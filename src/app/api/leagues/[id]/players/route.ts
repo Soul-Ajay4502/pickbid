@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const players = getPlayers(id);
+    const players = await getPlayers(id);
     return NextResponse.json(players);
   } catch (error) {
     console.error('Error fetching players:', error);
@@ -21,7 +21,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const league = getLeague(id);
+    const league = await getLeague(id);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const player = createPlayer({
+    const player = await createPlayer({
       leagueId: id,
       name,
       photo: photo ?? '',

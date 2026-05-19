@@ -3,7 +3,7 @@ import { getLeagues, createLeague } from '@/lib/store';
 
 export async function GET() {
   try {
-    const leagues = getLeagues();
+    const leagues = await getLeagues();
     return NextResponse.json(leagues);
   } catch (error) {
     console.error('Error fetching leagues:', error);
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const league = createLeague({
+    const league = await createLeague({
       name,
       totalPlayers: Number(totalPlayers),
       conductedBy,

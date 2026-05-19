@@ -7,11 +7,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const league = getLeague(id);
+    const league = await getLeague(id);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const players = getPlayers(id);
+    const players = await getPlayers(id);
     return NextResponse.json({ ...league, players });
   } catch (error) {
     console.error('Error fetching league:', error);
@@ -27,7 +27,7 @@ export async function DELETE(
     const { id } = await params;
     const { creatorToken } = await request.json();
 
-    const league = getLeague(id);
+    const league = await getLeague(id);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
@@ -35,7 +35,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorised' }, { status: 403 });
     }
 
-    deleteLeague(id);
+    await deleteLeague(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting league:', error);
