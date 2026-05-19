@@ -1,65 +1,98 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import type { League } from '@/lib/types';
+
+export default function HomePage() {
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/leagues')
+      .then((r) => r.json())
+      .then((data) => {
+        setLeagues(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setLeagues([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Cricket Leagues</h1>
+          <p className="text-muted-foreground mt-1">Browse leagues or create your own</p>
+        </div>
+        <Button
+          onClick={() => router.push('/leagues/new')}
+          className="bg-green-700 hover:bg-green-600 text-white"
+        >
+          + Create League
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="h-40 rounded-xl bg-muted animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {!loading && leagues.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <span className="text-7xl">🏏</span>
+          <h2 className="text-xl font-semibold text-foreground">No leagues yet</h2>
+          <p className="text-muted-foreground text-center max-w-xs">
+            Be the first to create a cricket league and start adding player cards!
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Button
+            onClick={() => router.push('/leagues/new')}
+            className="bg-green-700 hover:bg-green-600 text-white mt-2"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Create the First League
+          </Button>
         </div>
-      </main>
+      )}
+
+      {!loading && leagues.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {leagues.map((league) => (
+            <Card
+              key={league.id}
+              className="cursor-pointer border border-border hover:border-green-500 hover:shadow-lg transition-all duration-200 group"
+              onClick={() => router.push(`/leagues/${league.id}`)}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-lg group-hover:text-green-700 transition-colors line-clamp-2">
+                    {league.name}
+                  </CardTitle>
+                  <Badge variant="secondary" className="shrink-0 bg-green-100 text-green-800">
+                    {league.totalPlayers} players
+                  </Badge>
+                </div>
+                <CardDescription>Conducted by {league.conductedBy}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">
+                  Created {new Date(league.createdAt).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
