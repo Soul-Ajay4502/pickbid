@@ -136,6 +136,14 @@ export default function LeaguePage() {
           >
             + Add Your Card
           </Button>
+          {isLeagueCreator && data.players.length > 0 && (
+            <Button
+              onClick={() => router.push(`/leagues/${id}/auction`)}
+              className="bg-blue-700 hover:bg-blue-600 text-white"
+            >
+              Start Auction
+            </Button>
+          )}
           {isLeagueCreator && (
             <Button variant="destructive" onClick={handleDeleteLeague}>
               Delete League
