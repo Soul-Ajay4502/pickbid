@@ -138,6 +138,128 @@ export default function LeaguePage() {
     });
   }
 
+  async function handleDownloadRoster() {
+    if (!data || data.players.length === 0) return;
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = 210;
+    const margin = 20;
+    let y = margin;
+
+    const accent = [34, 197, 94] as const; // green-500
+
+    // ── Header band ──────────────────────────────────────────────────────────
+    doc.setFillColor(...accent);
+    doc.rect(0, 0, pageW, 36, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text(data.name, margin, 16);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Conducted by: ${data.conductedBy}`, margin, 24);
+    doc.text(
+      `${data.players.length} player${data.players.length !== 1 ? 's' : ''} · Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+      margin, 31,
+    );
+
+    y = 48;
+
+    // ── Column headers ────────────────────────────────────────────────────────
+    doc.setTextColor(120, 120, 120);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('#', margin, y);
+    doc.text('NAME', margin + 10, y);
+    doc.text('ROLE', margin + 90, y);
+    doc.text('BATTING', margin + 130, y);
+    y += 2;
+    doc.setDrawColor(220, 220, 220);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    // ── Player rows ───────────────────────────────────────────────────────────
+    data.players.forEach((player, i) => {
+      if (y > 272) {
+        doc.addPage();
+        y = margin;
+        // repeat column headers on new page
+        doc.setTextColor(120, 120, 120);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('#', margin, y);
+        doc.text('NAME', margin + 10, y);
+        doc.text('ROLE', margin + 90, y);
+        doc.text('BATTING', margin + 130, y);
+        y += 2;
+        doc.setDrawColor(220, 220, 220);
+        doc.line(margin, y, pageW - margin, y);
+        y += 6;
+      }
+
+      // Row number
+      doc.setTextColor(160, 160, 160);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(String(i + 1), margin, y);
+
+      // Name
+      doc.setTextColor(20, 20, 20);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(player.name, margin + 10, y);
+
+      // Role
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(50, 50, 50);
+      doc.text(player.role, margin + 90, y);
+
+      // Batting
+      const bat = player.battingType === 'Right-Hand Bat' ? 'RHB' : 'LHB';
+      doc.text(bat, margin + 130, y);
+
+      // WK badge
+      if (player.isWicketKeeper) {
+        doc.setTextColor(...accent);
+        doc.setFontSize(7);
+        doc.text('WK', margin + 148, y);
+      }
+
+      y += 5;
+
+      // Secondary line: bowling
+      if (player.bowlingType !== 'N/A') {
+        doc.setTextColor(140, 140, 140);
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.text(player.bowlingType, margin + 10, y);
+        y += 4;
+      }
+
+      // Row separator
+      doc.setDrawColor(240, 240, 240);
+      doc.line(margin, y, pageW - margin, y);
+      y += 4;
+    });
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setTextColor(180, 180, 180);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(`Page ${p} of ${pageCount}`, pageW - margin, 290, { align: 'right' });
+    }
+
+    const filename = `${data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_roster.pdf`;
+    doc.save(filename);
+  }
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10">
@@ -215,6 +337,11 @@ export default function LeaguePage() {
             {isLeagueCreator && (
               <Button variant="destructive" onClick={handleDeleteLeague}>
                 Delete League
+              </Button>
+            )}
+            {data.players.length > 0 && (
+              <Button variant="outline" onClick={handleDownloadRoster}>
+                Download Roster
               </Button>
             )}
             {isLeagueCreator && data.players.length > 0 && (
