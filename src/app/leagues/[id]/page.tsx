@@ -10,7 +10,7 @@ import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueWithPlayers } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Search, X } from 'lucide-react';
 
 export default function LeaguePage() {
   const router = useRouter();
@@ -59,6 +59,14 @@ export default function LeaguePage() {
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   async function handleTemplateChange(templateId: string) {
     setActiveTemplateId(templateId);
@@ -144,6 +152,16 @@ export default function LeaguePage() {
 
   if (!data) return null;
 
+  const q = debouncedQuery.toLowerCase();
+  const filteredPlayers = q
+    ? data.players.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.role.toLowerCase().includes(q) ||
+      p.battingType.toLowerCase().includes(q) ||
+      p.bowlingType.toLowerCase().includes(q)
+    )
+    : data.players;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -165,46 +183,77 @@ export default function LeaguePage() {
             </Badge>
           </div>
         </div>
+        <div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="outline" onClick={handleShare}>
+              Share
+            </Button>
+            <Button
+              onClick={() => router.push(`/leagues/${id}/players/new`)}
+              className="bg-green-700 hover:bg-green-600 text-white"
+            >
+              + Add Your Card
+            </Button>
+            {isLeagueCreator && data.players.length > 0 && (
+              <Button
+                onClick={() => router.push(`/leagues/${id}/auction`)}
+                className="bg-blue-700 hover:bg-blue-600 text-white"
+              >
+                Start Auction
+              </Button>
+            )}
+            {isLeagueCreator && (
+              <Button
+                variant="outline"
+                onClick={() => setTemplatePanelOpen((v) => !v)}
+              >
+                {templatePanelOpen ? 'Hide Templates' : 'Change Template'}
+              </Button>
+            )}
+            {isLeagueCreator && (
+              <Button variant="destructive" onClick={handleDeleteLeague}>
+                Delete League
+              </Button>
+            )}
+            {isLeagueCreator && data.players.length > 0 && (
+              <DownloadPDFButton
+                players={data.players}
+                leagueName={data.name}
+                conductedBy={data.conductedBy}
+                templateId={activeTemplateId}
+                logoUrl={data.logoUrl}
+              />
+            )}
+          </div>
 
-        <div className="flex flex-wrap gap-2 shrink-0">
-          <Button variant="outline" onClick={handleShare}>
-            Share
-          </Button>
-          <Button
-            onClick={() => router.push(`/leagues/${id}/players/new`)}
-            className="bg-green-700 hover:bg-green-600 text-white"
-          >
-            + Add Your Card
-          </Button>
-          {isLeagueCreator && data.players.length > 0 && (
-            <Button
-              onClick={() => router.push(`/leagues/${id}/auction`)}
-              className="bg-blue-700 hover:bg-blue-600 text-white"
-            >
-              Start Auction
-            </Button>
-          )}
-          {isLeagueCreator && (
-            <Button
-              variant="outline"
-              onClick={() => setTemplatePanelOpen((v) => !v)}
-            >
-              {templatePanelOpen ? 'Hide Templates' : 'Change Template'}
-            </Button>
-          )}
-          {isLeagueCreator && (
-            <Button variant="destructive" onClick={handleDeleteLeague}>
-              Delete League
-            </Button>
-          )}
-          {isLeagueCreator && data.players.length > 0 && (
-            <DownloadPDFButton
-              players={data.players}
-              leagueName={data.name}
-              conductedBy={data.conductedBy}
-              templateId={activeTemplateId}
-              logoUrl={data.logoUrl}
-            />
+          {/* Search */}
+          {data.players.length > 0 && (
+            <div className="my-6 flex items-center gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search players…"
+                  className="w-full h-9 pl-9 pr-9 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {debouncedQuery && (
+                <span className="text-sm text-muted-foreground shrink-0">
+                  {filteredPlayers.length} of {data.players.length}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -222,7 +271,9 @@ export default function LeaguePage() {
         </div>
       )}
 
-      <Separator className="mb-8" />
+      <Separator className="mb-6" />
+
+
 
       {/* Player cards grid */}
       {data.players.length === 0 ? (
@@ -239,9 +290,17 @@ export default function LeaguePage() {
             Add Your Card
           </Button>
         </div>
+      ) : filteredPlayers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Search size={36} className="text-muted-foreground/40" />
+          <p className="text-muted-foreground">No players match &ldquo;{debouncedQuery}&rdquo;</p>
+          <button onClick={() => setSearchQuery('')} className="text-sm text-green-700 hover:underline">
+            Clear search
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
-          {data.players.map((player) => (
+          {filteredPlayers.map((player) => (
             <PlayerCard
               key={player.id}
               player={player}
