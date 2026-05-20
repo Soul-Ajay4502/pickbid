@@ -10,6 +10,7 @@ import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueWithPlayers } from '@/lib/types';
 import { toast } from 'sonner';
+import { ArrowDown } from 'lucide-react';
 
 export default function LeaguePage() {
   const router = useRouter();
@@ -46,6 +47,18 @@ export default function LeaguePage() {
   useEffect(() => {
     fetchLeague();
   }, [fetchLeague]);
+
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  useEffect(() => {
+    function onScroll() {
+      const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+      setShowScrollBtn(distFromBottom > 200);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   async function handleTemplateChange(templateId: string) {
     setActiveTemplateId(templateId);
@@ -242,6 +255,17 @@ export default function LeaguePage() {
             />
           ))}
         </div>
+      )}
+
+      {/* Scroll-to-bottom button */}
+      {showScrollBtn && (
+        <button
+          onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
+          aria-label="Scroll to bottom"
+        >
+          <ArrowDown size={18} />
+        </button>
       )}
     </div>
   );
