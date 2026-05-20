@@ -10,7 +10,7 @@ import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueWithPlayers } from '@/lib/types';
 import { toast } from 'sonner';
-import { ArrowDown, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Search, X } from 'lucide-react';
 
 export default function LeaguePage() {
   const router = useRouter();
@@ -48,12 +48,14 @@ export default function LeaguePage() {
     fetchLeague();
   }, [fetchLeague]);
 
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     function onScroll() {
       const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
-      setShowScrollBtn(distFromBottom > 200);
+      setShowScrollBottom(distFromBottom > 200);
+      setShowScrollTop(window.scrollY > 200);
     }
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -316,15 +318,28 @@ export default function LeaguePage() {
         </div>
       )}
 
-      {/* Scroll-to-bottom button */}
-      {showScrollBtn && (
-        <button
-          onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
-          aria-label="Scroll to bottom"
-        >
-          <ArrowDown size={18} />
-        </button>
+      {/* Scroll buttons */}
+      {(showScrollTop || showScrollBottom) && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
+          {showScrollTop && (
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
+              aria-label="Scroll to top"
+            >
+              <ArrowUp size={18} />
+            </button>
+          )}
+          {showScrollBottom && (
+            <button
+              onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
+              aria-label="Scroll to bottom"
+            >
+              <ArrowDown size={18} />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
