@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, deleteLeague } from '@/lib/store';
+import { getLeague, getPlayers, updateLeague, deleteLeague } from '@/lib/store';
 
 export async function GET(
   _request: NextRequest,
@@ -16,6 +16,30 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const { creatorToken, templateId } = await request.json();
+
+    const league = await getLeague(id);
+    if (!league) {
+      return NextResponse.json({ error: 'League not found' }, { status: 404 });
+    }
+    if (league.creatorToken !== creatorToken) {
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 403 });
+    }
+
+    const updated = await updateLeague(id, { templateId });
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('Error updating league:', error);
+    return NextResponse.json({ error: 'Failed to update league' }, { status: 500 });
   }
 }
 

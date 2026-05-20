@@ -110,7 +110,7 @@ export default function PlayerCard({
         position: 'absolute', bottom: 0, left: 0, right: 0,
         height: hasPhoto ? Math.round(CARD_H * 0.71) : Math.round(CARD_H * 0.54),
         background: hasPhoto
-          ? 'linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.78) 32%, rgba(0,0,0,0.96))'
+          ? 'linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.78) 82%, rgba(0,0,0,0.96))'
           : 'linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.60))',
         pointerEvents: 'none',
       }} />

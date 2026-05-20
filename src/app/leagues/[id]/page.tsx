@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import PlayerCard from '@/components/PlayerCard';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
+import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueWithPlayers } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -16,6 +17,9 @@ export default function LeaguePage() {
   const [data, setData] = useState<LeagueWithPlayers | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLeagueCreator, setIsLeagueCreator] = useState(false);
+  const [activeTemplateId, setActiveTemplateId] = useState('');
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -26,6 +30,7 @@ export default function LeaguePage() {
       }
       const json: LeagueWithPlayers = await res.json();
       setData(json);
+      setActiveTemplateId(json.templateId);
 
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem(`creator_league_${id}`);
@@ -41,6 +46,28 @@ export default function LeaguePage() {
   useEffect(() => {
     fetchLeague();
   }, [fetchLeague]);
+
+  async function handleTemplateChange(templateId: string) {
+    setActiveTemplateId(templateId);
+    const creatorToken = typeof window !== 'undefined' ? localStorage.getItem(`creator_league_${id}`) : null;
+    if (!creatorToken) return;
+
+    setSavingTemplate(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creatorToken, templateId }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success('Template updated');
+    } catch {
+      toast.error('Failed to save template');
+      setActiveTemplateId(data?.templateId ?? templateId);
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
 
   function canEditPlayer(playerCreatorToken: string, playerId: string): boolean {
     if (typeof window === 'undefined') return false;
@@ -145,6 +172,14 @@ export default function LeaguePage() {
             </Button>
           )}
           {isLeagueCreator && (
+            <Button
+              variant="outline"
+              onClick={() => setTemplatePanelOpen((v) => !v)}
+            >
+              {templatePanelOpen ? 'Hide Templates' : 'Change Template'}
+            </Button>
+          )}
+          {isLeagueCreator && (
             <Button variant="destructive" onClick={handleDeleteLeague}>
               Delete League
             </Button>
@@ -154,12 +189,25 @@ export default function LeaguePage() {
               players={data.players}
               leagueName={data.name}
               conductedBy={data.conductedBy}
-              templateId={data.templateId}
+              templateId={activeTemplateId}
               logoUrl={data.logoUrl}
             />
           )}
         </div>
       </div>
+
+      {/* Template switcher panel */}
+      {isLeagueCreator && templatePanelOpen && (
+        <div className="mb-6 rounded-2xl border bg-muted/40 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-foreground">Card Template</p>
+            {savingTemplate && (
+              <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>
+            )}
+          </div>
+          <TemplateSelector value={activeTemplateId} onChange={handleTemplateChange} />
+        </div>
+      )}
 
       <Separator className="mb-8" />
 
@@ -184,7 +232,7 @@ export default function LeaguePage() {
             <PlayerCard
               key={player.id}
               player={player}
-              templateId={data.templateId}
+              templateId={activeTemplateId}
               leagueName={data.name}
               conductedBy={data.conductedBy}
               logoUrl={data.logoUrl}

@@ -64,6 +64,18 @@ export async function createLeague(
   return league;
 }
 
+export async function updateLeague(
+  id: string,
+  data: Partial<Omit<League, 'id' | 'creatorToken' | 'createdAt'>>
+): Promise<League | null> {
+  const leagues = await readLeagues();
+  const idx = leagues.findIndex((l) => l.id === id);
+  if (idx === -1) return null;
+  leagues[idx] = { ...leagues[idx], ...data };
+  await writeLeagues(leagues);
+  return leagues[idx];
+}
+
 export async function deleteLeague(id: string): Promise<boolean> {
   const leagues = await readLeagues();
   const idx = leagues.findIndex((l) => l.id === id);
