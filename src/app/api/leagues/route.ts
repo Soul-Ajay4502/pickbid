@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeagues, createLeague } from '@/lib/store';
+import { getLeaguesByCreator, getLeaguesJoinedByUser, createLeague } from '@/lib/store';
+import { auth } from '@/auth';
 
 export async function GET() {
   try {
-    const leagues = await getLeagues();
-    return NextResponse.json(leagues);
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+    }
+
+    const [created, joined] = await Promise.all([
+      getLeaguesByCreator(session.user.id),
+      getLeaguesJoinedByUser(session.user.id),
+    ]);
+    return NextResponse.json({ created, joined });
   } catch (error) {
     console.error('Error fetching leagues:', error);
     return NextResponse.json({ error: 'Failed to fetch leagues' }, { status: 500 });
@@ -13,10 +22,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, totalPlayers, conductedBy, creatorToken, templateId, logoUrl } = body;
+    const session = await auth();
+    if (!session?.user?.id || !session.user.email) {
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+    }
 
-    if (!name || !totalPlayers || !conductedBy || !creatorToken) {
+    const body = await request.json();
+    const { name, totalPlayers, conductedBy, templateId, logoUrl } = body;
+
+    if (!name || !totalPlayers || !conductedBy) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -24,7 +38,8 @@ export async function POST(request: NextRequest) {
       name,
       totalPlayers: Number(totalPlayers),
       conductedBy,
-      creatorToken,
+      creatorId: session.user.id,
+      creatorEmail: session.user.email,
       templateId: templateId ?? 'classic-green',
       logoUrl: logoUrl ?? '',
     });

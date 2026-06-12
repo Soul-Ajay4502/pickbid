@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
+import { Camera, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -116,38 +116,46 @@ export default function PlayerForm({
       <div className="space-y-1.5">
         <Label>Photo</Label>
         <div className="flex items-center gap-4">
-          {displaySrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={displaySrc}
-              alt="preview"
-              className="w-20 h-20 rounded-full object-cover border-2 border-green-400"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center text-2xl border-2 border-dashed border-border">
-              📷
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileRef.current?.click()}
-              disabled={loading}
-            >
-              {displaySrc ? 'Change Photo' : 'Upload Photo'}
-            </Button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={loading}
+            aria-label={displaySrc ? 'Change photo' : 'Upload photo'}
+            className="relative group shrink-0 rounded-full focus:outline-none"
+          >
+            {displaySrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={displaySrc}
+                alt="preview"
+                className="w-20 h-20 rounded-full object-cover ring-2 ring-primary/40 ring-offset-2 ring-offset-card transition-all duration-200 group-hover:ring-primary/70"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-border transition-colors duration-200 group-hover:border-primary/40 group-hover:bg-primary/5">
+                <Camera className="w-6 h-6 text-muted-foreground transition-colors group-hover:text-primary" />
+              </div>
+            )}
+            {/* Hover overlay */}
+            <span className="absolute inset-0 rounded-full bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+              <Camera className="w-5 h-5 text-white" />
+            </span>
+          </button>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium text-foreground">
+              {displaySrc ? 'Looking good!' : 'Add a photo'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {displaySrc ? 'Click the photo to change it' : 'Shown on your player card'}
+            </p>
             {displaySrc && (
-              <Button
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
                 onClick={handleRemovePhoto}
                 disabled={loading}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors w-fit mt-0.5"
               >
-                Remove
-              </Button>
+                <X className="w-3 h-3" /> Remove photo
+              </button>
             )}
           </div>
         </div>
@@ -218,25 +226,44 @@ export default function PlayerForm({
       </div>
 
       {/* Wicket Keeper */}
-      <div className="flex items-center gap-3">
-        <input
-          id="isWK"
-          type="checkbox"
-          checked={isWicketKeeper}
-          onChange={(e) => setIsWicketKeeper(e.target.checked)}
-          disabled={loading}
-          className="h-4 w-4 accent-green-600 cursor-pointer"
-        />
-        <Label htmlFor="isWK" className="cursor-pointer">Is Wicket Keeper</Label>
-      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isWicketKeeper}
+        disabled={loading}
+        onClick={() => setIsWicketKeeper((v) => !v)}
+        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+          isWicketKeeper
+            ? 'border-green-500/40 bg-green-500/8'
+            : 'border-border bg-input hover:border-primary/30'
+        }`}
+      >
+        <span>
+          <span className="block text-sm font-medium text-foreground">Wicket Keeper</span>
+          <span className="block text-xs text-muted-foreground mt-0.5">Adds the WK badge to your card</span>
+        </span>
+        <span
+          aria-hidden="true"
+          className={`relative inline-flex h-5.5 w-10 shrink-0 items-center rounded-full transition-colors duration-200 ${
+            isWicketKeeper ? 'bg-green-600' : 'bg-muted-foreground/25'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${
+              isWicketKeeper ? 'translate-x-5' : 'translate-x-1'
+            }`}
+          />
+        </span>
+      </button>
 
-      <Button
+      <button
         type="submit"
         disabled={loading}
-        className="w-full bg-green-700 hover:bg-green-600 text-white"
+        className="btn-premium w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm"
       >
+        {loading && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
         {loading ? 'Saving…' : submitLabel}
-      </Button>
+      </button>
     </form>
   );
 }

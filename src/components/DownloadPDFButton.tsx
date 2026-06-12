@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { FileDown } from 'lucide-react';
 import PlayerCard, { CARD_W, CARD_H } from './PlayerCard';
 import type { Player } from '@/lib/types';
 
@@ -12,6 +12,8 @@ interface DownloadPDFButtonProps {
   conductedBy?: string;
   templateId?: string;
   logoUrl?: string;
+  /** Overrides the default standalone-button styling (e.g. to render as a menu item) */
+  className?: string;
 }
 
 export default function DownloadPDFButton({
@@ -20,6 +22,7 @@ export default function DownloadPDFButton({
   conductedBy,
   templateId,
   logoUrl,
+  className,
 }: DownloadPDFButtonProps) {
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -94,13 +97,14 @@ export default function DownloadPDFButton({
 
   return (
     <>
-      <Button
+      <button
         onClick={handleDownload}
         disabled={loading || players.length === 0}
-        className="bg-amber-600 hover:bg-amber-500 text-white"
+        className={className ?? 'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}
       >
-        {loading ? 'Generating PDF…' : `Download PDF (${players.length} cards)`}
-      </Button>
+        <FileDown className={`w-3.5 h-3.5 ${className ? 'text-muted-foreground' : ''} ${loading ? 'animate-pulse' : ''}`} />
+        {loading ? 'Generating PDF…' : `Card PDF (${players.length} cards)`}
+      </button>
 
       {typeof window !== 'undefined' &&
         createPortal(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlayer, updatePlayer, deletePlayer } from '@/lib/store';
+import { getPlayer, updatePlayer, deletePlayer, cleanupImages } from '@/lib/store';
 
 export async function GET(
   _request: NextRequest,
@@ -34,6 +34,10 @@ export async function PUT(
     if (!updated) {
       return NextResponse.json({ error: 'Failed to update player' }, { status: 500 });
     }
+    // Photo replaced or removed → drop the old Cloudinary asset if nothing else uses it
+    if (typeof body.photo === 'string' && body.photo !== player.photo) {
+      await cleanupImages([player.photo]);
+    }
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error updating player:', error);
@@ -56,6 +60,7 @@ export async function DELETE(
     if (!success) {
       return NextResponse.json({ error: 'Failed to delete player' }, { status: 500 });
     }
+    await cleanupImages([player.photo]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting player:', error);

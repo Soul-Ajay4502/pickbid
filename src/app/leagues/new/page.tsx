@@ -1,18 +1,18 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useSession, signIn } from 'next-auth/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import TemplateSelector from '@/components/TemplateSelector';
 import PlayerCard from '@/components/PlayerCard';
-import { generateToken, sanitizeFolder, uploadFile } from '@/lib/utils';
+import { sanitizeFolder, uploadFile } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
 import type { Player } from '@/lib/types';
+import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight } from 'lucide-react';
 
 const PREVIEW_PLAYER: Player = {
   id: 'preview',
@@ -29,12 +29,17 @@ const PREVIEW_PLAYER: Player = {
 
 export default function NewLeaguePage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [form, setForm] = useState({ name: '', conductedBy: '', totalPlayers: '' });
+
+  useEffect(() => {
+    if (status === 'unauthenticated') signIn('google');
+  }, [status]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -58,6 +63,7 @@ export default function NewLeaguePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!session) { signIn('google'); return; }
     if (!form.name.trim() || !form.conductedBy.trim() || !form.totalPlayers) {
       toast.error('Please fill in all fields');
       return;
@@ -69,17 +75,13 @@ export default function NewLeaguePage() {
     }
 
     setLoading(true);
-    const creatorToken = generateToken();
-
     try {
-      // 1. Upload logo to Cloudinary if one was selected
       let logoUrl = '';
       if (logoFile) {
         const folder = sanitizeFolder(form.name.trim());
         logoUrl = await uploadFile(logoFile, folder);
       }
 
-      // 2. Create the league
       const res = await fetch('/api/leagues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,7 +91,6 @@ export default function NewLeaguePage() {
           totalPlayers: total,
           templateId,
           logoUrl,
-          creatorToken,
         }),
       });
 
@@ -99,9 +100,6 @@ export default function NewLeaguePage() {
       }
 
       const league = await res.json();
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`creator_league_${league.id}`, creatorToken);
-      }
       toast.success('League created!');
       router.push(`/leagues/${league.id}`);
     } catch (err) {
@@ -111,104 +109,171 @@ export default function NewLeaguePage() {
     }
   }
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
-      <Button variant="ghost" onClick={() => router.back()} className="mb-4 -ml-2 text-muted-foreground">
-        ← Back
-      </Button>
+  if (status === 'loading' || status === 'unauthenticated') {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-64px)]">
+        <div className="text-muted-foreground text-sm animate-pulse">Redirecting to sign in…</div>
+      </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* Form */}
-        <Card className="border border-border shadow-md">
-          <CardHeader>
-            <CardTitle className="text-2xl">Create a League</CardTitle>
-            <CardDescription>Set up a new cricket league and invite players to add their cards.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">League Name</Label>
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in-up">
+
+      {/* Page header */}
+      <div className="mb-8">
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5 group"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+          Back
+        </button>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-black tracking-tight text-gradient-green">Create a League</h1>
+          <p className="text-muted-foreground text-sm">
+            Set up your cricket league and invite players to join.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-start">
+
+        {/* ── Form card ── */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+
+          {/* Card header strip */}
+          <div className="px-6 py-4 border-b border-border bg-muted/40">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-linear-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center">
+                <Trophy className="w-4 h-4 text-green-500 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">League Details</p>
+                <p className="text-xs text-muted-foreground">Fill in the basics about your league</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+
+            {/* Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label htmlFor="name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  League Name
+                </Label>
                 <Input
                   id="name" name="name"
                   placeholder="e.g. Mumbai Premier League 2025"
                   value={form.name} onChange={handleChange}
-                  disabled={loading} required
+                  disabled={loading} required className="h-10"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="conductedBy">Conducted By</Label>
+                <Label htmlFor="conductedBy" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Conducted By
+                </Label>
                 <Input
                   id="conductedBy" name="conductedBy"
-                  placeholder="e.g. Mumbai Cricket Club"
+                  placeholder="e.g. Mumbai CC"
                   value={form.conductedBy} onChange={handleChange}
-                  disabled={loading} required
+                  disabled={loading} required className="h-10"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="totalPlayers">Total Players</Label>
+                <Label htmlFor="totalPlayers" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Total Players
+                </Label>
                 <Input
                   id="totalPlayers" name="totalPlayers"
                   type="number" min={1} max={100}
                   placeholder="e.g. 20"
                   value={form.totalPlayers} onChange={handleChange}
-                  disabled={loading} required
+                  disabled={loading} required className="h-10"
                 />
               </div>
+            </div>
 
-              {/* Logo upload */}
-              <div className="space-y-1.5">
-                <Label>League Logo</Label>
-                <div
-                  className="flex items-center gap-4 p-3 rounded-lg border border-dashed border-border cursor-pointer hover:bg-muted/40 transition-colors"
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  {logoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoPreview} alt="Logo preview" className="w-14 h-14 rounded-md object-contain bg-muted" />
-                  ) : (
-                    <div className="w-14 h-14 rounded-md bg-muted flex items-center justify-center text-2xl select-none">
-                      🏅
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm font-medium">{logoPreview ? 'Change logo' : 'Upload logo'}</p>
-                    <p className="text-xs text-muted-foreground">PNG, JPG or SVG · appears on every player card</p>
+            {/* Logo upload */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                League Logo
+              </Label>
+              <div
+                className="flex items-center gap-4 p-4 rounded-xl border border-dashed border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40 transition-all duration-200 group"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoPreview} alt="Logo preview"
+                    className="w-12 h-12 rounded-xl object-contain bg-muted border border-border"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-muted border border-border flex items-center justify-center text-muted-foreground group-hover:border-primary/30 transition-colors">
+                    <Upload className="w-4 h-4" />
                   </div>
-                  {logoPreview && (
-                    <Button
-                      type="button" variant="ghost" size="sm"
-                      className="ml-auto text-muted-foreground"
-                      onClick={handleRemoveLogo}
-                    >
-                      Remove
-                    </Button>
-                  )}
+                )}
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {logoPreview ? 'Change logo' : 'Upload logo'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    PNG, JPG or SVG · shown on every player card
+                  </p>
                 </div>
-                <input
-                  ref={logoInputRef} type="file" accept="image/*"
-                  className="hidden" onChange={handleLogoChange}
-                />
+                {logoPreview && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg hover:bg-destructive/10"
+                    onClick={handleRemoveLogo}
+                  >
+                    <X className="w-3.5 h-3.5" /> Remove
+                  </button>
+                )}
               </div>
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+            </div>
 
-              <Separator />
+            <Separator />
 
-              <div className="space-y-3">
-                <Label>Player Card Template</Label>
-                <TemplateSelector value={templateId} onChange={setTemplateId} />
+            {/* Template */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Card Template
+                </Label>
               </div>
+              <TemplateSelector value={templateId} onChange={setTemplateId} />
+            </div>
 
-              <Button type="submit" disabled={loading} className="w-full bg-green-700 hover:bg-green-600 text-white">
-                {loading ? 'Creating…' : 'Create League'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+            {/* Submit */}
+            <button
+              type="submit" disabled={loading}
+              className="btn-premium w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                <>Create League <ChevronRight className="w-4 h-4" /></>
+              )}
+            </button>
+          </form>
+        </div>
 
-        {/* Live card preview */}
-        <div className="flex flex-col items-center gap-3 sticky top-8">
-          <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide self-start">
-            Live Preview
-          </p>
+        {/* ── Live preview ── */}
+        <div className="flex flex-col items-center gap-3 lg:sticky lg:top-24 animate-fade-in-up" style={{ animationDelay: '0.12s' }}>
+          <div className="flex items-center gap-2 self-start">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              Live Preview
+            </p>
+          </div>
           <PlayerCard
             player={PREVIEW_PLAYER}
             templateId={templateId}

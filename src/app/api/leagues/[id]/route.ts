@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, updateLeague, deleteLeague } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { auth } from '@/auth';
 
 export async function GET(
   _request: NextRequest,
@@ -7,12 +8,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const league = await getLeague(id);
+    const [session, league] = await Promise.all([auth(), getLeague(id)]);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const players = await getPlayers(id);
-    return NextResponse.json({ ...league, players });
+    const [players, teams] = await Promise.all([getPlayers(id), getTeams(id)]);
+    const isCreator = session?.user?.id === league.creatorId;
+    const { creatorId, ...safeLeague } = league;
+    return NextResponse.json({ ...safeLeague, players, teams, isCreator });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
@@ -25,17 +28,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { creatorToken, templateId } = await request.json();
-
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+    }
     const league = await getLeague(id);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    if (league.creatorToken !== creatorToken) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 403 });
+    if (league.creatorId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
-    const updated = await updateLeague(id, { templateId });
+    const body = await request.json();
+    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl'];
+    const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
+    const updated = await updateLeague(id, patch);
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error updating league:', error);
@@ -44,22 +51,29 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const { creatorToken } = await request.json();
-
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+    }
     const league = await getLeague(id);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    if (league.creatorToken !== creatorToken) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 403 });
+    if (league.creatorId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
+    // Collect image URLs before the cascade delete wipes the player rows
+    const players = await getPlayers(id);
+    const imageUrls = [league.logoUrl, ...players.map((p) => p.photo)];
     await deleteLeague(id);
+    // After the delete, anything still referenced (e.g. a photo shared with a
+    // user profile or another league) survives; the rest is removed from Cloudinary
+    await cleanupImages(imageUrls);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting league:', error);

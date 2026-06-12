@@ -1,26 +1,39 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useSession, signIn } from 'next-auth/react';
 import { Separator } from '@/components/ui/separator';
 import PlayerCard from '@/components/PlayerCard';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
-import type { LeagueWithPlayers } from '@/lib/types';
+import type { LeagueWithPlayers, UserProfile } from '@/lib/types';
+import { generateToken } from '@/lib/utils';
+import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { toast } from 'sonner';
-import { ArrowDown, ArrowUp, Search, X } from 'lucide-react';
+import {
+  ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock,
+  ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
+  UsersRound, Images, UserPlus,
+} from 'lucide-react';
 
-export default function LeaguePage() {
+function LeaguePageInner() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const isOpen = searchParams.get('open') === 'true';
+  const { status: sessionStatus } = useSession();
+
+  const leagueRedirectUrl = `/leagues/${id}${isOpen ? '?open=true' : ''}`;
+
   const [data, setData] = useState<LeagueWithPlayers | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isLeagueCreator, setIsLeagueCreator] = useState(false);
   const [activeTemplateId, setActiveTemplateId] = useState('');
   const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [togglingPublic, setTogglingPublic] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -32,11 +45,6 @@ export default function LeaguePage() {
       const json: LeagueWithPlayers = await res.json();
       setData(json);
       setActiveTemplateId(json.templateId);
-
-      if (typeof window !== 'undefined') {
-        const token = localStorage.getItem(`creator_league_${id}`);
-        setIsLeagueCreator(!!token && token === json.creatorToken);
-      }
     } catch {
       toast.error('Failed to load league');
     } finally {
@@ -44,10 +52,96 @@ export default function LeaguePage() {
     }
   }, [id, router]);
 
-  useEffect(() => {
-    fetchLeague();
-  }, [fetchLeague]);
+  useEffect(() => { fetchLeague(); }, [fetchLeague]);
 
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated') return;
+    fetch('/api/profile')
+      .then((r) => r.json())
+      .then((d) => { if (d) setProfile(d); })
+      .catch(() => { });
+  }, [sessionStatus]);
+
+
+  const hasJoined = useMemo(() => {
+    if (typeof window === 'undefined' || !data) return false;
+    return data.players.some((p) => !!localStorage.getItem(`creator_player_${p.id}`));
+  }, [data]);
+
+  async function handleJoin() {
+    if (!profile) return;
+    setJoining(true);
+    const creatorToken = generateToken();
+    try {
+      const res = await fetch(`/api/leagues/${id}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profile.name,
+          photo: profile.photo,
+          battingType: profile.battingType,
+          bowlingType: profile.bowlingType,
+          role: profile.role,
+          isWicketKeeper: profile.isWicketKeeper,
+          creatorToken,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? 'Failed to join');
+      }
+      const player = await res.json();
+      localStorage.setItem(`creator_player_${player.id}`, creatorToken);
+      toast.success('You joined the league!');
+      fetchLeague();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  // ── Share & Export menu ────────────────────────────────────────────────────
+  const [shareOpen, setShareOpen] = useState(false);
+  const [teamExporting, setTeamExporting] = useState<'roster' | 'posters' | null>(null);
+  const shareRef = useRef<HTMLDivElement>(null);
+
+  async function handleTeamExport(kind: 'roster' | 'posters') {
+    if (!data || teamExporting) return;
+    setTeamExporting(kind);
+    try {
+      if (kind === 'roster') {
+        await downloadTeamwiseRoster(data, data.teams, data.players);
+        toast.success('Team-wise roster downloaded');
+      } else {
+        await downloadSquadPosters(data, data.teams, data.players);
+        toast.success('Squad posters downloaded');
+      }
+      setShareOpen(false);
+    } catch {
+      toast.error('Export failed — please try again');
+    } finally {
+      setTeamExporting(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!shareOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShareOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [shareOpen]);
+
+  // ── Scroll buttons ─────────────────────────────────────────────────────────
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -62,6 +156,7 @@ export default function LeaguePage() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // ── Search ─────────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
@@ -70,17 +165,15 @@ export default function LeaguePage() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // ── Template ───────────────────────────────────────────────────────────────
   async function handleTemplateChange(templateId: string) {
     setActiveTemplateId(templateId);
-    const creatorToken = typeof window !== 'undefined' ? localStorage.getItem(`creator_league_${id}`) : null;
-    if (!creatorToken) return;
-
     setSavingTemplate(true);
     try {
       const res = await fetch(`/api/leagues/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorToken, templateId }),
+        body: JSON.stringify({ templateId }),
       });
       if (!res.ok) throw new Error('Failed to save');
       toast.success('Template updated');
@@ -92,12 +185,12 @@ export default function LeaguePage() {
     }
   }
 
+  // ── Player helpers ─────────────────────────────────────────────────────────
   function canEditPlayer(playerCreatorToken: string, playerId: string): boolean {
     if (typeof window === 'undefined') return false;
-    const leagueToken = localStorage.getItem(`creator_league_${id}`);
     const playerToken = localStorage.getItem(`creator_player_${playerId}`);
     return (
-      (!!leagueToken && leagueToken === data?.creatorToken) ||
+      data?.isCreator === true ||
       (!!playerToken && playerToken === playerCreatorToken)
     );
   }
@@ -116,14 +209,8 @@ export default function LeaguePage() {
 
   async function handleDeleteLeague() {
     if (!confirm(`Delete "${data?.name}"? This will remove all player cards too and cannot be undone.`)) return;
-    const creatorToken = typeof window !== 'undefined' ? localStorage.getItem(`creator_league_${id}`) : null;
-    if (!creatorToken) return;
     try {
-      const res = await fetch(`/api/leagues/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorToken }),
-      });
+      const res = await fetch(`/api/leagues/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete league');
       toast.success('League deleted');
       router.push('/');
@@ -132,43 +219,32 @@ export default function LeaguePage() {
     }
   }
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      toast.success('League URL copied to clipboard!');
-    });
+  // ── Share ──────────────────────────────────────────────────────────────────
+  function copyLink(url: string, label: string) {
+    navigator.clipboard.writeText(url).then(() => toast.success(`${label} copied!`));
   }
 
   async function handleDownloadRoster() {
     if (!data || data.players.length === 0) return;
     const { jsPDF } = await import('jspdf');
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
     const pageW = 210;
     const margin = 20;
     let y = margin;
 
-    const accent = [34, 197, 94] as const; // green-500
-
-    // ── Header band ──────────────────────────────────────────────────────────
+    const accent = [34, 197, 94] as const;
     doc.setFillColor(...accent);
     doc.rect(0, 0, pageW, 36, 'F');
-
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
     doc.text(data.name, margin, 16);
-
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(`Conducted by: ${data.conductedBy}`, margin, 24);
-    doc.text(
-      `${data.players.length} player${data.players.length !== 1 ? 's' : ''} · Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-      margin, 31,
-    );
-
+    doc.text(`${data.players.length} player${data.players.length !== 1 ? 's' : ''} · Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, margin, 31);
     y = 48;
 
-    // ── Column headers ────────────────────────────────────────────────────────
     doc.setTextColor(120, 120, 120);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
@@ -181,12 +257,10 @@ export default function LeaguePage() {
     doc.line(margin, y, pageW - margin, y);
     y += 6;
 
-    // ── Player rows ───────────────────────────────────────────────────────────
     data.players.forEach((player, i) => {
       if (y > 272) {
         doc.addPage();
         y = margin;
-        // repeat column headers on new page
         doc.setTextColor(120, 120, 120);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
@@ -199,39 +273,25 @@ export default function LeaguePage() {
         doc.line(margin, y, pageW - margin, y);
         y += 6;
       }
-
-      // Row number
       doc.setTextColor(160, 160, 160);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.text(String(i + 1), margin, y);
-
-      // Name
       doc.setTextColor(20, 20, 20);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.text(player.name, margin + 10, y);
-
-      // Role
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(50, 50, 50);
       doc.text(player.role, margin + 90, y);
-
-      // Batting
-      const bat = player.battingType === 'Right-Hand Bat' ? 'RHB' : 'LHB';
-      doc.text(bat, margin + 130, y);
-
-      // WK badge
+      doc.text(player.battingType === 'Right-Hand Bat' ? 'RHB' : 'LHB', margin + 130, y);
       if (player.isWicketKeeper) {
         doc.setTextColor(...accent);
         doc.setFontSize(7);
         doc.text('WK', margin + 148, y);
       }
-
       y += 5;
-
-      // Secondary line: bowling
       if (player.bowlingType !== 'N/A') {
         doc.setTextColor(140, 140, 140);
         doc.setFont('helvetica', 'italic');
@@ -239,14 +299,11 @@ export default function LeaguePage() {
         doc.text(player.bowlingType, margin + 10, y);
         y += 4;
       }
-
-      // Row separator
       doc.setDrawColor(240, 240, 240);
       doc.line(margin, y, pageW - margin, y);
       y += 4;
     });
 
-    // ── Footer ────────────────────────────────────────────────────────────────
     const pageCount = doc.getNumberOfPages();
     for (let p = 1; p <= pageCount; p++) {
       doc.setPage(p);
@@ -255,19 +312,103 @@ export default function LeaguePage() {
       doc.setFontSize(7);
       doc.text(`Page ${p} of ${pageCount}`, pageW - margin, 290, { align: 'right' });
     }
-
-    const filename = `${data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_roster.pdf`;
-    doc.save(filename);
+    doc.save(`${data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_roster.pdf`);
   }
 
+  // ── Toggle public ──────────────────────────────────────────────────────────
+  async function handleTogglePublic() {
+    if (!data) return;
+    setTogglingPublic(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: !data.isPublic }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setData(prev => prev ? { ...prev, isPublic: updated.isPublic, joinCode: updated.joinCode } : prev);
+      toast.success(updated.isPublic ? `League is now public · Code: ${updated.joinCode}` : 'League set to private');
+    } catch { toast.error('Failed to update visibility'); }
+    finally { setTogglingPublic(false); }
+  }
+
+  // ── Squad poster ───────────────────────────────────────────────────────────
+  async function handleSquadPoster() {
+    if (!data || data.players.length === 0) return;
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = 297, pageH = 210, margin = 12;
+    const cols = 4, rows = Math.ceil(data.players.length / cols);
+    const cellW = (pageW - margin * 2) / cols;
+    const cellH = Math.min(40, (pageH - margin * 2 - 24) / rows);
+
+    // Header
+    const accent = [34, 197, 94] as const;
+    doc.setFillColor(...accent);
+    doc.rect(0, 0, pageW, 18, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(data.name, margin, 12);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`${data.players.length} players · ${data.conductedBy}`, pageW - margin, 12, { align: 'right' });
+
+    // Player grid
+    data.players.forEach((player, i) => {
+      const col = i % cols, row = Math.floor(i / cols);
+      const x = margin + col * cellW, y = 22 + row * cellH;
+      // Cell bg
+      doc.setFillColor(248, 250, 248);
+      doc.roundedRect(x + 1, y + 1, cellW - 2, cellH - 2, 2, 2, 'F');
+      // Name
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(player.name, x + 4, y + 8);
+      // Role
+      doc.setFillColor(...accent);
+      doc.setTextColor(...accent);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(player.role, x + 4, y + 14);
+      // Details
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(6.5);
+      doc.text(player.battingType === 'Right-Hand Bat' ? 'RHB' : 'LHB', x + 4, y + 19);
+      if (player.bowlingType !== 'N/A') doc.text(player.bowlingType, x + 4, y + 23);
+      if (player.isWicketKeeper) { doc.setTextColor(...accent); doc.text('WK', x + cellW - 10, y + 19); }
+      // Stats if present
+      if (player.statsRuns != null || player.statsWickets != null) {
+        doc.setTextColor(71, 85, 105);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        const parts: string[] = [];
+        if (player.statsRuns != null) parts.push(`${player.statsRuns}R`);
+        if (player.statsWickets != null) parts.push(`${player.statsWickets}W`);
+        doc.text(parts.join(' · '), x + 4, y + cellH - 5);
+      }
+      // Number
+      doc.setTextColor(200, 210, 200);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(22);
+      doc.text(String(i + 1), x + cellW - 8, y + cellH - 4);
+    });
+
+    doc.save(`${data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_squad_poster.pdf`);
+    toast.success('Squad poster downloaded!');
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10">
-        <div className="h-8 w-64 bg-muted animate-pulse rounded mb-2" />
-        <div className="h-4 w-40 bg-muted animate-pulse rounded mb-8" />
+        <div className="h-8 w-64 bg-muted rounded-lg mb-2 shimmer" />
+        <div className="h-4 w-40 bg-muted rounded-lg mb-8 shimmer" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="h-72 rounded-2xl bg-muted animate-pulse" />
+            <div key={n} className="h-72 rounded-2xl bg-muted shimmer" />
           ))}
         </div>
       </div>
@@ -286,115 +427,221 @@ export default function LeaguePage() {
     )
     : data.players;
 
+  const showAddCard = data.isCreator || isOpen;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const fillPct = data.totalPlayers > 0
+    ? Math.min(100, Math.round((data.players.length / data.totalPlayers) * 100))
+    : 0;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Button variant="ghost" onClick={() => router.push('/')} className="-ml-2 text-muted-foreground text-sm p-1 h-auto">
-              ← All Leagues
-            </Button>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{data.name}</h1>
-          <p className="text-muted-foreground mt-0.5">Conducted by {data.conductedBy}</p>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <Badge className="bg-green-100 text-green-800 border-0">
-              {data.totalPlayers} player slots
-            </Badge>
-            <Badge variant="secondary">
-              {data.players.length} registered
-            </Badge>
-          </div>
-        </div>
-        <div>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Button variant="outline" onClick={handleShare}>
-              Share
-            </Button>
-            <Button
-              onClick={() => router.push(`/leagues/${id}/players/new`)}
-              className="bg-green-700 hover:bg-green-600 text-white"
-            >
-              + Add Your Card
-            </Button>
-            {isLeagueCreator && data.players.length > 0 && (
-              <Button
-                onClick={() => router.push(`/leagues/${id}/auction`)}
-                className="bg-blue-700 hover:bg-blue-600 text-white"
-              >
-                Start Auction
-              </Button>
-            )}
-            {isLeagueCreator && (
-              <Button
-                variant="outline"
-                onClick={() => setTemplatePanelOpen((v) => !v)}
-              >
-                {templatePanelOpen ? 'Hide Templates' : 'Change Template'}
-              </Button>
-            )}
-            {isLeagueCreator && (
-              <Button variant="destructive" onClick={handleDeleteLeague}>
-                Delete League
-              </Button>
-            )}
-            {data.players.length > 0 && (
-              <Button variant="outline" onClick={handleDownloadRoster}>
-                Download Roster
-              </Button>
-            )}
-            {isLeagueCreator && data.players.length > 0 && (
-              <DownloadPDFButton
-                players={data.players}
-                leagueName={data.name}
-                conductedBy={data.conductedBy}
-                templateId={activeTemplateId}
-                logoUrl={data.logoUrl}
-              />
-            )}
-          </div>
+      <div className="mb-6 animate-fade-in-up">
+        <button
+          onClick={() => router.push('/')}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 group"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+          All Leagues
+        </button>
 
-          {/* Search */}
-          {data.players.length > 0 && (
-            <div className="my-6 flex items-center gap-3">
-              <div className="relative flex-1 max-w-sm">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search players…"
-                  className="w-full h-9 pl-9 pr-9 rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              {debouncedQuery && (
-                <span className="text-sm text-muted-foreground shrink-0">
-                  {filteredPlayers.length} of {data.players.length}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          {/* Title + capacity */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gradient-green">{data.name}</h1>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${data.isPublic
+                  ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
+                  : 'bg-muted text-muted-foreground border-border'
+                }`}>
+                {data.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                {data.isPublic ? 'Public' : 'Private'}
+              </span>
+              {isOpen && !data.isCreator && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  Open for registration
                 </span>
               )}
             </div>
+            <p className="text-muted-foreground mt-1 text-sm">Conducted by {data.conductedBy}</p>
+
+            <div className="mt-3.5 max-w-xs">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3 h-3" />
+                  {data.players.length} of {data.totalPlayers} slots filled
+                </span>
+                <span className="font-semibold text-foreground tabular-nums">{fillPct}%</span>
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${fillPct}%` }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Primary actions */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {showAddCard && (
+              hasJoined ? (
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                  Joined ✓
+                </span>
+              ) : profile ? (
+                <button
+                  onClick={handleJoin}
+                  disabled={joining}
+                  className="btn-premium inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {joining && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  {joining ? 'Joining…' : 'Join League'}
+                </button>
+              ) : sessionStatus === 'unauthenticated' ? (
+                <button
+                  onClick={() => signIn('google', { callbackUrl: leagueRedirectUrl })}
+                  className="btn-premium inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-semibold"
+                >
+                  Sign in to Join
+                </button>
+              ) : sessionStatus === 'authenticated' ? (
+                <button
+                  onClick={() => router.push(`/profile?redirect=${encodeURIComponent(leagueRedirectUrl)}`)}
+                  className="btn-premium inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-semibold"
+                >
+                  Complete Profile to Join
+                </button>
+              ) : null
+            )}
+            {data.isCreator && data.players.length > 0 && (
+              <button
+                onClick={() => router.push(`/leagues/${id}/auction`)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-linear-to-br from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:via-violet-500 hover:to-indigo-500 transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)] hover:shadow-[0_0_36px_rgba(124,58,237,0.45)] hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Gavel className="w-4 h-4" />
+                Start Auction
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 mt-6">
+          {data.isCreator && (
+            <>
+              <button onClick={() => router.push(`/leagues/${id}/players/new`)} className="toolbar-btn">
+                <UserPlus className="w-3.5 h-3.5" />Add Player
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
+                <Users className="w-3.5 h-3.5" />Teams
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/matches`)} className="toolbar-btn">
+                <BarChart2 className="w-3.5 h-3.5" />Matches
+              </button>
+              <button onClick={() => setTemplatePanelOpen((v) => !v)} className="toolbar-btn" aria-expanded={templatePanelOpen}>
+                <Palette className="w-3.5 h-3.5" />
+                {templatePanelOpen ? 'Hide Templates' : 'Template'}
+              </button>
+              <button onClick={handleTogglePublic} disabled={togglingPublic} className="toolbar-btn">
+                {data.isPublic
+                  ? <><Lock className="w-3.5 h-3.5" />Make Private</>
+                  : <><Globe className="w-3.5 h-3.5" />Make Public</>}
+              </button>
+            </>
+          )}
+          {data.isPublic && data.joinCode && (
+            <button
+              onClick={() => copyLink(`${origin}/leagues/discover`, 'Discover link')}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-xs font-mono font-semibold tracking-widest bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 hover:bg-green-500/15 transition-colors"
+              title="Join code — click to copy the discover page link"
+            >
+              <Globe className="w-3 h-3" />{data.joinCode}
+            </button>
+          )}
+
+          {/* Share & Export menu */}
+          <div className="relative" ref={shareRef}>
+            <button onClick={() => setShareOpen((v) => !v)} className="toolbar-btn" aria-expanded={shareOpen} aria-haspopup="menu">
+              <Share2 className="w-3.5 h-3.5" />
+              Share & Export
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${shareOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {shareOpen && (
+              <div className="menu-panel absolute right-0 top-full mt-2 w-64 p-1.5 z-50" role="menu">
+                <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Share</p>
+                <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}`, 'View link'); setShareOpen(false); }}>
+                  <Link2 className="w-3.5 h-3.5 text-muted-foreground" />Copy View Link
+                </button>
+                {data.isCreator && (
+                  <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}?open=true`, 'Register link'); setShareOpen(false); }}>
+                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Register Link
+                  </button>
+                )}
+                {data.players.length > 0 && (
+                  <>
+                    <div className="my-1.5 h-px bg-border/70" />
+                    <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Export</p>
+                    <button className="menu-item" onClick={() => { handleDownloadRoster(); setShareOpen(false); }}>
+                      <FileText className="w-3.5 h-3.5 text-muted-foreground" />Roster PDF
+                    </button>
+                    {data.isCreator && (
+                      <>
+                        <button className="menu-item" onClick={() => { handleSquadPoster(); setShareOpen(false); }}>
+                          <ImageDown className="w-3.5 h-3.5 text-muted-foreground" />Squad Poster
+                        </button>
+                        <DownloadPDFButton
+                          players={data.players}
+                          leagueName={data.name}
+                          conductedBy={data.conductedBy}
+                          templateId={activeTemplateId}
+                          logoUrl={data.logoUrl}
+                          className="menu-item"
+                        />
+                      </>
+                    )}
+                    {data.teams.length > 0 && (
+                      <>
+                        <div className="my-1.5 h-px bg-border/70" />
+                        <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Teams</p>
+                        <button className="menu-item" disabled={!!teamExporting} onClick={() => handleTeamExport('roster')}>
+                          {teamExporting === 'roster'
+                            ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                            : <UsersRound className="w-3.5 h-3.5 text-muted-foreground" />}
+                          Team-wise Roster PDF
+                        </button>
+                        <button className="menu-item" disabled={!!teamExporting} onClick={() => handleTeamExport('posters')}>
+                          {teamExporting === 'posters'
+                            ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                            : <Images className="w-3.5 h-3.5 text-muted-foreground" />}
+                          Squad Posters (photos)
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {data.isCreator && (
+            <button
+              onClick={handleDeleteLeague}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-all duration-200"
+              title="Delete league"
+              aria-label="Delete league"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Template switcher panel */}
-      {isLeagueCreator && templatePanelOpen && (
-        <div className="mb-6 rounded-2xl border bg-muted/40 p-5">
+      {/* Template panel */}
+      {data.isCreator && templatePanelOpen && (
+        <div className="mb-6 rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-5 animate-scale-in">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-foreground">Card Template</p>
-            {savingTemplate && (
-              <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>
-            )}
+            <p className="text-sm font-semibold text-gradient-green">Card Template</p>
+            {savingTemplate && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
           </div>
           <TemplateSelector value={activeTemplateId} onChange={handleTemplateChange} />
         </div>
@@ -402,56 +649,124 @@ export default function LeaguePage() {
 
       <Separator className="mb-6" />
 
+      {/* Search */}
+      {data.players.length > 0 && (
+        <div className="mb-6 flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search players…"
+              className="w-full h-10 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label="Clear search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {debouncedQuery && (
+            <span className="text-sm text-muted-foreground shrink-0">
+              {filteredPlayers.length} of {data.players.length}
+            </span>
+          )}
+        </div>
+      )}
 
-
-      {/* Player cards grid */}
+      {/* Player grid */}
       {data.players.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <span className="text-6xl">🏏</span>
-          <h2 className="text-lg font-semibold">No player cards yet</h2>
-          <p className="text-muted-foreground text-center max-w-xs">
-            Be the first to add your cricket player card to this league!
-          </p>
-          <Button
-            onClick={() => router.push(`/leagues/${id}/players/new`)}
-            className="bg-green-700 hover:bg-green-600 text-white"
-          >
-            Add Your Card
-          </Button>
+        <div className="flex flex-col items-center justify-center py-24 gap-5 animate-fade-in-up">
+          <div className="relative">
+            <div className="absolute inset-0 bg-green-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
+            <span className="relative text-6xl animate-float select-none">🏏</span>
+          </div>
+          <div className="text-center space-y-1.5">
+            <h2 className="text-lg font-bold">No player cards yet</h2>
+            <p className="text-muted-foreground text-sm text-center max-w-xs leading-relaxed">
+              {data.isCreator
+                ? 'Add players yourself, or share the register link so they can join on their own.'
+                : showAddCard
+                  ? 'Be the first to add your cricket player card to this league!'
+                  : 'The creator has not opened this league for registration yet.'}
+            </p>
+          </div>
+          {data.isCreator && (
+            <button
+              onClick={() => router.push(`/leagues/${id}/players/new`)}
+              className="btn-premium inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Player
+            </button>
+          )}
+          {showAddCard && (
+            hasJoined ? (
+              <span className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                Joined ✓
+              </span>
+            ) : profile ? (
+              <button
+                onClick={handleJoin}
+                disabled={joining}
+                className="btn-premium inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {joining ? 'Joining…' : 'Join League'}
+              </button>
+            ) : sessionStatus === 'unauthenticated' ? (
+              <button
+                onClick={() => signIn('google', { callbackUrl: leagueRedirectUrl })}
+                className="btn-premium inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                Sign in to Join
+              </button>
+            ) : sessionStatus === 'authenticated' ? (
+              <button
+                onClick={() => router.push(`/profile?redirect=${encodeURIComponent(leagueRedirectUrl)}`)}
+                className="btn-premium inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                Complete Profile to Join
+              </button>
+            ) : null
+          )}
         </div>
       ) : filteredPlayers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Search size={36} className="text-muted-foreground/40" />
-          <p className="text-muted-foreground">No players match &ldquo;{debouncedQuery}&rdquo;</p>
-          <button onClick={() => setSearchQuery('')} className="text-sm text-green-700 hover:underline">
-            Clear search
-          </button>
+        <div className="flex flex-col items-center justify-center py-20 gap-3 animate-fade-in-up">
+          <Search size={36} className="text-muted-foreground/30" />
+          <p className="text-muted-foreground text-sm">No players match &ldquo;{debouncedQuery}&rdquo;</p>
+          <button onClick={() => setSearchQuery('')} className="text-sm text-primary hover:underline underline-offset-2 transition-colors">Clear search</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
-          {filteredPlayers.map((player) => (
-            <PlayerCard
+          {filteredPlayers.map((player, i) => (
+            <div
               key={player.id}
-              player={player}
-              templateId={activeTemplateId}
-              leagueName={data.name}
-              conductedBy={data.conductedBy}
-              logoUrl={data.logoUrl}
-              showEdit={canEditPlayer(player.creatorToken, player.id)}
-              onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
-              onDelete={() => handleDeletePlayer(player.id)}
-            />
+              className="animate-fade-in-up"
+              style={{ animationDelay: `${i * 0.06}s` }}
+            >
+              <PlayerCard
+                player={player}
+                templateId={activeTemplateId}
+                leagueName={data.name}
+                conductedBy={data.conductedBy}
+                logoUrl={data.logoUrl}
+                showEdit={canEditPlayer(player.creatorToken, player.id)}
+                onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
+                onDelete={() => handleDeletePlayer(player.id)}
+              />
+            </div>
           ))}
         </div>
       )}
 
       {/* Scroll buttons */}
       {(showScrollTop || showScrollBottom) && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 animate-scale-in">
           {showScrollTop && (
             <button
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-background/90 backdrop-blur border border-border/70 shadow-xl text-muted-foreground hover:text-foreground hover:bg-background hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
               aria-label="Scroll to top"
             >
               <ArrowUp size={18} />
@@ -460,7 +775,7 @@ export default function LeaguePage() {
           {showScrollBottom && (
             <button
               onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-background border border-border shadow-lg text-muted-foreground hover:text-foreground hover:shadow-xl transition-all"
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-background/90 backdrop-blur border border-border/70 shadow-xl text-muted-foreground hover:text-foreground hover:bg-background hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
               aria-label="Scroll to bottom"
             >
               <ArrowDown size={18} />
@@ -469,5 +784,13 @@ export default function LeaguePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeaguePage() {
+  return (
+    <Suspense fallback={<div className="max-w-7xl mx-auto px-4 py-10 text-muted-foreground animate-pulse">Loading…</div>}>
+      <LeaguePageInner />
+    </Suspense>
   );
 }

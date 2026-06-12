@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlayers, createPlayer, getLeague } from '@/lib/store';
+import { auth } from '@/auth';
 
 export async function GET(
   _request: NextRequest,
@@ -21,7 +22,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const league = await getLeague(id);
+    const [session, league] = await Promise.all([auth(), getLeague(id)]);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
@@ -35,6 +36,7 @@ export async function POST(
 
     const player = await createPlayer({
       leagueId: id,
+      userId: session?.user?.id ?? null,
       name,
       photo: photo ?? '',
       battingType,
