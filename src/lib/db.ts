@@ -1,4 +1,7 @@
 import { Sequelize } from 'sequelize';
+// Static import so the bundler and output file tracing include the driver —
+// Sequelize's own require('pg') is dynamic and invisible to static analysis.
+import pg from 'pg';
 
 // Reuse connection across hot-reloads in dev
 const g = global as typeof global & { _sequelize?: Sequelize };
@@ -6,8 +9,9 @@ const g = global as typeof global & { _sequelize?: Sequelize };
 function createSequelize() {
   return new Sequelize(process.env.DATABASE_URL!, {
     dialect: 'postgres',
+    dialectModule: pg,
     dialectOptions: {
-      ssl: { require: true, rejectUnauthorized: false },
+      ssl: { require: true, rejectUnauthorized: true },
     },
     pool: { max: 3, min: 0, idle: 20000, acquire: 30000 },
     logging: false,
