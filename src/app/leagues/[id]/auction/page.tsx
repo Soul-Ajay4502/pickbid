@@ -477,8 +477,8 @@ export default function AuctionPage() {
             )}
             {(phase === 'showing' || phase === 'sold-modal') && current && (
               <>
-                <div key={current.id} style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale), flexShrink: 0, animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
-                  <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                <div key={current.id} style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale), position: 'relative', overflow: 'hidden', flexShrink: 0, animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
                     <PlayerCard player={current} templateId={league.templateId} leagueName={league.name} conductedBy={league.conductedBy} logoUrl={league.logoUrl} pdfMode />
                   </div>
                 </div>

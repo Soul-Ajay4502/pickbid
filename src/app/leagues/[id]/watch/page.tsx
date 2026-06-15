@@ -161,8 +161,8 @@ export default function WatchPage() {
         ) : live.current ? (
           <div className="relative z-10 flex flex-col items-center gap-5">
             {phase === 'sold' && <Confetti key={live.v} />}
-            <div className="relative" style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale) }}>
-              <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
+            <div className="relative" style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale), overflow: 'hidden', animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
                 <PlayerCard player={live.current} templateId={live.league.templateId} leagueName={live.league.name} conductedBy={live.league.conductedBy} logoUrl={live.league.logoUrl} pdfMode />
               </div>
               {phase === 'sold' && (
