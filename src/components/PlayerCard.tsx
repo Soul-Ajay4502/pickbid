@@ -59,6 +59,7 @@ export default function PlayerCard({
 
   const card = (
     <div
+      className="max-w-[85vw] sm:max-w-none"
       style={{
         width: CARD_W, height: CARD_H,
         background: t.rootBg,
