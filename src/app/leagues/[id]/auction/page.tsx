@@ -397,7 +397,7 @@ export default function AuctionPage() {
       <div className="h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white">
         <div className="flex items-center justify-between px-5 py-3 bg-white/3 border-b border-white/8 shrink-0 backdrop-blur-xl">
           <Button variant="ghost" size="sm" onClick={() => router.push(`/leagues/${id}`)} className="text-white/40 hover:text-white hover:bg-white/10">← League</Button>
-          <div className="flex items-center gap-4 text-sm font-semibold">
+          <div className="flex items-center gap-4 text-xs sm:text-sm font-semibold">
             <span className="text-green-400 tabular-nums">{soldCount} Sold</span><span className="text-white/15">|</span>
             <span className="text-white/45 tabular-nums">{pool.length + unsoldQueue.length} Left</span>
             {unsoldQueue.length > 0 && <><span className="text-white/15">|</span><span className="text-amber-400 tabular-nums">{unsoldQueue.length} Unsold</span></>}
@@ -595,7 +595,7 @@ function ShareLiveButton({ onClick }: { onClick: () => void }) {
         <span className="absolute inline-flex h-full w-full rounded-full bg-red-500/70 animate-ping" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
       </span>
-      <Share2 className="w-3.5 h-3.5" />Share Live
+      <Share2 className="w-3.5 h-3.5" /><span className="text-xs hidden sm:inline">Share Live</span>
     </button>
   );
 }
