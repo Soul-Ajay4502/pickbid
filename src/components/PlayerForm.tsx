@@ -15,6 +15,8 @@ import type { Player } from '@/lib/types';
 
 export interface PlayerFormData {
   name: string;
+  /** Personal contact number — optional, kept for the organiser's records */
+  contactNumber: string;
   /** Existing Cloudinary URL (kept when no new file is selected) */
   photo: string;
   /** Newly selected file — parent uploads this to Cloudinary before saving */
@@ -52,6 +54,7 @@ export default function PlayerForm({
   loading = false,
 }: PlayerFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
+  const [contactNumber, setContactNumber] = useState(initial?.contactNumber ?? '');
   const [existingPhoto, setExistingPhoto] = useState(initial?.photo ?? '');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -88,6 +91,7 @@ export default function PlayerForm({
     e.preventDefault();
     await onSubmit({
       name,
+      contactNumber,
       photo: existingPhoto,
       photoFile,
       battingType,
@@ -110,6 +114,23 @@ export default function PlayerForm({
           required
           disabled={loading}
         />
+      </div>
+
+      {/* Phone Number */}
+      <div className="space-y-1.5">
+        <Label htmlFor="player-phone">
+          Phone Number <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          id="player-phone"
+          type="tel"
+          inputMode="tel"
+          value={contactNumber}
+          onChange={(e) => setContactNumber(e.target.value)}
+          placeholder="e.g. +91 98765 43210"
+          disabled={loading}
+        />
+        <p className="text-xs text-muted-foreground">Kept for the organiser&apos;s records — not shown on your card.</p>
       </div>
 
       {/* Photo */}

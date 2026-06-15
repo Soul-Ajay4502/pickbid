@@ -20,8 +20,13 @@ export default function EditPlayerPage() {
   useEffect(() => {
     async function load() {
       try {
+        // Pass the owner token so the API returns this card's records-only phone number
+        const token = typeof window !== 'undefined'
+          ? localStorage.getItem(`creator_player_${playerId}`)
+          : null;
+        const qs = token ? `?creatorToken=${encodeURIComponent(token)}` : '';
         const [playerRes, leagueRes] = await Promise.all([
-          fetch(`/api/leagues/${id}/players/${playerId}`),
+          fetch(`/api/leagues/${id}/players/${playerId}${qs}`),
           fetch(`/api/leagues/${id}`),
         ]);
 
@@ -82,6 +87,9 @@ export default function EditPlayerPage() {
           bowlingType: data.bowlingType,
           role: data.role,
           isWicketKeeper: data.isWicketKeeper,
+          contactNumber: data.contactNumber.trim() || null,
+          // Proves card ownership to the API when the editor isn't the league creator
+          creatorToken: localStorage.getItem(`creator_player_${playerId}`) ?? undefined,
         }),
       });
 
@@ -139,6 +147,7 @@ export default function EditPlayerPage() {
           <PlayerForm
             initial={{
               name: player.name,
+              contactNumber: player.contactNumber ?? '',
               photo: player.photo,
               battingType: player.battingType,
               bowlingType: player.bowlingType,

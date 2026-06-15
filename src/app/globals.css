@@ -213,6 +213,18 @@
   50%       { box-shadow: 0 0 0 6px oklch(0.62 0.19 150 / 0); }
 }
 
+/* Aceternity Spotlight — sweeps into view once on load */
+@keyframes spotlight {
+  0%   { opacity: 0; transform: translate(-72%, -62%) scale(0.5); }
+  100% { opacity: 1; transform: translate(-50%, -40%) scale(1); }
+}
+
+/* Marquee — continuous horizontal scroll for logo/feature strips */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
 /* ─── Animation utilities ────────────────────────────────────────── */
 @layer utilities {
   .animate-fade-in-up {
@@ -244,6 +256,15 @@
   }
   .animate-pulse-green {
     animation: pulseGreen 2s ease-in-out infinite;
+  }
+  .animate-spotlight {
+    animation: spotlight 2s ease 0.75s 1 forwards;
+  }
+  .animate-marquee {
+    animation: marquee 32s linear infinite;
+  }
+  .pause-on-hover:hover .animate-marquee {
+    animation-play-state: paused;
   }
 }
 

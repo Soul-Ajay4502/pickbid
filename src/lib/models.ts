@@ -116,6 +116,7 @@ export class PlayerModel extends Model<
   declare role: string;
   declare isWicketKeeper: CreationOptional<boolean>;
   declare creatorToken: string;
+  declare contactNumber: CreationOptional<string | null>;
   // Auction
   declare teamId: CreationOptional<string | null>;
   declare soldPrice: CreationOptional<number | null>;
@@ -142,6 +143,7 @@ PlayerModel.init(
     role:           { type: DataTypes.STRING,  allowNull: false },
     isWicketKeeper: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     creatorToken:   { type: DataTypes.STRING,  allowNull: false },
+    contactNumber:  { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     teamId:         { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     soldPrice:      { type: DataTypes.INTEGER, allowNull: true,  defaultValue: null },
     isUnsold:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
@@ -187,6 +189,56 @@ MatchModel.init(
   { sequelize, tableName: 'matches', timestamps: false, underscored: true }
 );
 
+// ── Team Official ───────────────────────────────────────────────────────────────
+export class TeamOfficialModel extends Model<
+  InferAttributes<TeamOfficialModel>,
+  InferCreationAttributes<TeamOfficialModel, { omit: 'createdAt' }>
+> {
+  declare id: string;
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare teamId: ForeignKey<TeamModel['id']>;
+  declare name: string;
+  declare contactNumber: CreationOptional<string | null>;
+  declare role: CreationOptional<string>;
+  declare photo: CreationOptional<string>;
+  declare createdAt: CreationOptional<Date>;
+}
+
+TeamOfficialModel.init(
+  {
+    id:            { type: DataTypes.STRING,  primaryKey: true },
+    leagueId:      { type: DataTypes.STRING,  allowNull: false },
+    teamId:        { type: DataTypes.STRING,  allowNull: false },
+    name:          { type: DataTypes.STRING,  allowNull: false },
+    contactNumber: { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    role:          { type: DataTypes.STRING,  allowNull: false, defaultValue: 'Official' },
+    photo:         { type: DataTypes.TEXT,    allowNull: false, defaultValue: '' },
+    createdAt:     { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'team_officials', timestamps: false, underscored: true }
+);
+
+// ── Auction Live State ──────────────────────────────────────────────────────────
+// One ephemeral JSON blob per league: the creator's auction page writes it on
+// each transition and spectators poll it to mirror the auction in real time.
+export class AuctionLiveModel extends Model<
+  InferAttributes<AuctionLiveModel>,
+  InferCreationAttributes<AuctionLiveModel>
+> {
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare state: CreationOptional<object | null>;
+  declare updatedAt: CreationOptional<Date>;
+}
+
+AuctionLiveModel.init(
+  {
+    leagueId:  { type: DataTypes.STRING, primaryKey: true },
+    state:     { type: DataTypes.JSONB,  allowNull: true, defaultValue: null },
+    updatedAt: { type: DataTypes.DATE,   allowNull: true, defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'auction_live', timestamps: false, underscored: true }
+);
+
 // ── Associations ──────────────────────────────────────────────────────────────
 UserModel.hasMany(LeagueModel,  { foreignKey: 'creatorId', onDelete: 'CASCADE' });
 LeagueModel.belongsTo(UserModel, { foreignKey: 'creatorId' });
@@ -199,3 +251,12 @@ PlayerModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
 
 LeagueModel.hasMany(MatchModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 MatchModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+LeagueModel.hasMany(TeamOfficialModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+TeamOfficialModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+TeamModel.hasMany(TeamOfficialModel,     { foreignKey: 'teamId', onDelete: 'CASCADE' });
+TeamOfficialModel.belongsTo(TeamModel,   { foreignKey: 'teamId' });
+
+LeagueModel.hasOne(AuctionLiveModel,     { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+AuctionLiveModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });

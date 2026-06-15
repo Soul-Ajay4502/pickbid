@@ -62,6 +62,7 @@ export default function NewPlayerPage() {
           bowlingType: data.bowlingType,
           role: data.role,
           isWicketKeeper: data.isWicketKeeper,
+          contactNumber: data.contactNumber.trim() || null,
           creatorToken,
         }),
       });

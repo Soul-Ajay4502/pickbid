@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileDown } from 'lucide-react';
+import { toast } from 'sonner';
 import PlayerCard, { CARD_W, CARD_H } from './PlayerCard';
 import type { Player } from '@/lib/types';
 
@@ -32,9 +33,12 @@ export default function DownloadPDFButton({
     setLoading(true);
 
     try {
+      // html2canvas-pro (a maintained fork) understands modern CSS colour
+      // functions (oklch, lab, lch, color()) that Tailwind v4 emits — the
+      // original html2canvas throws "unsupported color function" on them.
       const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
         import('jspdf'),
-        import('html2canvas'),
+        import('html2canvas-pro'),
       ]);
 
       // A4 portrait — matches the portrait card aspect ratio better
@@ -55,9 +59,9 @@ export default function DownloadPDFButton({
           backgroundColor: null,
           logging: false,
           onclone: (clonedDoc) => {
-            // html2canvas can't parse modern CSS color functions (oklch, lab) used by
-            // Tailwind v4 / shadcn. The card uses only inline styles, so stripping all
-            // stylesheets from the clone is safe and prevents the parse error.
+            // The card is styled entirely with inline styles, so we drop the app's
+            // stylesheets from the clone to render it in isolation — no global
+            // Tailwind rules leaking into the off-screen capture.
             clonedDoc
               .querySelectorAll('link[rel="stylesheet"], style')
               .forEach((el) => el.remove());
@@ -90,6 +94,7 @@ export default function DownloadPDFButton({
       pdf.save(`${safeName}_player_cards.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
+      toast.error('Failed to generate PDF — please try again');
     } finally {
       setLoading(false);
     }

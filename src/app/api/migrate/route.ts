@@ -19,12 +19,17 @@ type LegacyPlayer = {
  *
  * Imports existing Redis data into Neon (one-time, idempotent).
  * Run AFTER `npm run db:migrate` has created the tables.
- * Requires the caller to be signed in.
+ * Requires the caller to be signed in as MIGRATE_ADMIN_EMAIL.
  */
 export async function POST() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+  }
+  // Admin-only: without MIGRATE_ADMIN_EMAIL set, the endpoint is disabled
+  const adminEmail = process.env.MIGRATE_ADMIN_EMAIL;
+  if (!adminEmail || session.user.email !== adminEmail) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {

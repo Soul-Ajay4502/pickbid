@@ -42,7 +42,7 @@ const redis = new Redis({
 
 const db = new pg.Client({
   connectionString: process.env.DATABASE_URL,
-  ssl: { require: true, rejectUnauthorized: false },
+  ssl: { require: true, rejectUnauthorized: true },
 });
 
 async function main() {

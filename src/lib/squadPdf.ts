@@ -1,6 +1,6 @@
 'use client';
 
-import type { Player, Team } from '@/lib/types';
+import type { Player, Team, TeamOfficial } from '@/lib/types';
 
 interface LeagueInfo {
   name: string;
@@ -250,8 +250,15 @@ export async function downloadTeamwiseRoster(league: LeagueInfo, teams: Team[], 
 }
 
 /* ────────────────────────────────────────────────────────────────────
- * Squad posters — one A4 page per team, premium dark theme.
+ * Squad posters — exactly one A4 page per team, premium dark theme.
  * Player cards on a deep navy background with team-colour accents.
+ *
+ * Reading order top→bottom: TEAM OFFICIALS (silver leadership band) →
+ * ICON PLAYERS (gold hero cards with a star badge) → PLAYERS (team-colour).
+ * Each group is its own labelled section with a count chip.
+ *
+ * The grid auto-scales so a whole squad (plus officials) always fits on a
+ * single page — large squads shrink rather than spilling to a second page.
  * No bid prices — this is a presentation piece, not a ledger.
  * ──────────────────────────────────────────────────────────────────── */
 
@@ -270,11 +277,21 @@ const CARD_BG: [number, number, number] = [23, 26, 40];
 const CARD_BORDER: [number, number, number] = [42, 46, 64];
 const TEXT_WHITE: [number, number, number] = [245, 246, 250];
 const TEXT_GRAY: [number, number, number] = [128, 134, 152];
+/** Gold for icon (star) players, silver for the officials' leadership band */
+const GOLD: [number, number, number] = [234, 179, 8];
+const SILVER: [number, number, number] = [156, 168, 188];
+
+/** Pick a legible text colour (near-black or near-white) for a filled chip */
+function textOn(c: [number, number, number]): [number, number, number] {
+  const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  return lum > 140 ? DARK_BG : TEXT_WHITE;
+}
 
 export async function downloadSquadPosters(
   league: LeagueInfo,
   teams: Team[],
   players: Player[],
+  officials: TeamOfficial[] = [],
   onlyTeamId?: string
 ) {
   const targetTeams = onlyTeamId ? teams.filter((t) => t.id === onlyTeamId) : teams;
@@ -292,7 +309,7 @@ export async function downloadSquadPosters(
 
   let firstPage = true;
 
-  function drawTeamHeader(team: Team, squad: Player[], continued: boolean): number {
+  function drawTeamHeader(team: Team, squad: Player[], officialCount: number): number {
     const rgb = hexToRgb(team.colorHex);
 
     // Full-page dark background
@@ -302,18 +319,6 @@ export async function downloadSquadPosters(
     // Team-colour accent bar across the very top
     doc.setFillColor(...rgb);
     doc.rect(0, 0, pageW, 2.2, 'F');
-
-    if (continued) {
-      doc.setTextColor(...TEXT_WHITE);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(15);
-      doc.text(team.name.toUpperCase(), GRID_X, 16);
-      doc.setTextColor(...dim(rgb, 0.85));
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('CONTINUED', pageW - GRID_X, 16, { align: 'right' });
-      return 24;
-    }
 
     // Giant watermark initial, dimmed into the background
     doc.setTextColor(...dim(rgb, 0.16));
@@ -333,13 +338,17 @@ export async function downloadSquadPosters(
     doc.setFontSize(30);
     doc.text(team.name.toUpperCase(), GRID_X, 32);
 
-    // Squad meta
-    const icons = squad.filter((p) => p.isIcon).length;
+    // Squad meta — same order as the sections below
+    const iconCount = squad.filter((p) => p.isIcon).length;
+    const metaParts: string[] = [];
+    if (officialCount > 0) metaParts.push(`${officialCount} OFFICIAL${officialCount !== 1 ? 'S' : ''}`);
+    if (iconCount > 0) metaParts.push(`${iconCount} ICON${iconCount !== 1 ? 'S' : ''}`);
+    metaParts.push(`${squad.length} PLAYER${squad.length !== 1 ? 'S' : ''}`);
     doc.setTextColor(...TEXT_GRAY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(
-      `OFFICIAL SQUAD   ·   ${squad.length} PLAYER${squad.length !== 1 ? 'S' : ''}${icons > 0 ? `   ·   ${icons} ICON` : ''}`,
+      `OFFICIAL SQUAD   ·   ${metaParts.join('   ·   ')}`,
       GRID_X, 40, { charSpace: 0.5 }
     );
 
@@ -364,17 +373,167 @@ export async function downloadSquadPosters(
     );
   }
 
+  // ── Card renderers ──────────────────────────────────────────────────────
+  const OFFICIAL_CELL_H = 52;
+
+  /** Filled 5-point star centred at (cx, cy) with the given outer radius. */
+  function drawStar(cx: number, cy: number, r: number, color: [number, number, number]) {
+    const inner = r * 0.42;
+    const pts: [number, number][] = [];
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 === 0 ? r : inner;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
+    }
+    const rel = pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]] as [number, number]);
+    doc.setFillColor(...color);
+    doc.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
+  }
+
+  function drawPlayerCard(player: Player, avatar: string, cellX: number, top: number, rgb: [number, number, number], s: number) {
+    const icon = player.isIcon;
+    const accent = icon ? GOLD : rgb;
+    const cx = cellX + CELL_W / 2;
+    const cardX = cellX + 2;
+    const cardW = CELL_W - 4;
+    const cardH = (CELL_H - 5) * s;
+    // Card body — icons get a subtle warm tint and a brighter gold border
+    doc.setFillColor(...(icon ? dim(GOLD, 0.12) : CARD_BG));
+    doc.setDrawColor(...(icon ? dim(GOLD, 0.85) : CARD_BORDER));
+    doc.setLineWidth(icon ? 0.6 : 0.3);
+    doc.roundedRect(cardX, top, cardW, cardH, 3, 3, 'FD');
+    // Accent strip along the card top
+    doc.setFillColor(...accent);
+    doc.roundedRect(cardX + cardW / 2 - 7, top, 14, 1.1, 0.55, 0.55, 'F');
+    // Star badge in the top-right corner for icon players
+    if (icon) drawStar(cardX + cardW - 5 * s, top + 5 * s, 2.7 * s, GOLD);
+
+    // Avatar with accent ring (thicker + double ring for icons)
+    const AV = 24 * s;
+    const avY = top + 5 * s;
+    doc.setDrawColor(...accent);
+    doc.setLineWidth(icon ? 1.2 : 0.9);
+    doc.circle(cx, avY + AV / 2, AV / 2 + 1.3 * s, 'S');
+    if (icon) {
+      doc.setLineWidth(0.4);
+      doc.circle(cx, avY + AV / 2, AV / 2 + 2.6 * s, 'S');
+    }
+    doc.addImage(avatar, 'PNG', cx - AV / 2, avY, AV, AV);
+
+    // Name (+ WK tag)
+    let textY = avY + AV + 7.5 * s;
+    doc.setTextColor(...TEXT_WHITE);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10 * s);
+    const displayName = player.name.length > 20 ? player.name.slice(0, 19) + '…' : player.name;
+    doc.text(displayName + (player.isWicketKeeper ? '  (WK)' : ''), cx, textY, { align: 'center' });
+
+    // Role in accent colour
+    textY += 4.8 * s;
+    doc.setTextColor(...dim(accent, 0.95));
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7 * s);
+    doc.text(player.role.toUpperCase(), cx, textY, { align: 'center', charSpace: 0.4 });
+
+    // Batting / bowling
+    textY += 4.4 * s;
+    doc.setTextColor(...TEXT_GRAY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8 * s);
+    const skill = player.bowlingType === 'N/A'
+      ? batShort(player.battingType)
+      : `${batShort(player.battingType)} · ${player.bowlingType}`;
+    doc.text(skill, cx, textY, { align: 'center' });
+
+    // Gold "ICON" chip (no bid prices on the poster)
+    if (icon) {
+      textY += 6.2 * s;
+      const label = 'ICON';
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5 * s);
+      const tw = doc.getTextWidth(label);
+      doc.setFillColor(...GOLD);
+      doc.roundedRect(cx - tw / 2 - 4, textY - 3.4 * s, tw + 8, 5 * s, 2.5 * s, 2.5 * s, 'F');
+      doc.setTextColor(...DARK_BG);
+      doc.text(label, cx, textY, { align: 'center', charSpace: 0.3 });
+    }
+  }
+
+  function drawOfficialCard(official: TeamOfficial, avatar: string, cellX: number, top: number, accent: [number, number, number], s: number) {
+    const cx = cellX + CELL_W / 2;
+    const cardX = cellX + 2;
+    const cardW = CELL_W - 4;
+    const cardH = (OFFICIAL_CELL_H - 5) * s;
+    doc.setFillColor(...CARD_BG);
+    doc.setDrawColor(...CARD_BORDER);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(cardX, top, cardW, cardH, 3, 3, 'FD');
+    // Silver accent strip — sets the leadership band apart from the players
+    doc.setFillColor(...dim(accent, 0.7));
+    doc.roundedRect(cardX + cardW / 2 - 7, top, 14, 1.1, 0.55, 0.55, 'F');
+
+    const AV = 22 * s;
+    const avY = top + 5 * s;
+    doc.setDrawColor(...dim(accent, 0.9));
+    doc.setLineWidth(0.8);
+    doc.circle(cx, avY + AV / 2, AV / 2 + 1.2 * s, 'S');
+    doc.addImage(avatar, 'PNG', cx - AV / 2, avY, AV, AV);
+
+    let textY = avY + AV + 7 * s;
+    doc.setTextColor(...TEXT_WHITE);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5 * s);
+    const displayName = official.name.length > 20 ? official.name.slice(0, 19) + '…' : official.name;
+    doc.text(displayName, cx, textY, { align: 'center' });
+
+    // Role — the headline info for an official (no contact number on the poster)
+    textY += 4.6 * s;
+    doc.setTextColor(...accent);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7 * s);
+    const role = (official.role || 'Official').toUpperCase();
+    doc.text(role.length > 26 ? role.slice(0, 25) + '…' : role, cx, textY, { align: 'center', charSpace: 0.4 });
+  }
+
+  function drawSectionLabel(label: string, color: [number, number, number], count: number, y: number, s: number) {
+    const fs = Math.max(7.5, 10.5 * s);
+    // Leading colour bar
+    doc.setFillColor(...color);
+    doc.roundedRect(GRID_X, y - 3.2, 2.6, 4.8, 0.9, 0.9, 'F');
+    // Label
+    doc.setTextColor(...TEXT_WHITE);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(fs);
+    doc.text(label, GRID_X + 5.5, y, { charSpace: 0.9 });
+    const labelW = doc.getTextWidth(label) + label.length * 0.9;
+    // Count chip pinned to the right edge
+    const chip = String(count);
+    doc.setFontSize(Math.max(6.5, 7.5 * s));
+    const chipH = Math.max(4.6, 5.2 * s);
+    const cw = doc.getTextWidth(chip) + 5.5;
+    const chipX = pageW - GRID_X - cw;
+    doc.setFillColor(...color);
+    doc.roundedRect(chipX, y - chipH + 1.4, cw, chipH, chipH / 2, chipH / 2, 'F');
+    doc.setTextColor(...textOn(color));
+    doc.text(chip, chipX + cw / 2, y, { align: 'center' });
+    // Divider between label and chip
+    doc.setDrawColor(...CARD_BORDER);
+    doc.setLineWidth(0.25);
+    doc.line(GRID_X + 9.5 + labelW, y - 1.4, chipX - 3, y - 1.4);
+  }
+
   for (const team of targetTeams) {
     const squad = players.filter((p) => p.teamId === team.id);
+    const teamOfficials = officials.filter((o) => o.teamId === team.id);
     const rgb = hexToRgb(team.colorHex);
 
     if (!firstPage) doc.addPage();
     firstPage = false;
 
-    let gridTop = drawTeamHeader(team, squad, false);
+    const gridTop = drawTeamHeader(team, squad, teamOfficials.length);
     drawFooter();
 
-    if (squad.length === 0) {
+    if (squad.length === 0 && teamOfficials.length === 0) {
       doc.setTextColor(...TEXT_GRAY);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(11);
@@ -382,90 +541,59 @@ export async function downloadSquadPosters(
       continue;
     }
 
+    const icons = squad.filter((p) => p.isIcon);
+    const others = squad.filter((p) => !p.isIcon);
+
     // Pre-render avatars in parallel — photo fetch is the slow part
-    const avatars = await Promise.all(
-      squad.map((p) => makeAvatar(p.photo, p.name, team.colorHex))
-    );
+    const [iconAvatars, otherAvatars, officialAvatars] = await Promise.all([
+      Promise.all(icons.map((p) => makeAvatar(p.photo, p.name, team.colorHex))),
+      Promise.all(others.map((p) => makeAvatar(p.photo, p.name, team.colorHex))),
+      Promise.all(teamOfficials.map((o) => makeAvatar(o.photo, o.name, team.colorHex))),
+    ]);
 
-    const rowsPerPage = () => Math.floor((pageH - gridTop - 18) / CELL_H);
-    let rowCapacity = rowsPerPage();
+    // Reading order: officials (silver) → icons (gold) → other players (team colour)
+    const sections = [
+      {
+        items: teamOfficials, label: 'TEAM OFFICIALS', color: SILVER, cellH: OFFICIAL_CELL_H,
+        draw: (i: number, x: number, y: number, sc: number) =>
+          drawOfficialCard(teamOfficials[i], officialAvatars[i], x, y, SILVER, sc),
+      },
+      {
+        items: icons, label: 'ICON PLAYERS', color: GOLD, cellH: CELL_H,
+        draw: (i: number, x: number, y: number, sc: number) =>
+          drawPlayerCard(icons[i], iconAvatars[i], x, y, rgb, sc),
+      },
+      {
+        items: others, label: 'PLAYERS', color: rgb, cellH: CELL_H,
+        draw: (i: number, x: number, y: number, sc: number) =>
+          drawPlayerCard(others[i], otherAvatars[i], x, y, rgb, sc),
+      },
+    ].filter((sec) => sec.items.length > 0);
 
-    for (let i = 0; i < squad.length; i++) {
-      const player = squad[i];
-      const slot = i % (rowCapacity * COLS);
+    // Scale everything so the present sections fit on this one page. Cards keep
+    // their natural size for small squads (s capped at 1) and shrink uniformly
+    // for large ones, so a poster is never split across pages.
+    const SECTION_GAP = 5, LABEL_H = 9;
+    const naturalH =
+      sections.reduce((h, sec) => h + LABEL_H + Math.ceil(sec.items.length / COLS) * sec.cellH, 0) +
+      SECTION_GAP * Math.max(0, sections.length - 1);
+    const available = (pageH - 18) - gridTop;
+    const s = Math.min(1, available / naturalH);
 
-      // Overflow → continuation page
-      if (i > 0 && slot === 0) {
-        doc.addPage();
-        gridTop = drawTeamHeader(team, squad, true);
-        drawFooter();
-        rowCapacity = rowsPerPage();
+    // Render each section: label, then its card grid
+    let curY = gridTop;
+    sections.forEach((sec, si) => {
+      if (si > 0) curY += SECTION_GAP * s;
+      drawSectionLabel(sec.label, sec.color, sec.items.length, curY + 4 * s, s);
+      curY += LABEL_H * s;
+      const cellH = sec.cellH * s;
+      for (let i = 0; i < sec.items.length; i++) {
+        const col = i % COLS;
+        sec.draw(i, GRID_X + col * CELL_W, curY, s);
+        if (col === COLS - 1) curY += cellH;
       }
-
-      const col = slot % COLS;
-      const row = Math.floor(slot / COLS);
-      const cellX = GRID_X + col * CELL_W;
-      const top = gridTop + row * CELL_H;
-      const cx = cellX + CELL_W / 2;
-
-      // Player card surface
-      const cardX = cellX + 2;
-      const cardW = CELL_W - 4;
-      const cardH = CELL_H - 5;
-      doc.setFillColor(...CARD_BG);
-      doc.setDrawColor(...(player.isIcon ? dim([217, 119, 6], 0.7) : CARD_BORDER));
-      doc.setLineWidth(player.isIcon ? 0.5 : 0.3);
-      doc.roundedRect(cardX, top, cardW, cardH, 3, 3, 'FD');
-      // Team-colour accent strip along the card top
-      doc.setFillColor(...rgb);
-      doc.roundedRect(cardX + cardW / 2 - 7, top, 14, 1.1, 0.55, 0.55, 'F');
-
-      // Avatar with team-colour ring
-      const AV = 24;
-      const avY = top + 5;
-      doc.setDrawColor(...rgb);
-      doc.setLineWidth(0.9);
-      doc.circle(cx, avY + AV / 2, AV / 2 + 1.3, 'S');
-      doc.addImage(avatars[i], 'PNG', cx - AV / 2, avY, AV, AV);
-
-      // Name (+ WK tag)
-      let textY = avY + AV + 7.5;
-      doc.setTextColor(...TEXT_WHITE);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      const displayName = player.name.length > 20 ? player.name.slice(0, 19) + '…' : player.name;
-      doc.text(displayName + (player.isWicketKeeper ? '  (WK)' : ''), cx, textY, { align: 'center' });
-
-      // Role in team colour
-      textY += 4.8;
-      doc.setTextColor(...dim(rgb, 0.95));
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.text(player.role.toUpperCase(), cx, textY, { align: 'center', charSpace: 0.4 });
-
-      // Batting / bowling
-      textY += 4.4;
-      doc.setTextColor(...TEXT_GRAY);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.8);
-      const skill = player.bowlingType === 'N/A'
-        ? batShort(player.battingType)
-        : `${batShort(player.battingType)} · ${player.bowlingType}`;
-      doc.text(skill, cx, textY, { align: 'center' });
-
-      // Icon player chip (no bid prices on the poster)
-      if (player.isIcon) {
-        textY += 6.2;
-        const label = 'ICON PLAYER';
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(6.5);
-        const tw = doc.getTextWidth(label) + 1.5 /* charSpace */;
-        doc.setFillColor(217, 119, 6);
-        doc.roundedRect(cx - tw / 2 - 3, textY - 3.4, tw + 6, 5, 2.5, 2.5, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.text(label, cx, textY, { align: 'center', charSpace: 0.3 });
-      }
-    }
+      if (sec.items.length % COLS !== 0) curY += cellH;
+    });
   }
 
   const fileName = onlyTeamId && targetTeams.length === 1

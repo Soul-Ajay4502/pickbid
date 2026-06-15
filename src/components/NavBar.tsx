@@ -10,9 +10,11 @@ export default function NavBar() {
   const { data: session, status } = useSession();
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
+  const isAuctionPage = /^\/leagues\/[^/]+\/auction$/.test(pathname);
+  const isWatchPage = /^\/leagues\/[^/]+\/watch$/.test(pathname);
 
   // The auction runs as an immersive full-screen experience
-  if (/^\/leagues\/[^/]+\/auction$/.test(pathname)) return null;
+  if (isAuctionPage || isWatchPage) return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-2xl">

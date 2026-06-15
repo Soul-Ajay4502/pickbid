@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel } from './models';
-import type { League, Player, Team, Match, UserProfile } from './types';
+import { sequelize } from './db';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel } from './models';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ function toPlayer(row: PlayerModel): Player {
     role:           row.role as Player['role'],
     isWicketKeeper: row.isWicketKeeper ?? false,
     creatorToken:   row.creatorToken,
+    contactNumber:  row.contactNumber ?? null,
     teamId:         row.teamId ?? null,
     soldPrice:      row.soldPrice ?? null,
     isUnsold:       row.isUnsold ?? false,
@@ -210,6 +212,59 @@ export async function deleteTeam(id: string): Promise<boolean> {
   return deleted > 0;
 }
 
+// ── Team Officials ──────────────────────────────────────────────────────────────
+
+function toOfficial(row: TeamOfficialModel): TeamOfficial {
+  return {
+    id:            row.id,
+    leagueId:      row.leagueId!,
+    teamId:        row.teamId!,
+    name:          row.name,
+    contactNumber: row.contactNumber ?? null,
+    role:          row.role ?? 'Official',
+    photo:         row.photo ?? '',
+    createdAt:     row.createdAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+export async function getOfficials(leagueId: string): Promise<TeamOfficial[]> {
+  const rows = await TeamOfficialModel.findAll({ where: { leagueId }, order: [['createdAt', 'ASC']] });
+  return rows.map(toOfficial);
+}
+
+export async function getOfficial(id: string): Promise<TeamOfficial | null> {
+  const row = await TeamOfficialModel.findByPk(id);
+  return row ? toOfficial(row) : null;
+}
+
+export async function createOfficial(data: Omit<TeamOfficial, 'id' | 'createdAt'>): Promise<TeamOfficial> {
+  const row = await TeamOfficialModel.create({
+    id:            uuidv4(),
+    leagueId:      data.leagueId,
+    teamId:        data.teamId,
+    name:          data.name,
+    contactNumber: data.contactNumber ?? null,
+    role:          data.role,
+    photo:         data.photo ?? '',
+  });
+  return toOfficial(row);
+}
+
+export async function updateOfficial(
+  id: string,
+  data: Partial<Omit<TeamOfficial, 'id' | 'leagueId' | 'teamId' | 'createdAt'>>
+): Promise<TeamOfficial | null> {
+  const row = await TeamOfficialModel.findByPk(id);
+  if (!row) return null;
+  await row.update(data);
+  return toOfficial(row);
+}
+
+export async function deleteOfficial(id: string): Promise<boolean> {
+  const deleted = await TeamOfficialModel.destroy({ where: { id } });
+  return deleted > 0;
+}
+
 // ── Players ───────────────────────────────────────────────────────────────────
 
 export async function getPlayers(leagueId: string): Promise<Player[]> {
@@ -234,6 +289,7 @@ export async function createPlayer(data: Omit<Player, 'id' | 'createdAt'>): Prom
     role:           data.role,
     isWicketKeeper: data.isWicketKeeper,
     creatorToken:   data.creatorToken,
+    contactNumber:  data.contactNumber ?? null,
     teamId:         data.teamId ?? null,
     soldPrice:      data.soldPrice ?? null,
     isUnsold:       data.isUnsold ?? false,
@@ -260,6 +316,84 @@ export async function updatePlayer(
 export async function deletePlayer(id: string): Promise<boolean> {
   const deleted = await PlayerModel.destroy({ where: { id } });
   return deleted > 0;
+}
+
+/** Auction rule violation (squad full, over budget, unknown team) — safe to show to the user. */
+export class AuctionRuleError extends Error {}
+
+/**
+ * Assign a player to a team, enforcing squad-size and budget rules atomically.
+ *
+ * The team row is locked for the duration of the transaction so two
+ * simultaneous sales to the same team can't both pass validation and
+ * oversell the squad or overspend the purse.
+ */
+export async function assignPlayerToTeam(
+  playerId: string,
+  teamId: string,
+  soldPrice: number | null,
+  extra: Partial<Omit<Player, 'id' | 'leagueId' | 'creatorToken' | 'createdAt' | 'teamId' | 'soldPrice'>> = {}
+): Promise<Player | null> {
+  return sequelize.transaction(async (t) => {
+    const row = await PlayerModel.findByPk(playerId, { transaction: t });
+    if (!row) return null;
+    const team = await TeamModel.findOne({
+      where: { id: teamId, leagueId: row.leagueId! },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!team) throw new AuctionRuleError('Team not found in this league');
+
+    const squad = await PlayerModel.findAll({
+      where: { teamId, id: { [Op.ne]: playerId } },
+      attributes: ['soldPrice'],
+      transaction: t,
+    });
+    if (squad.length >= (team.maxPlayers ?? 11)) {
+      throw new AuctionRuleError(`${team.name} squad is already full`);
+    }
+    if (soldPrice != null) {
+      const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
+      if (spent + soldPrice > team.budget) {
+        throw new AuctionRuleError(`Exceeds ${team.name}'s remaining budget`);
+      }
+    }
+
+    await row.update({ ...extra, teamId, soldPrice }, { transaction: t });
+    return toPlayer(row);
+  });
+}
+
+/**
+ * Clear auction results for a league so it can be re-run from scratch.
+ *
+ * Un-assigns every sold player and clears unsold flags. Pre-assigned icon
+ * players keep their team — they were pinned before the auction, not won in
+ * it. Returns how many players were reset.
+ */
+export async function resetAuction(leagueId: string): Promise<number> {
+  const [count] = await PlayerModel.update(
+    { teamId: null, soldPrice: null, isUnsold: false },
+    { where: { leagueId, isIcon: false } }
+  );
+  return count;
+}
+
+// ── Live auction state ──────────────────────────────────────────────────────────
+// One ephemeral JSON blob per league, written by the creator's auction page on
+// each transition and polled by spectators to mirror the auction in real time.
+
+export async function getAuctionLive(leagueId: string): Promise<LiveAuctionState | null> {
+  const row = await AuctionLiveModel.findByPk(leagueId);
+  return (row?.state as LiveAuctionState | undefined) ?? null;
+}
+
+export async function setAuctionLive(leagueId: string, state: LiveAuctionState): Promise<void> {
+  await AuctionLiveModel.upsert({ leagueId, state, updatedAt: new Date() });
+}
+
+export async function clearAuctionLive(leagueId: string): Promise<void> {
+  await AuctionLiveModel.destroy({ where: { leagueId } });
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
@@ -354,12 +488,13 @@ export async function cleanupImages(urls: Array<string | null | undefined>): Pro
 
   await Promise.allSettled(
     candidates.map(async (url) => {
-      const [playerRefs, profileRefs, logoRefs] = await Promise.all([
+      const [playerRefs, profileRefs, logoRefs, officialRefs] = await Promise.all([
         PlayerModel.count({ where: { photo: url } }),
         UserModel.count({ where: { photo: url } }),
         LeagueModel.count({ where: { logoUrl: url } }),
+        TeamOfficialModel.count({ where: { photo: url } }),
       ]);
-      if (playerRefs + profileRefs + logoRefs === 0) {
+      if (playerRefs + profileRefs + logoRefs + officialRefs === 0) {
         await deleteFromCloudinary(url);
       }
     })

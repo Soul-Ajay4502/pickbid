@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, getOfficials, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
 import { auth } from '@/auth';
 
 export async function GET(
@@ -12,10 +12,13 @@ export async function GET(
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const [players, teams] = await Promise.all([getPlayers(id), getTeams(id)]);
+    const [players, teams, officials] = await Promise.all([getPlayers(id), getTeams(id), getOfficials(id)]);
     const isCreator = session?.user?.id === league.creatorId;
     const { creatorId, ...safeLeague } = league;
-    return NextResponse.json({ ...safeLeague, players, teams, isCreator });
+    // Contact numbers are for the organiser's records only — never expose them to non-creators
+    const safePlayers = isCreator ? players : players.map((p) => ({ ...p, contactNumber: null }));
+    const safeOfficials = isCreator ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
+    return NextResponse.json({ ...safeLeague, players: safePlayers, teams, officials: safeOfficials, isCreator });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });

@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signIn } from 'next-auth/react';
-import { Users, Calendar, ArrowRight, Trophy, Star, Zap, Plus } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { Users, Calendar, ArrowRight, Plus } from 'lucide-react';
 import type { League } from '@/lib/types';
+import Landing from '@/components/landing/Landing';
 
 interface LeagueSections {
   created: League[];
@@ -140,66 +141,9 @@ export default function HomePage() {
     );
   }
 
-  // ── Hero (signed out) ──────────────────────────────────────────────────────
+  // ── Landing (signed out) ─────────────────────────────────────────────────────
   if (!session) {
-    return (
-      <div className="relative flex flex-col items-center justify-center min-h-[calc(100vh-64px)] px-4 gap-10 text-center overflow-hidden">
-
-        {/* Atmospheric orbs — behind content */}
-        <div className="absolute top-0 left-1/4 w-150 h-150 rounded-full bg-green-500/5 blur-[140px] animate-orb pointer-events-none" aria-hidden="true" />
-        <div className="absolute bottom-10 right-1/4 w-125 h-125 rounded-full bg-blue-500/4 blur-[120px] animate-orb pointer-events-none" style={{ animationDelay: '4s' }} aria-hidden="true" />
-        <div className="absolute top-1/3 -left-20 w-96 h-96 rounded-full bg-teal-400/4 blur-[100px] animate-orb pointer-events-none" style={{ animationDelay: '8s' }} aria-hidden="true" />
-
-        {/* Eyebrow badge */}
-        <div className="eyebrow-badge animate-badge-pop" style={{ animationDelay: '0.05s' }}>
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          Cricket leagues made simple
-        </div>
-
-        {/* Heading + subtext */}
-        <div className="space-y-5 animate-fade-in-up max-w-2xl" style={{ animationDelay: '0.1s' }}>
-          <h1 className="text-6xl sm:text-7xl font-black tracking-tight leading-[1.03]">
-            <span className="block text-gradient-green">Cricket</span>
-            <span className="block text-foreground/90">Player Cards</span>
-          </h1>
-          <p className="text-muted-foreground text-lg sm:text-xl max-w-md mx-auto leading-relaxed">
-            Build your league, design premium player cards, and host live auctions — all in one place.
-          </p>
-        </div>
-
-        {/* CTA */}
-        <div className="flex flex-col items-center gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          <button
-            onClick={() => signIn('google')}
-            className="btn-premium inline-flex items-center gap-2.5 px-10 py-3.5 text-base rounded-2xl font-semibold"
-          >
-            Get Started Free
-            <ArrowRight className="w-4 h-4" />
-          </button>
-          <p className="text-muted-foreground/40 text-xs tracking-wide">
-            Sign in with Google · No credit card needed
-          </p>
-        </div>
-
-        {/* Stats row */}
-        <div
-          className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 animate-fade-in-up"
-          style={{ animationDelay: '0.3s' }}
-        >
-          {[
-            { icon: Trophy, label: 'Player Cards' },
-            { icon: Zap, label: 'Live Auction' },
-            { icon: Star, label: 'PDF Export' },
-            { icon: Users, label: 'Share Links' },
-          ].map(({ icon: Icon, label }) => (
-            <div key={label} className="stat-chip">
-              <Icon className="w-3.5 h-3.5 text-primary/70" />
-              {label}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+    return <Landing />;
   }
 
   const isEmpty = !loading && sections.created.length === 0 && sections.joined.length === 0;

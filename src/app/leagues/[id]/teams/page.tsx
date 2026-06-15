@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus } from 'lucide-react';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
-import type { LeagueWithPlayers, Team, Player } from '@/lib/types';
+import { sanitizeFolder, uploadFile } from '@/lib/utils';
+import type { LeagueWithPlayers, Team, Player, TeamOfficial } from '@/lib/types';
 
 const TEAM_COLORS = [
   '#22c55e','#3b82f6','#8b5cf6','#f59e0b','#ef4444',
@@ -41,6 +42,23 @@ export default function TeamsPage() {
   // icon player picker
   const [iconPickerTeam, setIconPickerTeam] = useState<string | null>(null);
   const [iconBusy, setIconBusy] = useState(false);
+
+  // team officials editor (squad-poster only; never affects the auction)
+  const [officialTeam, setOfficialTeam] = useState<string | null>(null);
+  const [oName, setOName] = useState('');
+  const [oRole, setORole] = useState('');
+  const [oContact, setOContact] = useState('');
+  const [oFile, setOFile] = useState<File | null>(null);
+  const [oPreview, setOPreview] = useState('');
+  const [oBusy, setOBusy] = useState(false);
+
+  function resetOfficialForm() {
+    setOName(''); setORole(''); setOContact(''); setOFile(null); setOPreview('');
+  }
+  function toggleOfficialEditor(teamId: string) {
+    setOfficialTeam(v => (v === teamId ? null : teamId));
+    resetOfficialForm();
+  }
 
   async function assignIcon(team: Team, player: Player) {
     if (iconBusy || !data) return;
@@ -79,6 +97,51 @@ export default function TeamsPage() {
     finally { setIconBusy(false); }
   }
 
+  async function addOfficial(team: Team) {
+    if (oBusy || !data) return;
+    if (!oName.trim()) { toast.error('Official name is required'); return; }
+    setOBusy(true);
+    try {
+      let photoUrl = '';
+      if (oFile) {
+        photoUrl = await uploadFile(oFile, `${sanitizeFolder(data.name)}/officials`);
+      }
+      const res = await fetch(`/api/leagues/${id}/officials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId: team.id,
+          name: oName.trim(),
+          role: oRole.trim() || 'Official',
+          contactNumber: oContact.trim() || null,
+          photo: photoUrl,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const created: TeamOfficial = await res.json();
+      setData(prev => prev ? { ...prev, officials: [...prev.officials, created] } : prev);
+      resetOfficialForm();
+      toast.success(`${created.name} added to ${team.name}`);
+    } catch { toast.error('Failed to add official'); }
+    finally { setOBusy(false); }
+  }
+
+  async function removeOfficial(official: TeamOfficial) {
+    if (oBusy) return;
+    setOBusy(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}/officials`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ officialId: official.id }),
+      });
+      if (!res.ok) throw new Error();
+      setData(prev => prev ? { ...prev, officials: prev.officials.filter(o => o.id !== official.id) } : prev);
+      toast.success(`${official.name} removed`);
+    } catch { toast.error('Failed to remove official'); }
+    finally { setOBusy(false); }
+  }
+
   // PDF exports — holds 'roster' | 'posters' | a teamId while generating
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -90,7 +153,7 @@ export default function TeamsPage() {
         await downloadTeamwiseRoster(data, teams, data.players);
         toast.success('Team-wise roster downloaded');
       } else {
-        await downloadSquadPosters(data, teams, data.players, teamId);
+        await downloadSquadPosters(data, teams, data.players, data.officials ?? [], teamId);
         toast.success(teamId ? 'Squad poster downloaded' : 'Squad posters downloaded');
       }
     } catch {
@@ -188,6 +251,12 @@ export default function TeamsPage() {
       playersByTeam[p.teamId].push(p);
     }
   });
+
+  const officialsByTeam: Record<string, TeamOfficial[]> = {};
+  (data.officials ?? []).forEach(o => {
+    if (!officialsByTeam[o.teamId]) officialsByTeam[o.teamId] = [];
+    officialsByTeam[o.teamId].push(o);
+  });
   const unsoldPlayers = data.players.filter(p => p.isUnsold);
   const unpickedPlayers = data.players.filter(p => !p.teamId && !p.isUnsold);
 
@@ -247,6 +316,7 @@ export default function TeamsPage() {
           const remaining = team.budget - spent;
           const pct = Math.min(100, Math.round((spent / team.budget) * 100));
           const tPlayers = playersByTeam[team.id] ?? [];
+          const tOfficials = officialsByTeam[team.id] ?? [];
 
           return (
             <div
@@ -297,6 +367,15 @@ export default function TeamsPage() {
                           : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
                       }`}>
                       <Star className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => toggleOfficialEditor(team.id)}
+                      title="Add team official"
+                      className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                        officialTeam === team.id
+                          ? 'text-indigo-500 bg-indigo-500/10'
+                          : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10'
+                      }`}>
+                      <Briefcase className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => handleExport('posters', team.id)} disabled={!!exporting}
                       title={`Download ${team.name} squad poster`}
@@ -357,6 +436,71 @@ export default function TeamsPage() {
                   </div>
                 );
               })()}
+
+              {/* Team officials editor */}
+              {officialTeam === team.id && (
+                <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3 space-y-3 animate-scale-in">
+                  <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5" />
+                    Add a team official for {team.name}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Officials don&apos;t take part in the auction — they appear only on the squad poster. The contact number is kept for your records and isn&apos;t printed.
+                  </p>
+                  <div className="flex items-start gap-3">
+                    <label className="shrink-0 cursor-pointer" title="Upload photo">
+                      <div
+                        className="w-14 h-14 rounded-full border-2 border-dashed border-border bg-muted/40 bg-cover bg-center overflow-hidden flex items-center justify-center hover:border-indigo-500/50 transition-colors"
+                        style={oPreview ? { backgroundImage: `url(${oPreview})`, borderStyle: 'solid' } : undefined}
+                      >
+                        {!oPreview && <ImagePlus className="w-5 h-5 text-muted-foreground" />}
+                      </div>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0] ?? null;
+                          setOFile(f);
+                          setOPreview(f ? URL.createObjectURL(f) : '');
+                        }} />
+                    </label>
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <input value={oName} onChange={e => setOName(e.target.value)} placeholder="Name"
+                        className="col-span-2 h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                      <input value={oRole} onChange={e => setORole(e.target.value)} placeholder="Role (e.g. Coach)"
+                        className="h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                      <input value={oContact} onChange={e => setOContact(e.target.value)} placeholder="Contact number" inputMode="tel"
+                        className="h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => toggleOfficialEditor(team.id)}
+                      className="px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors text-xs font-medium">
+                      Cancel
+                    </button>
+                    <button onClick={() => addOfficial(team)} disabled={oBusy}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50 transition-colors inline-flex items-center gap-1.5">
+                      {oBusy && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                      Add Official
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Officials */}
+              {tOfficials.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {tOfficials.map(o => (
+                    <span key={o.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/25">
+                      <Briefcase className="w-2.5 h-2.5" />
+                      {o.name}
+                      <span className="opacity-60">{o.role}</span>
+                      <button onClick={() => removeOfficial(o)} disabled={oBusy} title="Remove official"
+                        className="ml-0.5 hover:text-destructive transition-colors disabled:opacity-50">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Players */}
               {tPlayers.length > 0 && (

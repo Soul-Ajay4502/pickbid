@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
-  UsersRound, Images, UserPlus,
+  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -34,6 +34,7 @@ function LeaguePageInner() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [joining, setJoining] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
+  const [resettingAuction, setResettingAuction] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -114,7 +115,7 @@ function LeaguePageInner() {
         await downloadTeamwiseRoster(data, data.teams, data.players);
         toast.success('Team-wise roster downloaded');
       } else {
-        await downloadSquadPosters(data, data.teams, data.players);
+        await downloadSquadPosters(data, data.teams, data.players, data.officials ?? []);
         toast.success('Squad posters downloaded');
       }
       setShareOpen(false);
@@ -198,12 +199,31 @@ function LeaguePageInner() {
   async function handleDeletePlayer(playerId: string) {
     if (!confirm('Delete this player card?')) return;
     try {
-      const res = await fetch(`/api/leagues/${id}/players/${playerId}`, { method: 'DELETE' });
+      // Proves card ownership to the API when the deleter isn't the league creator
+      const token = localStorage.getItem(`creator_player_${playerId}`);
+      const qs = token ? `?creatorToken=${encodeURIComponent(token)}` : '';
+      const res = await fetch(`/api/leagues/${id}/players/${playerId}${qs}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
       toast.success('Player card deleted');
       fetchLeague();
     } catch {
       toast.error('Failed to delete player card');
+    }
+  }
+
+  async function handleResetAuction() {
+    if (!confirm('Reset the auction? Every sold player is removed from their team and unsold flags are cleared. Pre-assigned icon players stay on their teams. This cannot be undone.')) return;
+    setResettingAuction(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}/auction/reset`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      const { reset } = await res.json();
+      toast.success(`Auction reset — ${reset} player${reset === 1 ? '' : 's'} cleared`);
+      fetchLeague();
+    } catch {
+      toast.error('Failed to reset auction');
+    } finally {
+      setResettingAuction(false);
     }
   }
 
@@ -428,6 +448,8 @@ function LeaguePageInner() {
     : data.players;
 
   const showAddCard = data.isCreator || isOpen;
+  // Auction has results to clear when a non-icon player is on a team or marked unsold
+  const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const fillPct = data.totalPlayers > 0
     ? Math.min(100, Math.round((data.players.length / data.totalPlayers) * 100))
@@ -436,7 +458,11 @@ function LeaguePageInner() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="mb-6 animate-fade-in-up">
+      {/* relative z-30: lift the whole header (and its Share & Export dropdown)
+          above the player-card grid. The cards' animate-fade-in-up leaves a
+          persistent transform, so each card wrapper is its own stacking context;
+          without this the dropdown would render beneath them. */}
+      <div className="relative z-30 mb-6 animate-fade-in-up">
         <button
           onClick={() => router.push('/')}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 group"
@@ -451,8 +477,8 @@ function LeaguePageInner() {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gradient-green">{data.name}</h1>
               <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${data.isPublic
-                  ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
-                  : 'bg-muted text-muted-foreground border-border'
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
+                : 'bg-muted text-muted-foreground border-border'
                 }`}>
                 {data.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                 {data.isPublic ? 'Public' : 'Private'}
@@ -536,6 +562,12 @@ function LeaguePageInner() {
               <button onClick={() => router.push(`/leagues/${id}/matches`)} className="toolbar-btn">
                 <BarChart2 className="w-3.5 h-3.5" />Matches
               </button>
+              <button onClick={() => router.push(`/leagues/${id}/analytics`)} className="toolbar-btn">
+                <Activity className="w-3.5 h-3.5" />Analytics
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
+                <Trophy className="w-3.5 h-3.5" />Leaderboard
+              </button>
               <button onClick={() => setTemplatePanelOpen((v) => !v)} className="toolbar-btn" aria-expanded={templatePanelOpen}>
                 <Palette className="w-3.5 h-3.5" />
                 {templatePanelOpen ? 'Hide Templates' : 'Template'}
@@ -545,6 +577,14 @@ function LeaguePageInner() {
                   ? <><Lock className="w-3.5 h-3.5" />Make Private</>
                   : <><Globe className="w-3.5 h-3.5" />Make Public</>}
               </button>
+              {hasAuctionData && (
+                <button onClick={handleResetAuction} disabled={resettingAuction} className="toolbar-btn hover:text-destructive hover:border-destructive/40" title="Clear all sold players and unsold flags">
+                  {resettingAuction
+                    ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                    : <RotateCcw className="w-3.5 h-3.5" />}
+                  Reset Auction
+                </button>
+              )}
             </>
           )}
           {data.isPublic && data.joinCode && (
