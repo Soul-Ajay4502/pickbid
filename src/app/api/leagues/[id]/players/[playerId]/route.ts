@@ -111,10 +111,15 @@ export async function PUT(
       after(async () => {
         try {
           const teamId = sold.teamId!;
-          const [teams, officials] = await Promise.all([getTeams(id), getOfficials(id)]);
+          const [teams, officials, league] = await Promise.all([
+            getTeams(id), getOfficials(id), getLeague(id),
+          ]);
           const owner =
             officials.find((o) => o.teamId === teamId && /owner/i.test(o.role) && o.contactNumber) ??
             officials.find((o) => o.teamId === teamId && o.contactNumber);
+          const soldDate = new Date().toLocaleDateString('en-IN', {
+            day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
+          });
             if(player.contactNumber&&sold.soldPrice&&sold.soldPrice > 0) {
           await notifyPlayerSold({
             playerName: sold.name,
@@ -123,6 +128,8 @@ export async function PUT(
             ownerName: owner?.name ?? null,
             ownerNumber: owner?.contactNumber ?? null,
             soldPrice: sold.soldPrice ?? null,
+            leagueName: league?.name ?? null,
+            soldDate,
           });
         }
         } catch (err) {

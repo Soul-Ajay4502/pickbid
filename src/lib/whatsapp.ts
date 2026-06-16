@@ -28,6 +28,8 @@ type SoldNotification = {
   ownerName?: string | null;
   ownerNumber?: string | null;
   soldPrice: number | null;
+  leagueName?: string | null;
+  soldDate?: string | null;
 };
 
 /** Indian-style short form for an amount in rupees, mirroring the auction UI. */
@@ -126,7 +128,9 @@ export async function notifyPlayerSold(d: SoldNotification): Promise<boolean> {
       ? `${d.ownerName} — ${d.ownerNumber}`
       : d.ownerNumber
     : 'to be shared';
-const placeholderText = `${d.playerName} you were Sold To: ${d.teamName.toUpperCase()} contact: ${owner} Price: ${formatPrice(d.soldPrice)}`
+const leaguePrefix = d.leagueName ? `${d.leagueName} ` : '';
+const datePart = d.soldDate ? ` on ${d.soldDate}` : '';
+const placeholderText = `${d.playerName} you were Sold To: ${d.teamName.toUpperCase()} contact: ${owner} Price: ${formatPrice(d.soldPrice)}${datePart}-${leaguePrefix}`
   .replace(/[\n\r\t]/g, " ")
   .replace(/\s{2,}/g, " ")
   .trim();
