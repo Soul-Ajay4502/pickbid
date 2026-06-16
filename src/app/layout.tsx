@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import Providers from '@/components/Providers';
 import NavBar from '@/components/NavBar';
+import { Analytics } from '@vercel/analytics/next';
 import {
   SITE_URL,
   SITE_NAME,
@@ -166,6 +167,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Toaster richColors position="top-right" />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
