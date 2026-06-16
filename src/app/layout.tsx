@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import Providers from '@/components/Providers';
 import NavBar from '@/components/NavBar';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Analytics } from '@vercel/analytics/next';
 import {
   SITE_URL,
   SITE_NAME,
@@ -168,6 +169,7 @@ export default function RootLayout({
           <Toaster richColors position="top-right" />
         </Providers>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
