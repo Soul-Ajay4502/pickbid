@@ -637,7 +637,7 @@ function LeaguePageInner() {
                         />
                       </>
                     )}
-                    {data.teams.length > 0 && (
+                    {data.isCreator && data.teams.length > 0 && (
                       <>
                         <div className="my-1.5 h-px bg-border/70" />
                         <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Teams</p>
