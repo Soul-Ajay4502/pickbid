@@ -97,6 +97,8 @@ export interface UserProfile {
   bowlingType: Player['bowlingType'];
   role: Player['role'];
   isWicketKeeper: boolean;
+  /** Personal contact number — records only; never shown on cards/posters or exposed to non-creators */
+  contactNumber?: string | null;
   updatedAt: string;
 }
 

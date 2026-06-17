@@ -138,6 +138,7 @@ export default function PlayerCard({
             onClick={(e) => { e.stopPropagation(); setIconPopover((v) => !v); }}
             title="Icon player"
             aria-label={`Icon player of ${player.iconOfTeam.name}`}
+            className='animate-pulse'
             style={{
               width: 20, height: 20, borderRadius: '50%', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',

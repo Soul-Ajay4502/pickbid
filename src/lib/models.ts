@@ -21,6 +21,7 @@ export class UserModel extends Model<
   declare bowlingType: CreationOptional<string>;
   declare role: CreationOptional<string>;
   declare isWicketKeeper: CreationOptional<boolean>;
+  declare contactNumber: CreationOptional<string | null>;
   declare profileCompleted: CreationOptional<boolean>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -35,6 +36,7 @@ UserModel.init(
     bowlingType:      { type: DataTypes.STRING,  allowNull: false, defaultValue: 'N/A' },
     role:             { type: DataTypes.STRING,  allowNull: false, defaultValue: 'Batter' },
     isWicketKeeper:   { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    contactNumber:    { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     profileCompleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     updatedAt:        { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },

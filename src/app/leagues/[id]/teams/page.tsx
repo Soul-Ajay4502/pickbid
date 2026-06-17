@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus } from 'lucide-react';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
-import { sanitizeFolder, uploadFile } from '@/lib/utils';
+import { sanitizeFolder, uploadFile, formatIndianPhone } from '@/lib/utils';
 import type { LeagueWithPlayers, Team, Player, TeamOfficial } from '@/lib/types';
 
 const TEAM_COLORS = [
@@ -113,7 +113,7 @@ export default function TeamsPage() {
           teamId: team.id,
           name: oName.trim(),
           role: oRole.trim() || 'Official',
-          contactNumber: oContact.trim() || null,
+          contactNumber: formatIndianPhone(oContact) || null,
           photo: photoUrl,
         }),
       });
@@ -467,8 +467,11 @@ export default function TeamsPage() {
                         className="col-span-2 h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
                       <input value={oRole} onChange={e => setORole(e.target.value)} placeholder="Role (e.g. Coach)"
                         className="h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                      <input value={oContact} onChange={e => setOContact(e.target.value)} placeholder="Contact number" inputMode="tel"
-                        className="h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                      <div className="flex items-stretch h-9 rounded-lg border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/30">
+                        <span className="flex items-center px-2.5 text-sm text-muted-foreground bg-muted/60 border-r border-border select-none">+91</span>
+                        <input value={oContact} onChange={e => setOContact(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Contact number" inputMode="numeric" maxLength={10}
+                          className="flex-1 min-w-0 px-3 bg-transparent text-sm focus:outline-none" />
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">

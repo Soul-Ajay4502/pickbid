@@ -18,6 +18,22 @@ export function getOrCreateToken(key: string): string {
   return token;
 }
 
+/**
+ * Extract the 10-digit national part of a phone number, stripping any country
+ * code / spaces / punctuation. Accepts values like "+91 9846027693",
+ * "9846027693", "+919846027693" → "9846027693".
+ */
+export function localPhoneDigits(value: string | null | undefined): string {
+  const digits = (value ?? '').replace(/\D/g, '');
+  return digits.slice(-10);
+}
+
+/** Format a 10-digit national number with the fixed +91 prefix, or '' if empty. */
+export function formatIndianPhone(local: string): string {
+  const digits = local.replace(/\D/g, '');
+  return digits ? `+91 ${digits}` : '';
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

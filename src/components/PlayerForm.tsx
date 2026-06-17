@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Camera, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { localPhoneDigits, formatIndianPhone } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -54,7 +55,8 @@ export default function PlayerForm({
   loading = false,
 }: PlayerFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [contactNumber, setContactNumber] = useState(initial?.contactNumber ?? '');
+  const [phone, setPhone] = useState(localPhoneDigits(initial?.contactNumber));
+  const [phoneError, setPhoneError] = useState('');
   const [existingPhoto, setExistingPhoto] = useState(initial?.photo ?? '');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -89,9 +91,14 @@ export default function PlayerForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (phone.length !== 10) {
+      setPhoneError(phone ? 'Enter a valid 10-digit phone number.' : 'Phone number is required.');
+      return;
+    }
+    setPhoneError('');
     await onSubmit({
       name,
-      contactNumber,
+      contactNumber: formatIndianPhone(phone),
       photo: existingPhoto,
       photoFile,
       battingType,
@@ -118,19 +125,37 @@ export default function PlayerForm({
 
       {/* Phone Number */}
       <div className="space-y-1.5">
-        <Label htmlFor="player-phone">
-          Phone Number <span className="font-normal text-muted-foreground">(optional)</span>
-        </Label>
-        <Input
-          id="player-phone"
-          type="tel"
-          inputMode="tel"
-          value={contactNumber}
-          onChange={(e) => setContactNumber(e.target.value)}
-          placeholder="e.g. +91 98765 43210"
-          disabled={loading}
-        />
-        <p className="text-xs text-muted-foreground">Kept for the organiser&apos;s records — not shown on your card.</p>
+        <Label htmlFor="player-phone">Phone Number</Label>
+        <div
+          className={`flex items-stretch rounded-md border bg-transparent overflow-hidden focus-within:ring-1 ${
+            phoneError ? 'border-destructive focus-within:ring-destructive' : 'border-input focus-within:ring-ring'
+          }`}
+        >
+          <span className="flex items-center px-3 text-sm text-muted-foreground bg-muted/60 border-r border-input select-none">
+            +91
+          </span>
+          <Input
+            id="player-phone"
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+              if (phoneError) setPhoneError('');
+            }}
+            placeholder="98765 43210"
+            maxLength={10}
+            required
+            aria-invalid={!!phoneError}
+            className="border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            disabled={loading}
+          />
+        </div>
+        {phoneError ? (
+          <p className="text-xs text-destructive">{phoneError}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Kept for the organiser&apos;s records — not shown on your card.</p>
+        )}
       </div>
 
       {/* Photo */}

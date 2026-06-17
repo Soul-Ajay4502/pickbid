@@ -83,6 +83,7 @@ function toProfile(row: UserModel): UserProfile | null {
     bowlingType:    (row.bowlingType ?? 'N/A')            as UserProfile['bowlingType'],
     role:           (row.role ?? 'Batter')                as UserProfile['role'],
     isWicketKeeper: row.isWicketKeeper ?? false,
+    contactNumber:  row.contactNumber ?? null,
     updatedAt:      row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -448,6 +449,7 @@ export async function setProfile(
     bowlingType:      data.bowlingType,
     role:             data.role,
     isWicketKeeper:   data.isWicketKeeper,
+    contactNumber:    data.contactNumber ?? null,
     profileCompleted: true,
   });
   return toProfile(row)!;
@@ -467,6 +469,7 @@ export async function updateProfile(
     bowlingType:      data.bowlingType ?? row.bowlingType,
     role:             data.role ?? row.role,
     isWicketKeeper:   data.isWicketKeeper ?? row.isWicketKeeper,
+    contactNumber:    data.contactNumber ?? row.contactNumber,
     profileCompleted: true,
   });
   return toProfile(row)!;

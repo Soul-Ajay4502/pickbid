@@ -68,6 +68,7 @@ function ProfilePageInner() {
         body: JSON.stringify({
           name: data.name,
           photo: photoUrl,
+          contactNumber: data.contactNumber,
           battingType: data.battingType,
           bowlingType: data.bowlingType,
           role: data.role,
@@ -98,6 +99,7 @@ function ProfilePageInner() {
     ? {
         name: profile.name,
         photo: profile.photo,
+        contactNumber: profile.contactNumber ?? '',
         battingType: profile.battingType,
         bowlingType: profile.bowlingType,
         role: profile.role,
