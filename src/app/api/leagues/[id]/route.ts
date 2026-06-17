@@ -15,8 +15,17 @@ export async function GET(
     const [players, teams, officials] = await Promise.all([getPlayers(id), getTeams(id), getOfficials(id)]);
     const isCreator = session?.user?.id === league.creatorId;
     const { creatorId, ...safeLeague } = league;
+    // Resolve each icon player to the team they're pre-assigned to, so cards can show the badge
+    const teamById = new Map(teams.map((tm) => [tm.id, tm]));
+    const withIconTeam = players.map((p) => {
+      const team = p.isIcon && p.teamId ? teamById.get(p.teamId) : null;
+      return {
+        ...p,
+        iconOfTeam: team ? { id: team.id, name: team.name, colorHex: team.colorHex } : null,
+      };
+    });
     // Contact numbers are for the organiser's records only — never expose them to non-creators
-    const safePlayers = isCreator ? players : players.map((p) => ({ ...p, contactNumber: null }));
+    const safePlayers = isCreator ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
     const safeOfficials = isCreator ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
     return NextResponse.json({ ...safeLeague, players: safePlayers, teams, officials: safeOfficials, isCreator });
   } catch (error) {

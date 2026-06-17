@@ -39,6 +39,8 @@ export interface Player {
   isUnsold?: boolean;
   /** Star player pre-assigned to a team before the auction */
   isIcon?: boolean;
+  /** When this player is an icon, the team they're pre-assigned to (derived on the API). Null otherwise. */
+  iconOfTeam?: { id: string; name: string; colorHex: string } | null;
   // Stats
   statsMatches?: number | null;
   statsRuns?: number | null;

@@ -45,6 +45,7 @@ export default function PlayerCard({
   const showStats = hasStats(player);
 
   const [qrUrl, setQrUrl] = useState('');
+  const [iconPopover, setIconPopover] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined' && player.leagueId && player.leagueId !== 'preview') {
       // setQrUrl(`${window.location.origin}/leagues/${player.leagueId}`);
@@ -128,6 +129,44 @@ export default function PlayerCard({
         )}
         {!qrUrl && <div style={{ width: 40, height: 40, flexShrink: 0 }} />}
       </div>
+
+      {/* Icon-player badge — a star in the top-right corner; click to reveal the team */}
+      {player.isIcon && player.iconOfTeam && (
+        <div style={{ position: 'absolute', top: 18, right: 14, zIndex: 5 }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIconPopover((v) => !v); }}
+            title="Icon player"
+            aria-label={`Icon player of ${player.iconOfTeam.name}`}
+            style={{
+              width: 20, height: 20, borderRadius: '50%', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.55)',
+              border: `1.5px solid ${player.iconOfTeam.colorHex}`,
+              boxShadow: `0 2px 12px ${rgba(t.accentRgb, 0.4)}`,
+              padding: 0, lineHeight: 1, fontSize: 12,
+            }}
+          >
+            ⭐
+          </button>
+          {iconPopover && (
+            <div style={{
+              position: 'absolute', top: 36, right: 0,
+              display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+              padding: '5px 10px', borderRadius: 8,
+              background: 'rgba(0,0,0,0.85)',
+              border: `1.5px solid ${player.iconOfTeam.colorHex}`,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: player.iconOfTeam.colorHex, flexShrink: 0, boxShadow: `0 0 6px ${player.iconOfTeam.colorHex}` }} />
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                <span style={{ color: '#ffd700', fontSize: 6.5, fontWeight: 'bold', letterSpacing: 1.5, textTransform: 'uppercase' }}>Icon of</span>
+                <span style={{ color: '#ffffff', fontSize: 11, fontWeight: 700 }}>{player.iconOfTeam.name}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bottom content */}
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 20px 14px' }}>
