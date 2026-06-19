@@ -108,6 +108,8 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   teams: Team[];
   officials: TeamOfficial[];
   isCreator: boolean;
+  /** True when the requesting user has a card in this league (matched by userId) */
+  hasJoined: boolean;
 }
 
 /** A team's purse summary shown on the live spectator board */

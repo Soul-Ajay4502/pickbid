@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Separator } from '@/components/ui/separator';
@@ -64,10 +64,8 @@ function LeaguePageInner() {
   }, [sessionStatus]);
 
 
-  const hasJoined = useMemo(() => {
-    if (typeof window === 'undefined' || !data) return false;
-    return data.players.some((p) => !!localStorage.getItem(`creator_player_${p.id}`));
-  }, [data]);
+  // Server-computed from the requester's userId, so it's consistent across devices
+  const hasJoined = data?.hasJoined ?? false;
 
   async function handleJoin() {
     if (!profile) return;

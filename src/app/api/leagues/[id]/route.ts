@@ -14,6 +14,10 @@ export async function GET(
     }
     const [players, teams, officials] = await Promise.all([getPlayers(id), getTeams(id), getOfficials(id)]);
     const isCreator = session?.user?.id === league.creatorId;
+    // Whether the requester has joined: matched by userId stamped at join time,
+    // so it stays consistent across devices (unlike the old localStorage check)
+    const userId = session?.user?.id;
+    const hasJoined = !!userId && players.some((p) => p.userId === userId);
     const { creatorId, ...safeLeague } = league;
     // Resolve each icon player to the team they're pre-assigned to, so cards can show the badge
     const teamById = new Map(teams.map((tm) => [tm.id, tm]));
@@ -27,7 +31,7 @@ export async function GET(
     // Contact numbers are for the organiser's records only — never expose them to non-creators
     const safePlayers = isCreator ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
     const safeOfficials = isCreator ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
-    return NextResponse.json({ ...safeLeague, players: safePlayers, teams, officials: safeOfficials, isCreator });
+    return NextResponse.json({ ...safeLeague, players: safePlayers, teams, officials: safeOfficials, isCreator, hasJoined });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
