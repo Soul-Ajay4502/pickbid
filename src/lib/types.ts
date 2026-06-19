@@ -8,6 +8,8 @@ export interface League {
   logoUrl: string;
   isPublic: boolean;
   joinCode: string | null;
+  /** When true, the creator has closed registration — non-creators can no longer join */
+  registrationClosed: boolean;
   createdAt: string;
 }
 

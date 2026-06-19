@@ -31,7 +31,9 @@ export async function GET(
     // Contact numbers are for the organiser's records only — never expose them to non-creators
     const safePlayers = isCreator ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
     const safeOfficials = isCreator ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
-    return NextResponse.json({ ...safeLeague, players: safePlayers, teams, officials: safeOfficials, isCreator, hasJoined });
+    // isCreator/hasJoined first, before the (potentially large) players array, so
+    // they're easy to find in the response rather than buried after the arrays
+    return NextResponse.json({ ...safeLeague, isCreator, hasJoined, players: safePlayers, teams, officials: safeOfficials });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
@@ -56,7 +58,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const body = await request.json();
-    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl'];
+    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
     const updated = await updateLeague(id, patch);
     return NextResponse.json(updated);

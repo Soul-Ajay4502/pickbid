@@ -12,7 +12,7 @@ import { generateToken } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { toast } from 'sonner';
 import {
-  ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock,
+  ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
   UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy,
 } from 'lucide-react';
@@ -34,6 +34,7 @@ function LeaguePageInner() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [joining, setJoining] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
+  const [togglingRegistration, setTogglingRegistration] = useState(false);
   const [resettingAuction, setResettingAuction] = useState(false);
 
   const fetchLeague = useCallback(async () => {
@@ -351,6 +352,23 @@ function LeaguePageInner() {
     finally { setTogglingPublic(false); }
   }
 
+  async function handleToggleRegistration() {
+    if (!data) return;
+    setTogglingRegistration(true);
+    const next = !(data.registrationClosed ?? false);
+    try {
+      const res = await fetch(`/api/leagues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationClosed: next }),
+      });
+      if (!res.ok) throw new Error();
+      setData(prev => prev ? { ...prev, registrationClosed: next } : prev);
+      toast.success(next ? 'Registration closed — new players can no longer join' : 'Registration reopened');
+    } catch { toast.error('Failed to update registration'); }
+    finally { setTogglingRegistration(false); }
+  }
+
   // ── Squad poster ───────────────────────────────────────────────────────────
   async function handleSquadPoster() {
     if (!data || data.players.length === 0) return;
@@ -445,7 +463,10 @@ function LeaguePageInner() {
     )
     : data.players;
 
-  const showAddCard = data.isCreator || isOpen;
+  const registrationClosed = data.registrationClosed ?? false;
+  // Non-creators can only join via a register link while registration is open
+  const canJoin = isOpen && !registrationClosed;
+  const showAddCard = data.isCreator || canJoin;
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -481,9 +502,35 @@ function LeaguePageInner() {
                 {data.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                 {data.isPublic ? 'Public' : 'Private'}
               </span>
-              {isOpen && !data.isCreator && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  Open for registration
+              {/* Registration flag. The creator can toggle it open/closed with the
+                  button on its left; non-creators only see the flag when they
+                  arrived via a register link (?open=true). */}
+              {data.isCreator ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <button
+                    onClick={handleToggleRegistration}
+                    disabled={togglingRegistration}
+                    title={registrationClosed ? 'Reopen registration so players can join' : 'Close registration to stop new players joining'}
+                    aria-label={registrationClosed ? 'Reopen registration' : 'Close registration'}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {togglingRegistration
+                      ? <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                      : registrationClosed ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                  </button>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${registrationClosed
+                    ? 'bg-muted text-muted-foreground border-border'
+                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                    }`}>
+                    {registrationClosed ? 'Registration closed' : 'Open for registration'}
+                  </span>
+                </span>
+              ) : isOpen && (
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${registrationClosed
+                  ? 'bg-muted text-muted-foreground border-border'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                  }`}>
+                  {registrationClosed ? 'Registration closed' : 'Open for registration'}
                 </span>
               )}
             </div>

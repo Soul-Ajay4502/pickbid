@@ -36,6 +36,12 @@ export async function POST(
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
+    // Once the creator closes registration, only they can still add cards
+    // (via Add Player); public self-registration is rejected.
+    const isCreator = !!session?.user?.id && league.creatorId === session.user.id;
+    if (league.registrationClosed && !isCreator) {
+      return NextResponse.json({ error: 'Registration is closed for this league' }, { status: 403 });
+    }
 
     const body = await request.json();
     const { name, photo, battingType, bowlingType, role, isWicketKeeper, contactNumber, creatorToken } = body;

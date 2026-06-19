@@ -17,6 +17,7 @@ function toLeague(row: LeagueModel): League {
     logoUrl:      row.logoUrl ?? '',
     isPublic:     row.isPublic ?? false,
     joinCode:     row.joinCode ?? null,
+    registrationClosed: row.registrationClosed ?? false,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }

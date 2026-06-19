@@ -57,21 +57,23 @@ export class LeagueModel extends Model<
   declare logoUrl: CreationOptional<string>;
   declare isPublic: CreationOptional<boolean>;
   declare joinCode: CreationOptional<string | null>;
+  declare registrationClosed: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
 }
 
 LeagueModel.init(
   {
-    id:           { type: DataTypes.STRING,  primaryKey: true },
-    name:         { type: DataTypes.STRING,  allowNull: false },
-    totalPlayers: { type: DataTypes.INTEGER, allowNull: false },
-    conductedBy:  { type: DataTypes.STRING,  allowNull: false },
-    creatorId:    { type: DataTypes.STRING,  allowNull: false },
-    templateId:   { type: DataTypes.STRING,  allowNull: false, defaultValue: 'classic-green' },
-    logoUrl:      { type: DataTypes.TEXT,    allowNull: false, defaultValue: '' },
-    isPublic:     { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    joinCode:     { type: DataTypes.STRING(8), allowNull: true, defaultValue: null },
-    createdAt:    { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
+    id:                 { type: DataTypes.STRING,  primaryKey: true },
+    name:               { type: DataTypes.STRING,  allowNull: false },
+    totalPlayers:       { type: DataTypes.INTEGER, allowNull: false },
+    conductedBy:        { type: DataTypes.STRING,  allowNull: false },
+    creatorId:          { type: DataTypes.STRING,  allowNull: false },
+    templateId:         { type: DataTypes.STRING,  allowNull: false, defaultValue: 'classic-green' },
+    logoUrl:            { type: DataTypes.TEXT,    allowNull: false, defaultValue: '' },
+    isPublic:           { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    joinCode:           { type: DataTypes.STRING(8), allowNull: true, defaultValue: null },
+    registrationClosed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }
 );
