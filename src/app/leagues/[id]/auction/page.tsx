@@ -248,8 +248,8 @@ export default function AuctionPage() {
   }
 
   if (loading || !league) return (
-    <div className="min-h-screen flex items-center justify-center bg-[oklch(0.085_0.014_260)]">
-      <div className="text-white/40 animate-pulse text-lg">Loading auction…</div>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-foreground/40 animate-pulse text-lg">Loading auction…</div>
     </div>
   );
 
@@ -259,11 +259,11 @@ export default function AuctionPage() {
   const watchUrl = typeof window !== 'undefined' ? `${window.location.origin}/leagues/${id}/watch` : '';
 
   if (phase === 'lobby') return (
-    <div className="min-h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background text-foreground relative overflow-hidden">
       <div className="absolute -top-24 left-1/3 w-150 h-150 rounded-full bg-green-500/6 blur-[130px] animate-orb pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-125 h-125 rounded-full bg-emerald-400/5 blur-[110px] animate-orb pointer-events-none" style={{ animationDelay: '5s' }} />
-      <div className="border-b border-white/8 px-6 py-4 relative z-10 backdrop-blur-xl bg-white/2 flex items-center justify-between gap-3">
-        <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-white/50 hover:text-white hover:bg-white/10">← Back to League</Button>
+      <div className="border-b border-foreground/8 px-6 py-4 relative z-10 backdrop-blur-xl bg-foreground/2 flex items-center justify-between gap-3">
+        <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/50 hover:text-foreground hover:bg-foreground/10">← Back to League</Button>
         <ShareLiveButton onClick={() => setShareOpen(true)} />
       </div>
       <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
@@ -274,30 +274,30 @@ export default function AuctionPage() {
         </div>
         <div style={{ animation: 'fadeInUp .55s .1s cubic-bezier(.22,1,.36,1) both' }}>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight mb-2">{league.name}</h1>
-          <p className="text-white/40 text-lg">Player Auction · {totalPlayers} players</p>
-          {teams.length > 0 && <p className="text-white/30 mt-1 text-sm">{teams.length} teams · Budget tracking on</p>}
-          {teams.length === 0 && <button onClick={() => router.push(`/leagues/${id}/teams`)} className="mt-3 text-sm text-amber-400/80 underline underline-offset-2 hover:text-amber-400">Set up teams →</button>}
+          <p className="text-foreground/40 text-lg">Player Auction · {totalPlayers} players</p>
+          {teams.length > 0 && <p className="text-foreground/30 mt-1 text-sm">{teams.length} teams · Budget tracking on</p>}
+          {teams.length === 0 && <button onClick={() => router.push(`/leagues/${id}/teams`)} className="mt-3 text-sm text-amber-600 dark:text-amber-400/80 underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300">Set up teams →</button>}
         </div>
 
         {/* Team purses */}
         {teams.length > 0 && (
           <div className="w-full max-w-3xl" style={{ animation: 'fadeInUp .55s .18s cubic-bezier(.22,1,.36,1) both' }}>
             <div className="flex items-center justify-between mb-3 gap-4 flex-wrap">
-              <p className="text-white/35 text-[11px] uppercase tracking-[3px] font-bold">Team Purses</p>
-              <label className="flex items-center gap-2 text-xs text-white/40">
+              <p className="text-foreground/35 text-[11px] uppercase tracking-[3px] font-bold">Team Purses</p>
+              <label className="flex items-center gap-2 text-xs text-foreground/40">
                 Base price / player
                 <input
                   type="number" min="0" value={basePrice || ''} placeholder="0"
                   onChange={e => changeBasePrice(e.target.value)}
-                  className="w-28 h-8 px-2 rounded-lg border border-white/15 bg-white/8 text-white text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500/40"
+                  className="w-28 h-8 px-2 rounded-lg border border-foreground/15 bg-foreground/8 text-foreground text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500/40"
                 />
-                {basePrice > 0 && <span className="text-green-400/70 tabular-nums">{fmt(basePrice)}</span>}
+                {basePrice > 0 && <span className="text-green-600 dark:text-green-400/70 tabular-nums">{fmt(basePrice)}</span>}
               </label>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/4 overflow-x-auto backdrop-blur">
+            <div className="rounded-2xl border border-foreground/10 bg-foreground/4 overflow-x-auto backdrop-blur">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest text-white/30">
+                  <tr className="border-b border-foreground/10 text-[10px] uppercase tracking-widest text-foreground/30">
                     <th className="px-4 py-2.5 text-left font-bold">Team</th>
                     <th className="px-3 py-2.5 text-right font-bold">Budget</th>
                     <th className="px-3 py-2.5 text-right font-bold">Balance</th>
@@ -309,24 +309,24 @@ export default function AuctionPage() {
                   {teams.map(t => {
                     const st = teamStats(t, league.players, basePrice);
                     return (
-                      <tr key={t.id} className="border-b border-white/5 last:border-0">
+                      <tr key={t.id} className="border-b border-foreground/5 last:border-0">
                         <td className="px-4 py-2.5 text-left">
                           <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.colorHex }} />
-                            <span className="font-semibold text-white/80">{t.name}</span>
+                            <span className="font-semibold text-foreground/80">{t.name}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-white/45">{fmt(t.budget)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-green-400 font-semibold">{fmt(st.balance)}</td>
-                        <td className="px-3 py-2.5 text-center tabular-nums text-white/55">{st.bought}/{st.maxPlayers}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-300">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-foreground/45">{fmt(t.budget)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums text-foreground/55">{st.bought}/{st.maxPlayers}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-600 dark:text-amber-300">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <p className="text-white/20 text-[11px] mt-2">Max bid = balance − (remaining slots − 1) × base price</p>
+            <p className="text-foreground/20 text-[11px] mt-2">Max bid = balance − (remaining slots − 1) × base price</p>
           </div>
         )}
 
@@ -334,9 +334,9 @@ export default function AuctionPage() {
           <AuctionCTA onClick={startAuction}>{hasAuctionData ? 'Resume Auction' : 'Start Auction'}</AuctionCTA>
           {hasAuctionData && (
             <button onClick={resetAuction} disabled={resetting}
-              className="inline-flex items-center gap-2 text-sm text-white/40 hover:text-red-300 disabled:opacity-50 transition-colors">
+              className="inline-flex items-center gap-2 text-sm text-foreground/40 hover:text-red-500 dark:hover:text-red-300 disabled:opacity-50 transition-colors">
               {resetting
-                ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ? <span className="w-3.5 h-3.5 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />
                 : <RotateCcw className="w-3.5 h-3.5" />}
               Reset auction data
             </button>
@@ -347,37 +347,37 @@ export default function AuctionPage() {
   );
 
   if (phase === 'done') return (
-    <div className="min-h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background text-foreground relative overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-150 rounded-full bg-amber-500/4 blur-[120px] pointer-events-none" />
-      <div className="border-b border-white/8 px-6 py-4">
-        <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-white/50 hover:text-white hover:bg-white/10">← Back to League</Button>
+      <div className="border-b border-foreground/8 px-6 py-4">
+        <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/50 hover:text-foreground hover:bg-foreground/10">← Back to League</Button>
       </div>
       <div className="flex-1 flex flex-col items-center justify-center gap-8 p-8 text-center overflow-auto">
         <div className="animate-trophy text-8xl select-none">🏆</div>
         <div style={{ animation: 'fadeInUp .55s .1s cubic-bezier(.22,1,.36,1) both' }}>
           <h2 className="text-4xl font-bold text-gradient-gold">Auction Complete!</h2>
-          <p className="text-white/50 text-xl mt-2">{soldCount} of {totalPlayers} players sold</p>
+          <p className="text-foreground/50 text-xl mt-2">{soldCount} of {totalPlayers} players sold</p>
         </div>
         {teams.length > 0 && (
           <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-3 gap-3" style={{ animation: 'fadeInUp .55s .2s cubic-bezier(.22,1,.36,1) both' }}>
             {teams.map(t => {
               const spent = spentByTeam[t.id] ?? 0, tPlayers = soldPlayers.filter(p => p.teamId === t.id);
-              return (<div key={t.id} className="bg-white/5 border border-white/10 rounded-xl p-3 text-left">
+              return (<div key={t.id} className="bg-foreground/5 border border-foreground/10 rounded-xl p-3 text-left">
                 <div className="flex items-center gap-2 mb-1"><div className="w-2.5 h-2.5 rounded-full" style={{ background: t.colorHex }} /><span className="font-semibold text-sm">{t.name}</span></div>
-                <p className="text-xs text-white/40">{tPlayers.length} players · {fmt(spent)}</p>
-                <p className="text-xs text-white/25 mt-0.5">{fmt(t.budget - spent)} left</p>
+                <p className="text-xs text-foreground/40">{tPlayers.length} players · {fmt(spent)}</p>
+                <p className="text-xs text-foreground/25 mt-0.5">{fmt(t.budget - spent)} left</p>
               </div>);
             })}
           </div>
         )}
         <div className="flex gap-4" style={{ animation: 'fadeInUp .55s .35s cubic-bezier(.22,1,.36,1) both' }}>
-          <Button variant="outline" onClick={resetAuction} disabled={resetting} className="border-white/20 text-white hover:bg-white/10">
+          <Button variant="outline" onClick={resetAuction} disabled={resetting} className="border-foreground/20 text-foreground hover:bg-foreground/10">
             {resetting
-              ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+              ? <span className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin mr-2" />
               : <RotateCcw className="w-4 h-4 mr-2" />}
             Reset Auction
           </Button>
-          <Button onClick={() => router.push(`/leagues/${id}`)} className="bg-green-600 hover:bg-green-500 btn-glow-green">Back to League</Button>
+          <Button onClick={() => router.push(`/leagues/${id}`)} className="bg-green-600 hover:bg-green-500 text-white btn-glow-green">Back to League</Button>
         </div>
       </div>
     </div>
@@ -394,24 +394,24 @@ export default function AuctionPage() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         @keyframes lobbyCta{0%,100%{box-shadow:0 0 28px 4px rgba(22,163,74,.5),0 10px 36px rgba(22,163,74,.3)}50%{box-shadow:0 0 52px 10px rgba(22,163,74,.7),0 10px 52px rgba(22,163,74,.45)}}
       `}</style>
-      <div className="h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white">
-        <div className="flex items-center justify-between px-5 py-3 bg-white/3 border-b border-white/8 shrink-0 backdrop-blur-xl">
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/leagues/${id}`)} className="text-white/40 hover:text-white hover:bg-white/10">← League</Button>
+      <div className="h-screen flex flex-col bg-background text-foreground">
+        <div className="flex items-center justify-between px-5 py-3 bg-foreground/3 border-b border-foreground/8 shrink-0 backdrop-blur-xl">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/40 hover:text-foreground hover:bg-foreground/10">← League</Button>
           <div className="flex items-center gap-4 text-xs sm:text-sm font-semibold">
-            <span className="text-green-400 tabular-nums">{soldCount} Sold</span><span className="text-white/15">|</span>
-            <span className="text-white/45 tabular-nums">{pool.length + unsoldQueue.length} Left</span>
-            {unsoldQueue.length > 0 && <><span className="text-white/15">|</span><span className="text-amber-400 tabular-nums">{unsoldQueue.length} Unsold</span></>}
-            {round > 1 && <><span className="text-white/15">|</span><span className="text-indigo-400 text-xs uppercase tracking-widest font-bold">Rnd {round}</span></>}
+            <span className="text-green-600 dark:text-green-400 tabular-nums">{soldCount} Sold</span><span className="text-foreground/15">|</span>
+            <span className="text-foreground/45 tabular-nums">{pool.length + unsoldQueue.length} Left</span>
+            {unsoldQueue.length > 0 && <><span className="text-foreground/15">|</span><span className="text-amber-600 dark:text-amber-400 tabular-nums">{unsoldQueue.length} Unsold</span></>}
+            {round > 1 && <><span className="text-foreground/15">|</span><span className="text-indigo-600 dark:text-indigo-400 text-xs uppercase tracking-widest font-bold">Rnd {round}</span></>}
           </div>
           <div className="flex items-center gap-3">
             <ShareLiveButton onClick={() => setShareOpen(true)} />
-            <div className="text-white/20 text-xs tabular-nums font-mono">{soldCount}/{totalPlayers}</div>
+            <div className="text-foreground/20 text-xs tabular-nums font-mono">{soldCount}/{totalPlayers}</div>
           </div>
         </div>
         <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
         {/* Mobile: horizontal purse strip */}
         {teams.length > 0 && (
-          <div className="md:hidden flex gap-2.5 px-4 py-2.5 border-b border-white/5 bg-white/2 overflow-x-auto shrink-0">
+          <div className="md:hidden flex gap-2.5 px-4 py-2.5 border-b border-foreground/5 bg-foreground/2 overflow-x-auto shrink-0">
             {teams.map(t => (
               <div key={t.id} className="min-w-44 shrink-0">
                 <PurseCard team={t} roster={soldPlayers} basePrice={basePrice} />
@@ -422,11 +422,11 @@ export default function AuctionPage() {
         <div className="flex-1 flex min-h-0">
           {/* Desktop: vertical purse sidebar on the left (collapsible) */}
           {teams.length > 0 && (purseOpen ? (
-            <aside className="hidden md:flex w-60 shrink-0 flex-col gap-2 p-3 border-r border-white/5 bg-white/2 overflow-y-auto animate-slide-in-right">
+            <aside className="hidden md:flex w-60 shrink-0 flex-col gap-2 p-3 border-r border-foreground/5 bg-foreground/2 overflow-y-auto animate-slide-in-right">
               <div className="flex items-center justify-between px-1 pb-0.5">
-                <p className="text-[10px] uppercase tracking-[2.5px] text-white/30 font-bold">Team Purses</p>
+                <p className="text-[10px] uppercase tracking-[2.5px] text-foreground/30 font-bold">Team Purses</p>
                 <button onClick={togglePurse} title="Collapse purses" aria-label="Collapse team purses"
-                  className="w-6 h-6 flex items-center justify-center rounded-md text-white/35 hover:text-white hover:bg-white/10 transition-colors">
+                  className="w-6 h-6 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
                   <PanelLeftClose className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -435,9 +435,9 @@ export default function AuctionPage() {
               ))}
             </aside>
           ) : (
-            <aside className="hidden md:flex w-11 shrink-0 flex-col items-center gap-2.5 py-3 border-r border-white/5 bg-white/2">
+            <aside className="hidden md:flex w-11 shrink-0 flex-col items-center gap-2.5 py-3 border-r border-foreground/5 bg-foreground/2">
               <button onClick={togglePurse} title="Show team purses" aria-label="Show team purses"
-                className="w-7 h-7 flex items-center justify-center rounded-md text-white/35 hover:text-white hover:bg-white/10 transition-colors">
+                className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
               <div className="flex flex-col gap-2 mt-1">
@@ -456,12 +456,12 @@ export default function AuctionPage() {
           <div className="flex-1 flex flex-col items-center justify-center gap-8 p-6 overflow-auto">
             {phase === 'idle' && (
               <div className="flex flex-col items-center gap-5">
-                {pool.length === 0 && unsoldQueue.length > 0 && <p className="text-amber-400/70 text-sm">All shown — {unsoldQueue.length} unsold re-entering</p>}
+                {pool.length === 0 && unsoldQueue.length > 0 && <p className="text-amber-600 dark:text-amber-400/70 text-sm">All shown — {unsoldQueue.length} unsold re-entering</p>}
                 <button onClick={pickNext} style={{ position: 'relative', padding: '28px 80px', borderRadius: 24, border: '2px solid rgba(168,85,247,.5)', cursor: 'pointer', background: 'linear-gradient(135deg,#4338ca 0%,#7c3aed 50%,#4338ca 100%)', color: '#fff', fontSize: 28, fontWeight: 900, letterSpacing: .4, display: 'flex', alignItems: 'center', gap: 16, animation: 'ctaGlow 2.2s ease-in-out infinite', transition: 'transform .1s ease', userSelect: 'none', WebkitUserSelect: 'none' }}
                   onMouseDown={e => { e.currentTarget.style.transform = 'scale(.95)' }} onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}>
                   <Shuffle size={30} />Pick Next Player
                 </button>
-                <p style={{ color: 'rgba(255,255,255,.22)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' }}>{pool.length + unsoldQueue.length} in pool</p>
+                <p style={{ color: 'var(--muted-foreground)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' }}>{pool.length + unsoldQueue.length} in pool</p>
               </div>
             )}
             {phase === 'picking' && (
@@ -490,14 +490,14 @@ export default function AuctionPage() {
                 )}
                 {phase === 'sold-modal' && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-[oklch(0.14_0.013_260)] border border-white/12 rounded-2xl p-6 w-full max-w-sm space-y-5 animate-scale-in shadow-2xl">
+                    <div className="bg-popover border border-foreground/12 rounded-2xl p-6 w-full max-w-sm space-y-5 animate-scale-in shadow-2xl">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-lg text-white">Record Sale — {current.name}</h3>
-                        <button onClick={() => setPhase('showing')} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
+                        <h3 className="font-bold text-lg text-foreground">Record Sale — {current.name}</h3>
+                        <button onClick={() => setPhase('showing')} className="text-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
                       </div>
                       {teams.length > 0 ? (
                         <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-white/40 uppercase tracking-wide">Sold To</label>
+                          <label className="text-xs font-semibold text-foreground/40 uppercase tracking-wide">Sold To</label>
                           <div className="grid grid-cols-2 gap-2">
                             {teams.map(t => {
                               const st = teamStats(t, soldPlayers, basePrice);
@@ -505,7 +505,7 @@ export default function AuctionPage() {
                               return (
                                 <button key={t.id} onClick={() => setSoldTeamId(t.id)} disabled={full}
                                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-left disabled:opacity-35 disabled:cursor-not-allowed"
-                                  style={{ borderColor: soldTeamId === t.id ? t.colorHex : 'rgba(255,255,255,.1)', background: soldTeamId === t.id ? `${t.colorHex}20` : 'transparent', color: soldTeamId === t.id ? '#fff' : 'rgba(255,255,255,.5)' }}>
+                                  style={{ borderColor: soldTeamId === t.id ? t.colorHex : 'var(--border)', background: soldTeamId === t.id ? `${t.colorHex}20` : 'transparent', color: soldTeamId === t.id ? 'var(--foreground)' : 'var(--muted-foreground)' }}>
                                   <div className="w-2 h-2 rounded-full shrink-0" style={{ background: t.colorHex }} />
                                   <span className="truncate flex-1">{t.name}</span>
                                   <span className="text-[10px] opacity-60 text-right leading-tight tabular-nums">
@@ -518,30 +518,30 @@ export default function AuctionPage() {
                         </div>
                       ) : (
                         <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-white/40 uppercase tracking-wide">Team Name</label>
-                          <input value={soldTeamId} onChange={e => setSoldTeamId(e.target.value)} placeholder="Enter team name" className="w-full h-10 px-3 rounded-xl border border-white/15 bg-white/8 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40" />
+                          <label className="text-xs font-semibold text-foreground/40 uppercase tracking-wide">Team Name</label>
+                          <input value={soldTeamId} onChange={e => setSoldTeamId(e.target.value)} placeholder="Enter team name" className="w-full h-10 px-3 rounded-xl border border-foreground/15 bg-foreground/8 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40" />
                         </div>
                       )}
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-white/40 uppercase tracking-wide flex items-center gap-1"><Wallet className="w-3 h-3" />Sale Price</label>
-                        <input type="number" min="0" value={soldPrice} onChange={e => setSoldPrice(e.target.value)} placeholder="e.g. 1500000" className="w-full h-10 px-3 rounded-xl border border-white/15 bg-white/8 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40" />
+                        <label className="text-xs font-semibold text-foreground/40 uppercase tracking-wide flex items-center gap-1"><Wallet className="w-3 h-3" />Sale Price</label>
+                        <input type="number" min="0" value={soldPrice} onChange={e => setSoldPrice(e.target.value)} placeholder="e.g. 1500000" className="w-full h-10 px-3 rounded-xl border border-foreground/15 bg-foreground/8 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40" />
                         {(() => {
                           if (!soldPrice) return null;
                           const price = parseInt(soldPrice) || 0;
                           const team = teams.find(t => t.id === soldTeamId);
                           const over = team ? price > teamStats(team, soldPlayers, basePrice).maxBid : false;
                           return (
-                            <p className={`text-xs ${over ? 'text-red-400 font-semibold' : 'text-white/40'}`}>
+                            <p className={`text-xs ${over ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-foreground/40'}`}>
                               {fmt(price)}{over && ` — exceeds ${team!.name}'s max bid`}
                             </p>
                           );
                         })()}
                       </div>
                       <div className="flex gap-3">
-                        <button onClick={() => setPhase('showing')} className="flex-1 py-2.5 rounded-xl border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors text-sm font-medium">Cancel</button>
+                        <button onClick={() => setPhase('showing')} className="flex-1 py-2.5 rounded-xl border border-foreground/15 text-foreground/60 hover:text-foreground hover:border-foreground/30 transition-colors text-sm font-medium">Cancel</button>
                         <button onClick={confirmSold} disabled={!soldTeamId || submittingSold}
                           className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
-                          {submittingSold && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}Confirm Sold
+                          {submittingSold && <span className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />}Confirm Sold
                         </button>
                       </div>
                     </div>
@@ -561,17 +561,17 @@ function PurseCard({ team, roster, basePrice }: { team: Team; roster: Player[]; 
   const pct = Math.min(100, Math.round((st.spent / team.budget) * 100));
   const full = st.slotsLeft === 0;
   return (
-    <div className={`rounded-xl border px-3 py-2 transition-colors ${full ? 'border-green-500/25 bg-green-500/5' : 'border-white/8 bg-white/4'}`}>
+    <div className={`rounded-xl border px-3 py-2 transition-colors ${full ? 'border-green-500/25 bg-green-500/5' : 'border-foreground/8 bg-foreground/4'}`}>
       <div className="flex items-center gap-1.5 mb-1">
         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: team.colorHex }} />
-        <span className="text-xs font-semibold text-white/75 truncate flex-1">{team.name}</span>
-        <span className={`text-[10px] tabular-nums font-bold ${full ? 'text-green-400' : 'text-white/40'}`}>{st.bought}/{st.maxPlayers}</span>
+        <span className="text-xs font-semibold text-foreground/75 truncate flex-1">{team.name}</span>
+        <span className={`text-[10px] tabular-nums font-bold ${full ? 'text-green-600 dark:text-green-400' : 'text-foreground/40'}`}>{st.bought}/{st.maxPlayers}</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-[11px] tabular-nums whitespace-nowrap">
-        <span className="text-white/40">Bal <span className="text-green-400 font-semibold">{fmt(st.balance)}</span></span>
-        <span className="text-white/40">Max <span className={`font-semibold ${full ? 'text-white/25' : 'text-amber-300'}`}>{full ? '—' : fmt(st.maxBid)}</span></span>
+        <span className="text-foreground/40">Bal <span className="text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</span></span>
+        <span className="text-foreground/40">Max <span className={`font-semibold ${full ? 'text-foreground/25' : 'text-amber-600 dark:text-amber-300'}`}>{full ? '—' : fmt(st.maxBid)}</span></span>
       </div>
-      <div className="mt-1.5 w-full h-1 rounded-full bg-white/10 overflow-hidden">
+      <div className="mt-1.5 w-full h-1 rounded-full bg-foreground/10 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: team.colorHex }} />
       </div>
     </div>
@@ -590,7 +590,7 @@ function AuctionCTA({ onClick, children }: { onClick: () => void; children: Reac
 function ShareLiveButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-semibold text-white/70 hover:text-white bg-white/8 hover:bg-white/15 border border-white/10 transition-colors shrink-0">
+      className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-semibold text-foreground/70 hover:text-foreground bg-foreground/8 hover:bg-foreground/15 border border-foreground/10 transition-colors shrink-0">
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full rounded-full bg-red-500/70 animate-ping" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
@@ -604,12 +604,12 @@ function ShareLiveModal({ open, onClose, url }: { open: boolean; onClose: () => 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[oklch(0.14_0.013_260)] border border-white/12 rounded-2xl p-6 w-full max-w-sm space-y-4 animate-scale-in shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-popover border border-foreground/12 rounded-2xl p-6 w-full max-w-sm space-y-4 animate-scale-in shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-lg text-white">Share Live View</h3>
-          <button onClick={onClose} className="text-white/40 hover:text-white" aria-label="Close"><X className="w-5 h-5" /></button>
+          <h3 className="font-bold text-lg text-foreground">Share Live View</h3>
+          <button onClick={onClose} className="text-foreground/40 hover:text-foreground" aria-label="Close"><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-white/50 text-sm">Anyone with this link follows the auction live — point a projector at it, or share it with the room to watch on their phones.</p>
+        <p className="text-foreground/50 text-sm">Anyone with this link follows the auction live — point a projector at it, or share it with the room to watch on their phones.</p>
         <div className="flex justify-center py-1">
           <div className="bg-white p-3 rounded-xl">
             <QRCodeSVG value={url} size={176} />
@@ -617,13 +617,13 @@ function ShareLiveModal({ open, onClose, url }: { open: boolean; onClose: () => 
         </div>
         <div className="flex items-center gap-2">
           <input readOnly value={url} onFocus={e => e.currentTarget.select()}
-            className="flex-1 h-10 px-3 rounded-xl border border-white/15 bg-white/8 text-white text-xs truncate focus:outline-none" />
+            className="flex-1 h-10 px-3 rounded-xl border border-foreground/15 bg-foreground/8 text-foreground text-xs truncate focus:outline-none" />
           <button onClick={() => { navigator.clipboard.writeText(url).then(() => toast.success('Watch link copied')); }}
             className="h-10 px-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-semibold inline-flex items-center gap-1.5 shrink-0">
             <Copy className="w-3.5 h-3.5" />Copy
           </button>
         </div>
-        <a href={url} target="_blank" rel="noreferrer" className="block text-center text-sm text-green-400 hover:underline underline-offset-2">Open big-screen view →</a>
+        <a href={url} target="_blank" rel="noreferrer" className="block text-center text-sm text-green-600 dark:text-green-400 hover:underline underline-offset-2">Open big-screen view →</a>
       </div>
     </div>
   );
