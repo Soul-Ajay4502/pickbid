@@ -7,9 +7,6 @@ import type { LiveAuctionState, LivePurse } from '@/lib/types';
 
 function fmt(n: number): string {
   if (!n) return '₹0';
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
@@ -46,28 +43,102 @@ function Confetti() {
   );
 }
 
-function PurseStrip({ purses }: { purses: LivePurse[] }) {
+function PurseTile({ t, className = '', onClick }: { t: LivePurse; className?: string; onClick?: () => void }) {
+  const bal = t.budget != null ? t.budget - t.spent : null;
+  const full = t.maxPlayers != null && t.count >= t.maxPlayers;
   return (
-    <div className="flex gap-2.5 px-4 py-3 border-t border-white/8 bg-white/2 overflow-x-auto shrink-0">
-      {purses.map(t => {
-        const bal = t.budget != null ? t.budget - t.spent : null;
-        const full = t.maxPlayers != null && t.count >= t.maxPlayers;
-        return (
-          <div key={t.id} className={`min-w-40 shrink-0 rounded-xl border px-3 py-2 ${full ? 'border-green-500/25 bg-green-500/5' : 'border-white/8 bg-white/4'}`}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
-              <span className="text-xs font-semibold text-white/75 truncate flex-1">{t.name}</span>
-              <span className={`text-[10px] tabular-nums font-bold ${full ? 'text-green-400' : 'text-white/40'}`}>
-                {t.count}{t.maxPlayers != null && `/${t.maxPlayers}`}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums whitespace-nowrap">
-              <span className="text-white/40">Spent <span className="text-white/70 font-semibold">{fmt(t.spent)}</span></span>
-              {bal != null && <span className="text-white/40">Bal <span className="text-green-400 font-semibold">{fmt(bal)}</span></span>}
-            </div>
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={`rounded-xl border px-3 py-2 ${onClick ? 'cursor-pointer hover:border-white/25 transition-colors' : ''} ${full ? 'border-green-500/25 bg-green-500/5' : 'border-white/8 bg-white/4'} ${className}`}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: t.color }} />
+        <span className="text-xs font-semibold text-white/75 truncate flex-1">{t.name}</span>
+        <span className={`text-[10px] tabular-nums font-bold ${full ? 'text-green-400' : 'text-white/40'}`}>
+          {t.count}{t.maxPlayers != null && `/${t.maxPlayers}`}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums whitespace-nowrap">
+        <span className="text-white/40">Spent <span className="text-white/70 font-semibold">{fmt(t.spent)}</span></span>
+        {bal != null && <span className="text-white/40">Bal <span className="text-green-400 font-semibold">{fmt(bal)}</span></span>}
+      </div>
+      {t.maxBid != null && (
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] tabular-nums whitespace-nowrap">
+          <span className="text-white/40">Max/player</span>
+          <span className={`font-semibold ${full ? 'text-white/30' : 'text-amber-300'}`}>{full ? '—' : fmt(t.maxBid)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile: a horizontal strip of all purses below the stage
+function PurseStrip({ purses, onView }: { purses: LivePurse[]; onView: (t: LivePurse) => void }) {
+  return (
+    <div className="md:hidden flex gap-2.5 px-4 py-3 border-t border-white/8 bg-white/2 overflow-x-auto shrink-0">
+      {purses.map(t => <PurseTile key={t.id} t={t} className="min-w-40 shrink-0" onClick={() => onView(t)} />)}
+    </div>
+  );
+}
+
+// Desktop (md+): a vertical column of purses flanking the stage
+function PurseColumn({ side, purses, onView }: { side: 'left' | 'right'; purses: LivePurse[]; onView: (t: LivePurse) => void }) {
+  if (purses.length === 0) return null;
+  return (
+    <aside className={`hidden md:flex w-56 lg:w-64 shrink-0 flex-col gap-2.5 p-3 overflow-y-auto bg-white/2 border-white/8 ${side === 'left' ? 'border-r' : 'border-l'}`}>
+      {purses.map(t => <PurseTile key={t.id} t={t} className="w-full" onClick={() => onView(t)} />)}
+    </aside>
+  );
+}
+
+// Per-team breakdown — players, prices and purse summary in a table
+function TeamSquadModal({ t, onClose }: { t: LivePurse; onClose: () => void }) {
+  const bal = t.budget != null ? t.budget - t.spent : null;
+  const full = t.maxPlayers != null && t.count >= t.maxPlayers;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[oklch(0.13_0.02_260)] border border-white/12 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl text-white"
+        style={{ animation: 'cardDropIn .35s cubic-bezier(.34,1.56,.64,1) both' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: t.color }} />
+            <h3 className="font-bold text-lg truncate">{t.name}</h3>
+            <span className="text-xs text-white/40 tabular-nums shrink-0">{t.count}{t.maxPlayers != null && `/${t.maxPlayers}`}</span>
           </div>
-        );
-      })}
+          <button onClick={onClose} className="text-white/40 hover:text-white shrink-0 text-2xl leading-none" aria-label="Close">×</button>
+        </div>
+        <div className="overflow-y-auto px-5 py-2 flex-1">
+          {t.players.length === 0 ? (
+            <p className="text-sm text-white/40 text-center py-10">No players bought yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-widest text-white/30 border-b border-white/10">
+                  <th className="py-2 pr-2 text-left font-bold w-6">#</th>
+                  <th className="py-2 text-left font-bold">Player</th>
+                  <th className="py-2 pl-2 text-right font-bold">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {t.players.map((p, i) => (
+                  <tr key={i} className="border-b border-white/5 last:border-0">
+                    <td className="py-2 pr-2 text-left tabular-nums text-white/35">{i + 1}</td>
+                    <td className="py-2 text-left font-medium text-white/85 truncate">{p.name}</td>
+                    <td className="py-2 pl-2 text-right tabular-nums text-white/70">{fmt(p.price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2 px-5 py-4 border-t border-white/10 text-center">
+          <div><p className="text-[10px] uppercase tracking-wide text-white/35 mb-0.5">Spent</p><p className="text-sm font-bold text-white/80 tabular-nums">{fmt(t.spent)}</p></div>
+          <div><p className="text-[10px] uppercase tracking-wide text-white/35 mb-0.5">Balance</p><p className="text-sm font-bold text-green-400 tabular-nums">{bal != null ? fmt(bal) : '—'}</p></div>
+          <div><p className="text-[10px] uppercase tracking-wide text-white/35 mb-0.5">Max/player</p><p className="text-sm font-bold text-amber-300 tabular-nums">{t.maxBid == null ? '—' : full ? 'Full' : fmt(t.maxBid)}</p></div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -77,6 +148,7 @@ export default function WatchPage() {
   const [live, setLive] = useState<LiveAuctionState | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [scale, setScale] = useState(1.2);
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
 
   // Poll the live state — best-effort, every 1.5s
   useEffect(() => {
@@ -94,19 +166,29 @@ export default function WatchPage() {
     return () => { active = false; clearInterval(iv); };
   }, [id]);
 
-  // Fit the player card to the viewport
+  const phase = live?.phase;
+  const purses = live?.purses ?? [];
+
+  // Split the purses so half flank each side of the stage on desktop
+  const purseHalf = Math.ceil(purses.length / 2);
+  const leftPurses = purses.slice(0, purseHalf);
+  const rightPurses = purses.slice(purseHalf);
+  // Look the team up by id each render so the modal stays live as sales come in
+  const viewPurse = viewTeamId ? purses.find(p => p.id === viewTeamId) ?? null : null;
+  const onViewTeam = (t: LivePurse) => setViewTeamId(t.id);
+
+  // Fit the player card to the viewport, reserving room for the side purse columns on desktop
   useEffect(() => {
     function upd() {
-      const h = window.innerHeight - 280, w = window.innerWidth - 64;
+      const cols = window.innerWidth >= 768 && purses.length > 0 ? (purses.length > 1 ? 2 : 1) : 0;
+      const sideW = cols * (window.innerWidth >= 1024 ? 256 : 224);
+      const h = window.innerHeight - 280, w = window.innerWidth - 64 - sideW;
       setScale(Math.max(0.5, Math.min(h / CARD_H, w / CARD_W, 2.6)));
     }
     upd();
     window.addEventListener('resize', upd);
     return () => window.removeEventListener('resize', upd);
-  }, []);
-
-  const phase = live?.phase;
-  const purses = live?.purses ?? [];
+  }, [purses.length]);
 
   return (
     <div className="h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white overflow-hidden">
@@ -142,6 +224,10 @@ export default function WatchPage() {
           </span>
         </div>
       </header>
+
+      <div className="flex-1 flex min-h-0">
+      {/* Desktop: half the team purses on the left of the stage */}
+      <PurseColumn side="left" purses={leftPurses} onView={onViewTeam} />
 
       {/* Stage */}
       <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden px-4">
@@ -202,8 +288,14 @@ export default function WatchPage() {
         )}
       </main>
 
-      {/* Team purses */}
-      {purses.length > 0 && <PurseStrip purses={purses} />}
+      {/* Desktop: the other half of the team purses on the right of the stage */}
+      <PurseColumn side="right" purses={rightPurses} onView={onViewTeam} />
+      </div>
+
+      {/* Mobile: team purses as a horizontal strip below the stage */}
+      {purses.length > 0 && <PurseStrip purses={purses} onView={onViewTeam} />}
+
+      {viewPurse && <TeamSquadModal t={viewPurse} onClose={() => setViewTeamId(null)} />}
     </div>
   );
 }

@@ -8,14 +8,12 @@ import type { LeagueWithPlayers, Player, Team, LiveAuctionState, LivePurse } fro
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Copy } from 'lucide-react';
+import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
 function fmt(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  return `₹${n.toLocaleString()}`;
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
 /**
@@ -55,6 +53,7 @@ export default function AuctionPage() {
   const [submittingSold, setSubmittingSold] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [viewTeam, setViewTeam] = useState<Team | null>(null);
   const liveSeq = useRef(0);
 
   // Base price per player — used for the max-bid rule; persisted per league
@@ -99,9 +98,10 @@ export default function AuctionPage() {
   useEffect(() => { fetchLeague(); }, [fetchLeague]);
   useEffect(() => {
     function upd() {
-      // Reserve room for the team-purse sidebar on desktop
-      const hasTeams = (league?.teams?.length ?? 0) > 0;
-      const sidebar = window.innerWidth >= 768 && hasTeams ? (purseOpen ? 240 : 44) : 0;
+      // Reserve room for the team-purse sidebars on desktop (split left + right)
+      const nTeams = league?.teams?.length ?? 0;
+      const cols = window.innerWidth >= 768 && nTeams > 0 ? (nTeams > 1 ? 2 : 1) : 0;
+      const sidebar = cols * (purseOpen ? 240 : 44);
       const h = window.innerHeight - 220, w = window.innerWidth - 80 - sidebar;
       setScale(Math.min(h / CARD_H, w / CARD_W, 2.4));
     }
@@ -128,10 +128,14 @@ export default function AuctionPage() {
     const lg = league!;
     const purses: LivePurse[] = (lg.teams ?? []).map(t => {
       const squad = opts.roster.filter(p => p.teamId === t.id);
+      const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
+      const maxPlayers = t.maxPlayers ?? 11;
+      const slotsLeft = Math.max(0, maxPlayers - squad.length);
+      const maxBid = slotsLeft === 0 ? 0 : Math.max(0, (t.budget - spent) - (slotsLeft - 1) * basePrice);
       return {
         id: t.id, name: t.name, color: t.colorHex, budget: t.budget,
-        spent: squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0),
-        count: squad.length, maxPlayers: t.maxPlayers,
+        spent, count: squad.length, maxPlayers: t.maxPlayers, maxBid,
+        players: squad.map(p => ({ name: p.name, price: p.soldPrice ?? 0 })),
       };
     });
     return {
@@ -144,7 +148,7 @@ export default function AuctionPage() {
       progress: { sold: opts.roster.length, total: lg.players.length, unsold: opts.unsold.length, left: opts.pool.length + opts.unsold.length, round: opts.round },
       purses,
     };
-  }, [league]);
+  }, [league, basePrice]);
 
   function startAuction() {
     if (!league) return;
@@ -255,6 +259,10 @@ export default function AuctionPage() {
   );
 
   const teams: Team[] = league.teams ?? [], totalPlayers = league.players.length, soldCount = soldPlayers.length;
+  // Split the purse list so half the teams sit on each side of the card (desktop only)
+  const purseHalf = Math.ceil(teams.length / 2);
+  const leftTeams = teams.slice(0, purseHalf);
+  const rightTeams = teams.slice(purseHalf);
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = league.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
   const watchUrl = typeof window !== 'undefined' ? `${window.location.origin}/leagues/${id}/watch` : '';
@@ -268,6 +276,7 @@ export default function AuctionPage() {
         <ShareLiveButton onClick={() => setShareOpen(true)} />
       </div>
       <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
+      {viewTeam && <TeamSquadModal team={viewTeam} roster={league.players} basePrice={basePrice} onClose={() => setViewTeam(null)} />}
       <div className="flex-1 flex flex-col items-center justify-center gap-10 p-8 text-center relative z-10">
         <div className="relative animate-float">
           <div className="absolute inset-0 bg-green-400/20 rounded-full blur-3xl scale-[2.5] animate-glow-pulse pointer-events-none" />
@@ -312,10 +321,10 @@ export default function AuctionPage() {
                     return (
                       <tr key={t.id} className="border-b border-foreground/5 last:border-0">
                         <td className="px-4 py-2.5 text-left">
-                          <div className="flex items-center gap-2">
+                          <button onClick={() => setViewTeam(t)} className="flex items-center gap-2 hover:text-foreground transition-colors group/team">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.colorHex }} />
-                            <span className="font-semibold text-foreground/80">{t.name}</span>
-                          </div>
+                            <span className="font-semibold text-foreground/80 group-hover/team:text-foreground group-hover/team:underline underline-offset-2">{t.name}</span>
+                          </button>
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-foreground/45">{fmt(t.budget)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</td>
@@ -410,50 +419,23 @@ export default function AuctionPage() {
           </div>
         </div>
         <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
+        {viewTeam && <TeamSquadModal team={viewTeam} roster={soldPlayers} basePrice={basePrice} onClose={() => setViewTeam(null)} />}
         {/* Mobile: horizontal purse strip */}
         {teams.length > 0 && (
           <div className="md:hidden flex gap-2.5 px-4 py-2.5 border-b border-foreground/5 bg-foreground/2 overflow-x-auto shrink-0">
             {teams.map(t => (
               <div key={t.id} className="min-w-44 shrink-0">
-                <PurseCard team={t} roster={soldPlayers} basePrice={basePrice} />
+                <PurseCard team={t} roster={soldPlayers} basePrice={basePrice} onView={() => setViewTeam(t)} />
               </div>
             ))}
           </div>
         )}
         <div className="flex-1 flex min-h-0">
-          {/* Desktop: vertical purse sidebar on the left (collapsible) */}
-          {teams.length > 0 && (purseOpen ? (
-            <aside className="hidden md:flex w-60 shrink-0 flex-col gap-2 p-3 border-r border-foreground/5 bg-foreground/2 overflow-y-auto animate-slide-in-right">
-              <div className="flex items-center justify-between px-1 pb-0.5">
-                <p className="text-[10px] uppercase tracking-[2.5px] text-foreground/30 font-bold">Team Purses</p>
-                <button onClick={togglePurse} title="Collapse purses" aria-label="Collapse team purses"
-                  className="w-6 h-6 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
-                  <PanelLeftClose className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              {teams.map(t => (
-                <PurseCard key={t.id} team={t} roster={soldPlayers} basePrice={basePrice} />
-              ))}
-            </aside>
-          ) : (
-            <aside className="hidden md:flex w-11 shrink-0 flex-col items-center gap-2.5 py-3 border-r border-foreground/5 bg-foreground/2">
-              <button onClick={togglePurse} title="Show team purses" aria-label="Show team purses"
-                className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
-                <PanelLeftOpen className="w-4 h-4" />
-              </button>
-              <div className="flex flex-col gap-2 mt-1">
-                {teams.map(t => {
-                  const st = teamStats(t, soldPlayers, basePrice);
-                  return (
-                    <div key={t.id}
-                      title={`${t.name} · Bal ${fmt(st.balance)} · ${st.bought}/${st.maxPlayers}`}
-                      className={`w-2.5 h-2.5 rounded-full ${st.slotsLeft === 0 ? 'ring-2 ring-green-400/40' : ''}`}
-                      style={{ background: t.colorHex }} />
-                  );
-                })}
-              </div>
-            </aside>
-          ))}
+          {/* Desktop: half the team purses sit on the left of the card (collapsible) */}
+          {leftTeams.length > 0 && (purseOpen
+            ? <PurseSidebar side="left" teams={leftTeams} roster={soldPlayers} basePrice={basePrice} onToggle={togglePurse} onView={setViewTeam} />
+            : <PurseRail side="left" teams={leftTeams} roster={soldPlayers} basePrice={basePrice} onToggle={togglePurse} onView={setViewTeam} />
+          )}
           <div className="flex-1 flex flex-col items-center justify-center gap-8 p-6 overflow-auto">
             {phase === 'idle' && (
               <div className="flex flex-col items-center gap-5">
@@ -551,18 +533,75 @@ export default function AuctionPage() {
               </>
             )}
           </div>
+          {/* Desktop: the other half of the team purses sit on the right of the card */}
+          {rightTeams.length > 0 && (purseOpen
+            ? <PurseSidebar side="right" teams={rightTeams} roster={soldPlayers} basePrice={basePrice} onToggle={togglePurse} onView={setViewTeam} />
+            : <PurseRail side="right" teams={rightTeams} roster={soldPlayers} basePrice={basePrice} onToggle={togglePurse} onView={setViewTeam} />
+          )}
         </div>
       </div>
     </>
   );
 }
 
-function PurseCard({ team, roster, basePrice }: { team: Team; roster: Player[]; basePrice: number }) {
+function PurseSidebar({ side, teams, roster, basePrice, onToggle, onView }: {
+  side: 'left' | 'right'; teams: Team[]; roster: Player[]; basePrice: number; onToggle: () => void; onView: (t: Team) => void;
+}) {
+  if (teams.length === 0) return null;
+  const Icon = side === 'left' ? PanelLeftClose : PanelRightClose;
+  return (
+    <aside className={`hidden md:flex w-60 shrink-0 flex-col gap-2 p-3 bg-foreground/2 overflow-y-auto animate-slide-in-right border-foreground/5 ${side === 'left' ? 'border-r' : 'border-l'}`}>
+      <div className="flex items-center justify-between px-1 pb-0.5">
+        <p className="text-[10px] uppercase tracking-[2.5px] text-foreground/30 font-bold">Team Purses</p>
+        <button onClick={onToggle} title="Collapse purses" aria-label="Collapse team purses"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
+          <Icon className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {teams.map(t => (
+        <PurseCard key={t.id} team={t} roster={roster} basePrice={basePrice} onView={() => onView(t)} />
+      ))}
+    </aside>
+  );
+}
+
+function PurseRail({ side, teams, roster, basePrice, onToggle, onView }: {
+  side: 'left' | 'right'; teams: Team[]; roster: Player[]; basePrice: number; onToggle: () => void; onView: (t: Team) => void;
+}) {
+  if (teams.length === 0) return null;
+  const Icon = side === 'left' ? PanelLeftOpen : PanelRightOpen;
+  return (
+    <aside className={`hidden md:flex w-11 shrink-0 flex-col items-center gap-2.5 py-3 bg-foreground/2 border-foreground/5 ${side === 'left' ? 'border-r' : 'border-l'}`}>
+      <button onClick={onToggle} title="Show team purses" aria-label="Show team purses"
+        className="w-7 h-7 flex items-center justify-center rounded-md text-foreground/35 hover:text-foreground hover:bg-foreground/10 transition-colors">
+        <Icon className="w-4 h-4" />
+      </button>
+      <div className="flex flex-col gap-2 mt-1">
+        {teams.map(t => {
+          const st = teamStats(t, roster, basePrice);
+          return (
+            <button key={t.id} onClick={() => onView(t)}
+              title={`${t.name} · Bal ${fmt(st.balance)} · ${st.bought}/${st.maxPlayers}`}
+              className={`w-2.5 h-2.5 rounded-full transition-transform hover:scale-125 ${st.slotsLeft === 0 ? 'ring-2 ring-green-400/40' : ''}`}
+              style={{ background: t.colorHex }} />
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function PurseCard({ team, roster, basePrice, onView }: { team: Team; roster: Player[]; basePrice: number; onView?: () => void }) {
   const st = teamStats(team, roster, basePrice);
   const pct = Math.min(100, Math.round((st.spent / team.budget) * 100));
   const full = st.slotsLeft === 0;
   return (
-    <div className={`rounded-xl border px-3 py-2 transition-colors ${full ? 'border-green-500/25 bg-green-500/5' : 'border-foreground/8 bg-foreground/4'}`}>
+    <div
+      onClick={onView}
+      role={onView ? 'button' : undefined}
+      tabIndex={onView ? 0 : undefined}
+      onKeyDown={onView ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onView(); } } : undefined}
+      className={`rounded-xl border px-3 py-2 transition-colors ${onView ? 'cursor-pointer hover:border-foreground/25' : ''} ${full ? 'border-green-500/25 bg-green-500/5' : 'border-foreground/8 bg-foreground/4'}`}>
       <div className="flex items-center gap-1.5 mb-1">
         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: team.colorHex }} />
         <span className="text-xs font-semibold text-foreground/75 truncate flex-1">{team.name}</span>
@@ -574,6 +613,55 @@ function PurseCard({ team, roster, basePrice }: { team: Team; roster: Player[]; 
       </div>
       <div className="mt-1.5 w-full h-1 rounded-full bg-foreground/10 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: team.colorHex }} />
+      </div>
+    </div>
+  );
+}
+
+// Per-team breakdown — players, prices and purse summary in a table
+function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; roster: Player[]; basePrice: number; onClose: () => void }) {
+  const st = teamStats(team, roster, basePrice);
+  const squad = roster.filter(p => p.teamId === team.id);
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-popover border border-foreground/12 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col animate-scale-in shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-foreground/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: team.colorHex }} />
+            <h3 className="font-bold text-lg text-foreground truncate">{team.name}</h3>
+            <span className="text-xs text-foreground/40 tabular-nums shrink-0">{st.bought}/{st.maxPlayers}</span>
+          </div>
+          <button onClick={onClose} className="text-foreground/40 hover:text-foreground shrink-0" aria-label="Close"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="overflow-y-auto px-5 py-2 flex-1">
+          {squad.length === 0 ? (
+            <p className="text-sm text-foreground/40 text-center py-10">No players bought yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-widest text-foreground/30 border-b border-foreground/10">
+                  <th className="py-2 pr-2 text-left font-bold w-6">#</th>
+                  <th className="py-2 text-left font-bold">Player</th>
+                  <th className="py-2 pl-2 text-right font-bold">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {squad.map((p, i) => (
+                  <tr key={p.id} className="border-b border-foreground/5 last:border-0">
+                    <td className="py-2 pr-2 text-left tabular-nums text-foreground/35">{i + 1}</td>
+                    <td className="py-2 text-left font-medium text-foreground/85 truncate">{p.name}</td>
+                    <td className="py-2 pl-2 text-right tabular-nums text-foreground/70">{fmt(p.soldPrice ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-2 px-5 py-4 border-t border-foreground/10 text-center">
+          <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Spent</p><p className="text-sm font-bold text-foreground/80 tabular-nums">{fmt(st.spent)}</p></div>
+          <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Balance</p><p className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">{fmt(st.balance)}</p></div>
+          <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Max Bid</p><p className="text-sm font-bold text-amber-600 dark:text-amber-300 tabular-nums">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</p></div>
+        </div>
       </div>
     </div>
   );
