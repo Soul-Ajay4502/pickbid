@@ -1,0 +1,45 @@
+# Cricket Cards
+
+> A full-stack Next.js app for running amateur cricket leagues: design premium player cards, host real-time auctions spectators can watch live, track leaderboards and match results, and share everything with a single link — no app install required.
+
+Key facts for working in this codebase:
+
+- **Framework**: Next.js 16 (App Router, React 19, TypeScript). This is NOT older Next.js — APIs and conventions differ from common training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing code, and heed deprecation notices.
+- **Database**: PostgreSQL (Neon) accessed via Sequelize models (`src/lib/models.ts`); migrations via `sequelize-cli` in `migrations/`.
+- **Auth**: NextAuth v5 (Auth.js), Google provider only. Player/upload APIs are intentionally anonymous — players create cards with a per-card `creatorToken`. Do NOT add session gating to player or upload routes.
+- **Styling**: Tailwind CSS v4, shadcn/ui + Base UI, Motion, Lucide.
+- **Media**: Cloudinary uploads. **Messaging**: WhatsApp Cloud API. **PDF**: jspdf + html2canvas-pro.
+- **Hosting**: Vercel, deployed from the working tree via CLI (not git auto-deploy); env changes need a redeploy.
+- **Commits**: Conventional Commits; releases automated by release-please.
+
+## Documentation
+
+- [README](README.md): Setup, environment variables, scripts, project structure, data model, deployment.
+- [AGENTS.md](AGENTS.md): Required reading rules for the Next.js 16 version in this repo.
+
+## Core source
+
+- [Sequelize models & associations](src/lib/models.ts): users, leagues, teams, players, team_officials, matches, auction_live.
+- [Shared types](src/lib/types.ts): League, Player, Team, TeamOfficial, Match, LiveAuctionState, LivePurse.
+- [Auth config](src/auth.ts): NextAuth Google setup; token.sub mapped to the DB user id.
+- [Database connection](src/lib/db.ts): Sequelize + pg, SSL required, pooled across hot reloads.
+- [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
+- [SEO config](src/lib/seo.ts): single source of truth for metadata, OG images, sitemap, robots.
+
+## API routes (src/app/api)
+
+- `auth/[...nextauth]`: NextAuth handlers.
+- `leagues`: list (created/joined) and create leagues.
+- `leagues/[id]`: get/update/delete a league with players, teams, officials.
+- `leagues/[id]/players`, `players/[playerId]`: player cards CRUD (anonymous via creatorToken).
+- `leagues/[id]/teams`, `officials`, `matches`: team, official and match management.
+- `leagues/[id]/auction/live`, `auction/reset`: live auction state broadcast/poll and reset.
+- `leagues/[id]/clone`: duplicate a league.
+- `leagues/join`, `leagues/public`: join by code; public league directory.
+- `profile`: user profile. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
+
+## Optional
+
+- [Migrations](migrations/): Sequelize schema history.
+- [Scripts](scripts/): favicon generation, Redis import, migration helpers.
+- [Landing page](src/components/landing/Landing.tsx): marketing/feature copy.
