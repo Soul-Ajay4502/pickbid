@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.0...v0.2.1) (2026-06-23)
+
+
+### Code Refactoring
+
+* update README and add llms.txt for project documentation an… ([59780f4](https://github.com/Soul-Ajay4502/player-card-generator/commit/59780f4cf81170252e576307e6382c9887fc601b))
+* update README and add llms.txt for project documentation and setup instructions ([bc8ffc7](https://github.com/Soul-Ajay4502/player-card-generator/commit/bc8ffc71b59f85ee98060686ebfa89e16af50646))
+
 ## [0.2.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.1.0...v0.2.0) (2026-06-23)
 
 
