@@ -10,9 +10,6 @@ const MAX_RANKS = 20;
 
 function fmt(n: number): string {
   if (!n) return '₹0';
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
@@ -59,7 +56,7 @@ function PodiumCard({ player, rank, meta }: { player: Player; rank: number; meta
   const r = RANK[rank];
   const Medalish = r.medal;
   return (
-    <div className={`flex flex-col items-center gap-3 flex-1 max-w-50 ${ORDER[rank]}`}>
+    <div className={`flex flex-col items-center gap-3 flex-1 mx-auto max-w-50 ${ORDER[rank]}`}>
       <div className="relative">
         <Avatar photo={player.photo} name={player.name} color={meta?.color ?? '#64748b'} size={r.av} ring={r.ring} />
         <div className="absolute -top-1.5 -right-1.5 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg">
@@ -78,7 +75,7 @@ function PodiumCard({ player, rank, meta }: { player: Player; rank: number; meta
         <p className={`mt-1 font-black tabular-nums ${rank === 0 ? 'text-xl' : 'text-lg'} ${r.text}`}>{fmt(player.soldPrice ?? 0)}</p>
       </div>
       <div
-        className={`w-full rounded-t-xl bg-linear-to-t ${r.ped} flex items-start justify-center pt-2 text-white font-black text-2xl tabular-nums shadow-inner`}
+        className={`w-full rounded-b-xl md:rounded-t-xl bg-linear-to-t ${r.ped} flex items-start justify-center pt-2 text-white font-black text-2xl tabular-nums shadow-inner`}
         style={{ height: r.height }}
       >
         {rank + 1}

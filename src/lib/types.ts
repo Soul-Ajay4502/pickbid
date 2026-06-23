@@ -123,6 +123,10 @@ export interface LivePurse {
   spent: number;
   count: number;
   maxPlayers: number | null;
+  /** Highest bid this team can still place under the reserve-per-slot rule */
+  maxBid: number | null;
+  /** Players this team has bought, for the per-team breakdown modal */
+  players: { name: string; price: number }[];
 }
 
 /**

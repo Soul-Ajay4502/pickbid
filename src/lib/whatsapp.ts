@@ -35,9 +35,7 @@ type SoldNotification = {
 /** Indian-style short form for an amount in rupees, mirroring the auction UI. */
 function formatPrice(n: number | null): string {
   if (n == null) return 'undisclosed';
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2).replace(/\.?0+$/, '')}Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(2).replace(/\.?0+$/, '')}L`;
-  return `₹${n.toLocaleString('en-IN')}`;
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
 /**

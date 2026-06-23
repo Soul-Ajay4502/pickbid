@@ -10,9 +10,6 @@ import { formatIndianPhone, localPhoneDigits, copyToClipboard } from '@/lib/util
 import type { LeagueWithPlayers, Player, Team, TeamOfficial } from '@/lib/types';
 
 function fmt(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)}Cr`;
-  if (n >= 100000)   return `₹${(n / 100000).toFixed(2)}L`;
-  if (n >= 1000)     return `₹${(n / 1000).toFixed(1)}K`;
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 

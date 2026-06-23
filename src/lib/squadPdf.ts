@@ -9,9 +9,7 @@ interface LeagueInfo {
 
 /* jsPDF's built-in Helvetica has no ₹ glyph — use "Rs" in PDFs */
 function fmtRs(n: number): string {
-  if (n >= 10000000) return `Rs ${(n / 10000000).toFixed(1)} Cr`;
-  if (n >= 100000) return `Rs ${(n / 100000).toFixed(1)} L`;
-  return `Rs ${n.toLocaleString('en-IN')}`;
+  return `Rs ${Math.round(n).toLocaleString('en-IN')}`;
 }
 
 function hexToRgb(hex: string): [number, number, number] {

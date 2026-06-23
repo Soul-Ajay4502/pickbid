@@ -594,6 +594,158 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* ─── Claymorphism (scoped to .clay) ─────────────────────────────── */
+/* Soft, puffy "clay" surfaces: a dark drop shadow bottom-right, a light
+   highlight top-left, plus inset highlights/shadows for the inflated look.
+   Pressed (:active) states flip to inset-only for the tactile "push-in". */
+.clay {
+  --clay-radius: 1rem;
+  --clay-light: oklch(1 0 0 / 0.9);
+  --clay-dark: oklch(0.62 0.03 260 / 0.30);
+  --clay-bg: var(--card);
+}
+.dark .clay {
+  --clay-light: oklch(1 0 0 / 0.06);
+  --clay-dark: oklch(0 0 0 / 0.55);
+}
+
+/* Generic puffy surface */
+.clay-card {
+  border: none !important;
+  border-radius: var(--clay-radius);
+  background: var(--clay-bg);
+  box-shadow:
+    10px 10px 24px var(--clay-dark),
+    -8px -8px 20px var(--clay-light),
+    inset 2px 2px 3px var(--clay-light),
+    inset -3px -3px 6px var(--clay-dark);
+}
+
+/* Concave / pressed-in surface — used for inputs */
+.clay-input {
+  border: none !important;
+  border-radius: 1.1rem;
+  background: var(--clay-bg);
+  box-shadow:
+    inset 4px 4px 9px var(--clay-dark),
+    inset -4px -4px 9px var(--clay-light);
+}
+.clay-input:focus-visible {
+  box-shadow:
+    inset 4px 4px 9px var(--clay-dark),
+    inset -4px -4px 9px var(--clay-light),
+    0 0 0 3px oklch(0.62 0.19 150 / 0.18) !important;
+}
+
+/* Toolbar buttons → small puffy clay pills */
+.clay .toolbar-btn {
+  border: none;
+  border-radius: 0.6rem;
+  background: var(--clay-bg);
+  box-shadow:
+    4px 4px 10px var(--clay-dark),
+    -4px -4px 10px var(--clay-light),
+    inset 1px 1px 1px var(--clay-light);
+}
+.clay .toolbar-btn:hover {
+  color: var(--foreground);
+  background: var(--clay-bg);
+  transform: translateY(-1px);
+  box-shadow:
+    6px 6px 14px var(--clay-dark),
+    -5px -5px 12px var(--clay-light),
+    inset 1px 1px 1px var(--clay-light);
+}
+.clay .toolbar-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 3px 3px 7px var(--clay-dark),
+    inset -3px -3px 7px var(--clay-light);
+}
+
+/* Primary green button → clay with a colour-matched drop shadow */
+.clay .btn-premium {
+  border: none !important;
+  border-radius: 1.1rem;
+  box-shadow:
+    5px 6px 16px oklch(0.45 0.16 150 / 0.45),
+    -4px -4px 12px var(--clay-light),
+    inset 2px 2px 3px oklch(1 0 0 / 0.35),
+    inset -3px -3px 7px oklch(0.4 0.15 150 / 0.45);
+}
+.clay .btn-premium:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    6px 8px 20px oklch(0.45 0.16 150 / 0.55),
+    -5px -5px 14px var(--clay-light),
+    inset 2px 2px 3px oklch(1 0 0 / 0.4),
+    inset -3px -3px 7px oklch(0.4 0.15 150 / 0.45);
+}
+.clay .btn-premium:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 4px 4px 9px oklch(0.4 0.15 150 / 0.5),
+    inset -3px -3px 7px oklch(1 0 0 / 0.25);
+}
+
+/* Status pills & join-code chip → mini puffy clay */
+.clay-pill {
+  border: none !important;
+  border-radius: 9999px;
+  box-shadow:
+    3px 3px 7px var(--clay-dark),
+    -3px -3px 7px var(--clay-light);
+}
+
+/* Dropdown menu → puffy clay panel */
+.clay .menu-panel {
+  border: none;
+  border-radius: var(--clay-radius);
+  box-shadow:
+    12px 14px 32px var(--clay-dark),
+    -8px -8px 22px var(--clay-light),
+    inset 2px 2px 3px var(--clay-light);
+}
+.clay .menu-item {
+  border-radius: 0.85rem;
+}
+.clay .menu-item:hover {
+  box-shadow:
+    inset 2px 2px 5px var(--clay-dark),
+    inset -2px -2px 5px var(--clay-light);
+  background: var(--clay-bg);
+}
+
+/* Capacity bar → concave track with a convex clay fill */
+.clay .progress-track {
+  height: 0.6rem;
+  box-shadow:
+    inset 2px 2px 5px var(--clay-dark),
+    inset -2px -2px 5px var(--clay-light);
+  background: var(--clay-bg);
+}
+.clay .progress-fill {
+  box-shadow:
+    inset 1px 1px 2px oklch(1 0 0 / 0.4),
+    inset -1px -1px 2px oklch(0.35 0.14 160 / 0.4);
+}
+
+/* Floating scroll buttons → round clay nubs */
+.clay-fab {
+  border: none !important;
+  background: var(--clay-bg) !important;
+  box-shadow:
+    5px 5px 14px var(--clay-dark),
+    -4px -4px 12px var(--clay-light),
+    inset 1px 1px 2px var(--clay-light) !important;
+}
+.clay-fab:hover {
+  box-shadow:
+    7px 7px 18px var(--clay-dark),
+    -5px -5px 14px var(--clay-light),
+    inset 1px 1px 2px var(--clay-light) !important;
+}
+
 /* ─── Reduced motion: keep the design, drop the movement ────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

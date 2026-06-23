@@ -15,9 +15,7 @@ const TEAM_COLORS = [
 ];
 
 function fmt(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)}Cr`;
-  if (n >= 100000)   return `₹${(n / 100000).toFixed(1)}L`;
-  return `₹${n.toLocaleString()}`;
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
 export default function TeamsPage() {

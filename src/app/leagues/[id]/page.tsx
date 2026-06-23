@@ -40,6 +40,8 @@ function LeaguePageInner() {
   const [resettingAuction, setResettingAuction] = useState(false);
   // Player shown in the full-view modal (null = closed)
   const [viewPlayer, setViewPlayer] = useState<Player | null>(null);
+  // Once an auction is complete the cards are hidden behind a banner; this reveals them
+  const [showPlayers, setShowPlayers] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -473,13 +475,18 @@ function LeaguePageInner() {
   const showAddCard = data.isCreator || canJoin;
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
+  // The auction is complete once every player is resolved (sold/icon or unsold) and real results exist
+  const allResolved = data.players.length > 0 && data.players.every(p => p.teamId || p.isUnsold);
+  const auctionCompleted = data.teams.length > 0 && hasAuctionData && allResolved;
+  // Hide the card grid behind the "completed" banner until the viewer asks to see it
+  const playersHidden = auctionCompleted && !showPlayers;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const fillPct = data.totalPlayers > 0
     ? Math.min(100, Math.round((data.players.length / data.totalPlayers) * 100))
     : 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="clay max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       {/* relative z-30: lift the whole header (and its Share & Export dropdown)
           above the player-card grid. The cards' animate-fade-in-up leaves a
@@ -499,9 +506,9 @@ function LeaguePageInner() {
           <div className="min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gradient-green">{data.name}</h1>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${data.isPublic
-                ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
-                : 'bg-muted text-muted-foreground border-border'
+              <span className={`clay-pill inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${data.isPublic
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : 'bg-muted text-muted-foreground'
                 }`}>
                 {data.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                 {data.isPublic ? 'Public' : 'Private'}
@@ -522,17 +529,17 @@ function LeaguePageInner() {
                       ? <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                       : registrationClosed ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                   </button>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${registrationClosed
-                    ? 'bg-muted text-muted-foreground border-border'
-                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                  <span className={`clay-pill inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${registrationClosed
+                    ? 'bg-muted text-muted-foreground'
+                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     }`}>
                     {registrationClosed ? 'Registration closed' : 'Open for registration'}
                   </span>
                 </span>
               ) : isOpen && (
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${registrationClosed
-                  ? 'bg-muted text-muted-foreground border-border'
-                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                <span className={`clay-pill inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${registrationClosed
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                   }`}>
                   {registrationClosed ? 'Registration closed' : 'Open for registration'}
                 </span>
@@ -558,7 +565,7 @@ function LeaguePageInner() {
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             {showAddCard && (
               hasJoined ? (
-                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20">
+                <span className="clay-pill inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-green-500/10 text-green-600 dark:text-green-400">
                   Joined ✓
                 </span>
               ) : profile ? (
@@ -656,7 +663,7 @@ function LeaguePageInner() {
           {data.isPublic && data.joinCode && (
             <button
               onClick={() => copyLink(`${origin}/leagues/discover`, 'Discover link')}
-              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-xs font-mono font-semibold tracking-widest bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 hover:bg-green-500/15 transition-colors"
+              className="clay-pill inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-mono font-semibold tracking-widest bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/15 transition-colors"
               title="Join code — click to copy the discover page link"
             >
               <Globe className="w-3 h-3" />{data.joinCode}
@@ -756,9 +763,9 @@ function LeaguePageInner() {
       <Separator className="mb-6" />
 
       {/* Search */}
-      {data.players.length > 0 && (
+      {data.players.length > 0 && !playersHidden && (
         <div className="mb-6 flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative flex-1 max-w-3xl mx-auto">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
               type="text"
@@ -837,6 +844,37 @@ function LeaguePageInner() {
             ) : null
           )}
         </div>
+      ) : playersHidden ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-6 animate-fade-in-up text-center">
+          <div className="relative">
+            <div className="absolute inset-0 bg-amber-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
+            <span className="relative text-6xl select-none">🏆</span>
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-xl sm:text-2xl font-black text-gradient-gold">Auction Completed</h2>
+            <p className="text-muted-foreground text-sm max-w-sm leading-relaxed mx-auto">
+              All {data.players.length} players have been auctioned. Browse the final squads, or view the player cards below.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {(data.isCreator || data.isPublic) && (
+              <>
+                <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
+                  <Users className="w-3.5 h-3.5" />View Squads
+                </button>
+                <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
+                  <Trophy className="w-3.5 h-3.5" />Leaderboard
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setShowPlayers(true)}
+            className="btn-premium inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold"
+          >
+            <Images className="w-4 h-4" />View Player Cards
+          </button>
+        </div>
       ) : filteredPlayers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 animate-fade-in-up">
           <Search size={36} className="text-muted-foreground/30" />
@@ -844,7 +882,15 @@ function LeaguePageInner() {
           <button onClick={() => setSearchQuery('')} className="text-sm text-primary hover:underline underline-offset-2 transition-colors">Clear search</button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
+        <>
+          {auctionCompleted && (
+            <div className="flex justify-center mb-6 animate-fade-in-up">
+              <button onClick={() => setShowPlayers(false)} className="toolbar-btn">
+                <ArrowUp className="w-3.5 h-3.5" />Hide Player Cards
+              </button>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
           {filteredPlayers.map((player, i) => (
             <div
               key={player.id}
@@ -866,7 +912,8 @@ function LeaguePageInner() {
               />
             </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Full player view */}
