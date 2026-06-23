@@ -38,11 +38,11 @@ export default function NavBar() {
 
         {/* Nav links (logged in) */}
         {session && (
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="flex items-center gap-1">
             <Link href="/leagues/discover"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
               <Globe className="w-3.5 h-3.5" />
-              Discover
+              <span className="hidden sm:inline">Discover</span>
             </Link>
           </nav>
         )}
