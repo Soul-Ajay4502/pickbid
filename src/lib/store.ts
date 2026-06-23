@@ -183,6 +183,146 @@ export async function deleteLeague(id: string): Promise<boolean> {
   return deleted > 0;
 }
 
+/**
+ * Clone a league into a brand-new one owned by `creatorId`.
+ *
+ * The clone starts a fresh season: the new league is always private (no join
+ * code), matches and live-auction state are never carried over, and every
+ * copied player has their auction result cleared. Icon players keep their
+ * pre-assigned team (remapped to the clone's new team rows); everyone else is
+ * reset to unsold. `overrides` lets the caller edit the league's details at
+ * clone time; whatever is omitted falls back to the source league's value.
+ *
+ * Teams/players/officials are each opt-in. Officials need teams, so they're
+ * only copied when teams are too. Player contact numbers are private to the
+ * organiser, so they're copied only when `copyContactNumbers` is set (the
+ * route allows this solely when the cloner owns the source league).
+ *
+ * Returns the new league, or null if the source doesn't exist.
+ */
+export async function cloneLeague(
+  sourceId: string,
+  creatorId: string,
+  creatorEmail: string,
+  overrides: Partial<Pick<League, 'name' | 'conductedBy' | 'totalPlayers' | 'templateId' | 'logoUrl'>> = {},
+  options: {
+    includeTeams?: boolean;
+    includePlayers?: boolean;
+    includeOfficials?: boolean;
+    copyContactNumbers?: boolean;
+  } = {}
+): Promise<League | null> {
+  const source = await LeagueModel.findByPk(sourceId);
+  if (!source) return null;
+
+  await ensureUser(creatorId, creatorEmail);
+
+  const includeTeams = options.includeTeams ?? true;
+  const includePlayers = options.includePlayers ?? true;
+  // Officials live on teams, so they can only come along when teams do
+  const includeOfficials = (options.includeOfficials ?? true) && includeTeams;
+
+  return sequelize.transaction(async (t) => {
+    const newLeague = await LeagueModel.create(
+      {
+        id:           uuidv4(),
+        name:         overrides.name ?? source.name,
+        totalPlayers: overrides.totalPlayers ?? source.totalPlayers,
+        conductedBy:  overrides.conductedBy ?? source.conductedBy,
+        creatorId,
+        templateId:   overrides.templateId ?? source.templateId,
+        logoUrl:      overrides.logoUrl ?? source.logoUrl,
+        // A clone always starts as a private league with no auction history
+        isPublic:     false,
+        joinCode:     null,
+        registrationClosed: false,
+      },
+      { transaction: t }
+    );
+
+    // Map each source team id to its freshly-created clone so icon players and
+    // officials can be re-pointed at the new rows
+    const teamIdMap = new Map<string, string>();
+    if (includeTeams) {
+      const teams = await TeamModel.findAll({ where: { leagueId: sourceId }, order: [['createdAt', 'ASC']], transaction: t });
+      for (const team of teams) {
+        const newId = uuidv4();
+        teamIdMap.set(team.id, newId);
+        await TeamModel.create(
+          {
+            id:         newId,
+            leagueId:   newLeague.id,
+            name:       team.name,
+            colorHex:   team.colorHex,
+            budget:     team.budget,
+            maxPlayers: team.maxPlayers,
+          },
+          { transaction: t }
+        );
+      }
+    }
+
+    if (includePlayers) {
+      const players = await PlayerModel.findAll({ where: { leagueId: sourceId }, order: [['createdAt', 'ASC']], transaction: t });
+      for (const p of players) {
+        // Icon players are pinned to a team before the auction, so they keep
+        // their team (remapped). Everyone else resets to unsold.
+        const keepTeam = p.isIcon && p.teamId ? teamIdMap.get(p.teamId) ?? null : null;
+        await PlayerModel.create(
+          {
+            id:             uuidv4(),
+            leagueId:       newLeague.id,
+            // The clone's players aren't "joined" by the original owners, and
+            // a fresh token means only the new organiser controls these cards
+            userId:         null,
+            creatorToken:   uuidv4(),
+            name:           p.name,
+            photo:          p.photo,
+            battingType:    p.battingType,
+            bowlingType:    p.bowlingType,
+            role:           p.role,
+            isWicketKeeper: p.isWicketKeeper,
+            contactNumber:  options.copyContactNumbers ? p.contactNumber : null,
+            isIcon:         p.isIcon,
+            teamId:         keepTeam,
+            soldPrice:      null,
+            isUnsold:       false,
+            statsMatches:   p.statsMatches,
+            statsRuns:      p.statsRuns,
+            statsWickets:   p.statsWickets,
+            statsAverage:   p.statsAverage,
+            statsSR:        p.statsSR,
+          },
+          { transaction: t }
+        );
+      }
+    }
+
+    if (includeOfficials) {
+      const officials = await TeamOfficialModel.findAll({ where: { leagueId: sourceId }, order: [['createdAt', 'ASC']], transaction: t });
+      for (const o of officials) {
+        const newTeamId = teamIdMap.get(o.teamId!);
+        // An official whose team didn't come across has nowhere to live
+        if (!newTeamId) continue;
+        await TeamOfficialModel.create(
+          {
+            id:            uuidv4(),
+            leagueId:      newLeague.id,
+            teamId:        newTeamId,
+            name:          o.name,
+            contactNumber: options.copyContactNumbers ? o.contactNumber : null,
+            role:          o.role,
+            photo:         o.photo,
+          },
+          { transaction: t }
+        );
+      }
+    }
+
+    return toLeague(newLeague);
+  });
+}
+
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
 export async function getTeams(leagueId: string): Promise<Team[]> {

@@ -167,7 +167,8 @@ export default function TeamsPage() {
     const res = await fetch(`/api/leagues/${id}`);
     if (!res.ok) { router.push('/'); return; }
     const json: LeagueWithPlayers = await res.json();
-    if (!json.isCreator) { router.push(`/leagues/${id}`); return; }
+    // Public leagues are viewable by anyone (read-only); private ones stay creator-only
+    if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
     setData(json);
     setTeams(json.teams);
     setLoading(false);
@@ -236,6 +237,10 @@ export default function TeamsPage() {
     );
   }
 
+  // Non-creators reach this page only for public leagues — they get a read-only
+  // view, so every add/edit/delete affordance is hidden behind canEdit.
+  const canEdit = data.isCreator;
+
   // Calculate spending per team
   const spentByTeam: Record<string, number> = {};
   data.players.forEach(p => {
@@ -259,6 +264,10 @@ export default function TeamsPage() {
   });
   const unsoldPlayers = data.players.filter(p => p.isUnsold);
   const unpickedPlayers = data.players.filter(p => !p.teamId && !p.isUnsold);
+  // The auction is complete once it has run (a player sold or marked unsold)
+  // and no players are left waiting — at that point adding teams makes no sense.
+  const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
+  const auctionComplete = hasAuctionData && unpickedPlayers.length === 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in-up">
@@ -308,7 +317,7 @@ export default function TeamsPage() {
                 <Shield className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
-            <p className="text-muted-foreground text-sm">No teams yet. Add teams below to get started.</p>
+            <p className="text-muted-foreground text-sm">{canEdit ? 'No teams yet. Add teams below to get started.' : 'No teams have been added yet.'}</p>
           </div>
         )}
         {teams.map((team, ti) => {
@@ -349,7 +358,13 @@ export default function TeamsPage() {
                   </div>
                 ) : (
                   <>
-                    <span className="font-semibold text-foreground flex-1">{team.name}</span>
+                    <button
+                      onClick={() => router.push(`/leagues/${id}/teams/${team.id}`)}
+                      className="font-semibold text-foreground flex-1 text-left hover:text-primary transition-colors truncate"
+                      title="View full squad details"
+                    >
+                      {team.name}
+                    </button>
                     {tPlayers.length >= team.maxPlayers ? (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 mr-1">
                         Full · {tPlayers.length}/{team.maxPlayers}
@@ -359,24 +374,28 @@ export default function TeamsPage() {
                         {tPlayers.length}/{team.maxPlayers} players
                       </span>
                     )}
-                    <button onClick={() => setIconPickerTeam(v => v === team.id ? null : team.id)}
-                      title="Add icon player"
-                      className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
-                        iconPickerTeam === team.id
-                          ? 'text-amber-500 bg-amber-500/10'
-                          : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
-                      }`}>
-                      <Star className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => toggleOfficialEditor(team.id)}
-                      title="Add team official"
-                      className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
-                        officialTeam === team.id
-                          ? 'text-indigo-500 bg-indigo-500/10'
-                          : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10'
-                      }`}>
-                      <Briefcase className="w-3.5 h-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button onClick={() => setIconPickerTeam(v => v === team.id ? null : team.id)}
+                        title="Add icon player"
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                          iconPickerTeam === team.id
+                            ? 'text-amber-500 bg-amber-500/10'
+                            : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10'
+                        }`}>
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button onClick={() => toggleOfficialEditor(team.id)}
+                        title="Add team official"
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                          officialTeam === team.id
+                            ? 'text-indigo-500 bg-indigo-500/10'
+                            : 'text-muted-foreground hover:text-indigo-500 hover:bg-indigo-500/10'
+                        }`}>
+                        <Briefcase className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button onClick={() => handleExport('posters', team.id)} disabled={!!exporting}
                       title={`Download ${team.name} squad poster`}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
@@ -384,14 +403,18 @@ export default function TeamsPage() {
                         ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                         : <Download className="w-3.5 h-3.5" />}
                     </button>
-                    <button onClick={() => { setEditId(team.id); setEditName(team.name); }} title="Rename team"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(team.id)} title="Delete team"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button onClick={() => { setEditId(team.id); setEditName(team.name); }} title="Rename team"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button onClick={() => handleDelete(team.id)} title="Delete team"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -496,10 +519,12 @@ export default function TeamsPage() {
                       <Briefcase className="w-2.5 h-2.5" />
                       {o.name}
                       <span className="opacity-60">{o.role}</span>
-                      <button onClick={() => removeOfficial(o)} disabled={oBusy} title="Remove official"
-                        className="ml-0.5 hover:text-destructive transition-colors disabled:opacity-50">
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      {canEdit && (
+                        <button onClick={() => removeOfficial(o)} disabled={oBusy} title="Remove official"
+                          className="ml-0.5 hover:text-destructive transition-colors disabled:opacity-50">
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -513,10 +538,12 @@ export default function TeamsPage() {
                       <Star className="w-2.5 h-2.5 fill-current" />
                       {p.name}
                       <span className="opacity-60">Icon</span>
-                      <button onClick={() => removeIcon(p)} disabled={iconBusy} title="Remove icon player"
-                        className="ml-0.5 hover:text-destructive transition-colors disabled:opacity-50">
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      {canEdit && (
+                        <button onClick={() => removeIcon(p)} disabled={iconBusy} title="Remove icon player"
+                          className="ml-0.5 hover:text-destructive transition-colors disabled:opacity-50">
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
                     </span>
                   ) : (
                     <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border border-border hover:border-primary/30 hover:text-foreground transition-colors">
@@ -548,7 +575,8 @@ export default function TeamsPage() {
         </div>
       )}
 
-      {/* Add team form */}
+      {/* Add team form — hidden once the auction has finished */}
+      {canEdit && !auctionComplete && (
       <div className="rounded-2xl border border-border bg-card overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
         <div className="px-5 py-4 border-b border-border bg-muted/40 flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-linear-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center">
@@ -624,6 +652,7 @@ export default function TeamsPage() {
           </button>
         </form>
       </div>
+      )}
     </div>
   );
 }

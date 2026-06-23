@@ -34,6 +34,40 @@ export function formatIndianPhone(local: string): string {
   return digits ? `+91 ${digits}` : '';
 }
 
+/**
+ * Copy text to the clipboard across browsers and platforms.
+ *
+ * Prefers the async Clipboard API (HTTPS / localhost), and falls back to a
+ * hidden <textarea> + execCommand for non-secure contexts — e.g. a phone
+ * hitting the dev server over a LAN IP, where navigator.clipboard is undefined.
+ * Returns whether the copy succeeded.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the legacy path below
+    }
+  }
+  if (typeof document === 'undefined') return false;
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.setAttribute('readonly', '');
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

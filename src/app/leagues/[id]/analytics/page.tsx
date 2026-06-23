@@ -274,6 +274,8 @@ export default function AnalyticsPage() {
     ]);
     if (!lr.ok) { router.push('/'); return; }
     const league: LeagueWithPlayers = await lr.json();
+    // Analytics are open on public leagues; private ones stay creator-only
+    if (!league.isCreator && !league.isPublic) { router.push(`/leagues/${id}`); return; }
     setData(league);
     setMatches(mr.ok ? await mr.json() : []);
     setLoading(false);

@@ -5,16 +5,18 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Separator } from '@/components/ui/separator';
 import PlayerCard from '@/components/PlayerCard';
+import PlayerFullView from '@/components/PlayerFullView';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
-import type { LeagueWithPlayers, UserProfile } from '@/lib/types';
-import { generateToken } from '@/lib/utils';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
+import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { toast } from 'sonner';
 import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
-  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy,
+  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -36,6 +38,8 @@ function LeaguePageInner() {
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [togglingRegistration, setTogglingRegistration] = useState(false);
   const [resettingAuction, setResettingAuction] = useState(false);
+  // Player shown in the full-view modal (null = closed)
+  const [viewPlayer, setViewPlayer] = useState<Player | null>(null);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -240,7 +244,7 @@ function LeaguePageInner() {
 
   // ── Share ──────────────────────────────────────────────────────────────────
   function copyLink(url: string, label: string) {
-    navigator.clipboard.writeText(url).then(() => toast.success(`${label} copied!`));
+    copyToClipboard(url).then((ok) => ok ? toast.success(`${label} copied!`) : toast.error('Could not copy to clipboard'));
   }
 
   async function handleDownloadRoster() {
@@ -622,6 +626,9 @@ function LeaguePageInner() {
                   ? <><Lock className="w-3.5 h-3.5" />Make Private</>
                   : <><Globe className="w-3.5 h-3.5" />Make Public</>}
               </button>
+              <button onClick={() => router.push(`/leagues/${id}/clone`)} className="toolbar-btn" title="Create a copy of this league">
+                <CopyPlus className="w-3.5 h-3.5" />Clone
+              </button>
               {hasAuctionData && (
                 <button onClick={handleResetAuction} disabled={resettingAuction} className="toolbar-btn hover:text-destructive hover:border-destructive/40" title="Clear all sold players and unsold flags">
                   {resettingAuction
@@ -630,6 +637,20 @@ function LeaguePageInner() {
                   Reset Auction
                 </button>
               )}
+            </>
+          )}
+          {/* Public leagues are open for anyone to explore the squads & standings */}
+          {!data.isCreator && data.isPublic && (
+            <>
+              <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
+                <Users className="w-3.5 h-3.5" />Teams
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/analytics`)} className="toolbar-btn">
+                <Activity className="w-3.5 h-3.5" />Analytics
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
+                <Trophy className="w-3.5 h-3.5" />Leaderboard
+              </button>
             </>
           )}
           {data.isPublic && data.joinCode && (
@@ -827,8 +848,11 @@ function LeaguePageInner() {
           {filteredPlayers.map((player, i) => (
             <div
               key={player.id}
-              className="animate-fade-in-up"
+              className="animate-fade-in-up cursor-pointer"
               style={{ animationDelay: `${i * 0.06}s` }}
+              // Open the full view on click, but let the card's own buttons
+              // (edit, delete, icon badge) act normally
+              onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setViewPlayer(player); }}
             >
               <PlayerCard
                 player={player}
@@ -844,6 +868,29 @@ function LeaguePageInner() {
           ))}
         </div>
       )}
+
+      {/* Full player view */}
+      <Dialog open={!!viewPlayer} onOpenChange={(open) => { if (!open) setViewPlayer(null); }}>
+        <DialogContent className="sm:max-w-2xl p-0 max-h-[92vh] overflow-y-auto bg-transparent ring-0 shadow-none">
+          <DialogTitle className="sr-only">{viewPlayer?.name ?? 'Player'} details</DialogTitle>
+          {viewPlayer && (() => {
+            const team = viewPlayer.teamId ? data.teams.find((t) => t.id === viewPlayer.teamId) : null;
+            const teamMeta = team
+              ? { name: team.name, colorHex: team.colorHex }
+              : viewPlayer.iconOfTeam
+                ? { name: viewPlayer.iconOfTeam.name, colorHex: viewPlayer.iconOfTeam.colorHex }
+                : null;
+            return (
+              <PlayerFullView
+                player={viewPlayer}
+                team={teamMeta}
+                leagueName={data.name}
+                conductedBy={data.conductedBy}
+              />
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Scroll buttons */}
       {(showScrollTop || showScrollBottom) && (

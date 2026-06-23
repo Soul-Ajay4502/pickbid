@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
 import type { LeagueWithPlayers, Player, Team, LiveAuctionState, LivePurse } from '@/lib/types';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, RotateCcw, Share2, Copy } from 'lucide-react';
 
@@ -618,7 +619,7 @@ function ShareLiveModal({ open, onClose, url }: { open: boolean; onClose: () => 
         <div className="flex items-center gap-2">
           <input readOnly value={url} onFocus={e => e.currentTarget.select()}
             className="flex-1 h-10 px-3 rounded-xl border border-foreground/15 bg-foreground/8 text-foreground text-xs truncate focus:outline-none" />
-          <button onClick={() => { navigator.clipboard.writeText(url).then(() => toast.success('Watch link copied')); }}
+          <button onClick={() => { copyToClipboard(url).then((ok) => { if (ok) toast.success('Watch link copied'); else toast.error('Could not copy link'); }); }}
             className="h-10 px-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-semibold inline-flex items-center gap-1.5 shrink-0">
             <Copy className="w-3.5 h-3.5" />Copy
           </button>

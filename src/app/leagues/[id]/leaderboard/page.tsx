@@ -96,7 +96,10 @@ export default function LeaderboardPage() {
   const fetchLeague = useCallback(async () => {
     const res = await fetch(`/api/leagues/${id}`);
     if (!res.ok) { router.push('/'); return; }
-    setData(await res.json());
+    const json: LeagueWithPlayers = await res.json();
+    // Leaderboard is open on public leagues; private ones stay creator-only
+    if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
+    setData(json);
     setLoading(false);
   }, [id, router]);
 
