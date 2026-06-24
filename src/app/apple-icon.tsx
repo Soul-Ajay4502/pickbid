@@ -18,27 +18,24 @@ export default function AppleIcon() {
           borderRadius: 38,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 108,
-            height: 108,
-            borderRadius: 9999,
-            backgroundImage: 'linear-gradient(145deg, #fb7185, #9f1239)',
-            boxShadow: '0 10px 26px rgba(0,0,0,0.35)',
-          }}
+        {/* Auction gavel — PickIt puts players under the hammer */}
+        <svg
+          width={108}
+          height={108}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth={1.85}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ filter: 'drop-shadow(0 8px 18px rgba(0,0,0,0.35))' }}
         >
-          <div
-            style={{
-              width: 0,
-              height: 72,
-              borderLeft: '5px dashed rgba(255,255,255,0.92)',
-              transform: 'rotate(10deg)',
-            }}
-          />
-        </div>
+          <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8" />
+          <path d="m16 16 6-6" />
+          <path d="m8 8 6-6" />
+          <path d="m9 7 8 8" />
+          <path d="m21 11-8-8" />
+        </svg>
       </div>
     ),
     { ...size },

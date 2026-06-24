@@ -38,7 +38,7 @@ export function MovingBorderButton({
       onClick={onClick}
       style={{ borderRadius }}
       className={cn(
-        'relative h-14 overflow-hidden bg-transparent p-[1.5px] text-base',
+        'relative h-14 overflow-hidden bg-transparent p-[1.5px] text-base cursor-pointer',
         containerClassName,
       )}
     >

@@ -1,5 +1,5 @@
 /**
- * Generates src/app/favicon.ico from the branded cricket-ball mark so the
+ * Generates src/app/favicon.ico from the branded auction-gavel mark so the
  * classic favicon matches app/icon.tsx and app/apple-icon.tsx.
  *
  * Run:  node scripts/gen-favicon.mjs
@@ -20,16 +20,15 @@ const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" vi
       <stop offset="0.55" stop-color="#059669"/>
       <stop offset="1" stop-color="#0d9488"/>
     </linearGradient>
-    <linearGradient id="ball" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fb7185"/>
-      <stop offset="1" stop-color="#9f1239"/>
-    </linearGradient>
   </defs>
   <rect x="0" y="0" width="256" height="256" rx="52" ry="52" fill="url(#bg)"/>
-  <circle cx="128" cy="128" r="76" fill="url(#ball)"/>
-  <g transform="rotate(10 128 128)">
-    <line x1="128" y1="70" x2="128" y2="186" stroke="#ffffff" stroke-opacity="0.92"
-          stroke-width="7" stroke-linecap="round" stroke-dasharray="10 9"/>
+  <g transform="translate(32 32) scale(8)" fill="none" stroke="#ffffff"
+     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8"/>
+    <path d="m16 16 6-6"/>
+    <path d="m8 8 6-6"/>
+    <path d="m9 7 8 8"/>
+    <path d="m21 11-8-8"/>
   </g>
 </svg>`;
 

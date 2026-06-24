@@ -1,8 +1,8 @@
-# 🏏 Cricket Cards
+# 🏏 PickIt
 
 **Run cricket leagues like a pro.** Design premium player cards, host real-time auctions, track live leaderboards, and share it all with a single link — beautifully, in one place.
 
-Cricket Cards is a full-stack [Next.js](https://nextjs.org) app for organisers of local and amateur cricket leagues. Create a league, build broadcast-quality player cards, run a live auction that spectators can follow from any browser, record match results, and export squad sheets — all without anyone needing to install an app.
+PickIt is a full-stack [Next.js](https://nextjs.org) app for organisers of local and amateur cricket leagues. Create a league, build broadcast-quality player cards, run a live auction that spectators can follow from any browser, record match results, and export squad sheets — all without anyone needing to install an app.
 
 > Live: https://player-card-generator.vercel.app
 

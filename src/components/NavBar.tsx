@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UserCircle, Sun, Moon, LogOut, Plus, Globe } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { MagneticButton } from './ui/magnetic-button';
 
 export default function NavBar() {
   const { data: session, status } = useSession();
@@ -26,15 +27,13 @@ export default function NavBar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-base shadow-[0_0_16px_oklch(0.62_0.19_150/0.35)] transition-shadow duration-300 group-hover:shadow-[0_0_24px_oklch(0.62_0.19_150/0.5)]"
-            style={{ background: 'linear-gradient(135deg, #16a34a 0%, #059669 55%, #0d9488 100%)' }}
+        <MagneticButton>
+          <Link href="/" className="flex items-center gap-2.5 shrink-0 group cursor-pointer rounded-lg bg-linear-to-b  px-4 py-2 font-medium text-white ring-1 ring-white/20 ring-offset-1 ring-offset-green-500 transition-transform duration-150 ring-inset active:scale-98"
+
           >
-            🏏
-          </div>
-          <span className="hidden sm:block font-black text-[15px] tracking-tight text-gradient-green">Cricket Cards</span>
-        </Link>
+            <span className="hidden sm:block font-black text-[15px] tracking-tight text-gradient-green">PickIt</span>
+          </Link>
+        </MagneticButton>
 
         {/* Nav links (logged in) */}
         {session && (
