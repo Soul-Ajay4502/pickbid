@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.1...v0.2.2) (2026-06-24)
+
+
+### Code Refactoring
+
+* rename project from Cricket Cards to PickIt and update related files ([cf073c1](https://github.com/Soul-Ajay4502/player-card-generator/commit/cf073c1e5af572c9c482c430b39d3f27bf3a8dc9))
+
 ## [0.2.1](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.0...v0.2.1) (2026-06-23)
 
 
