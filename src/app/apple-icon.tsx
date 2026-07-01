@@ -18,7 +18,7 @@ export default function AppleIcon() {
           borderRadius: 38,
         }}
       >
-        {/* Auction gavel — PickIt puts players under the hammer */}
+        {/* Auction gavel — Pickbid puts players under the hammer */}
         <svg
           width={108}
           height={108}

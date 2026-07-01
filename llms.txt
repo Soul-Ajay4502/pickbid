@@ -1,4 +1,4 @@
-# PickIt
+# Pickbid
 
 > A full-stack Next.js app for running amateur cricket leagues: design premium player cards, host real-time auctions spectators can watch live, track leaderboards and match results, and share everything with a single link — no app install required.
 

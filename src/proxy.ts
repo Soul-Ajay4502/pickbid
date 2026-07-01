@@ -1,0 +1,49 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+// Next.js 16 renamed the `middleware` file convention to `proxy` (same feature,
+// runs before a route renders). This gate is defence-in-depth for *navigation*
+// only — every API route still enforces real auth/authorization via `auth()`.
+// We check for the Auth.js session cookie rather than importing `@/auth`, so the
+// proxy stays lightweight and never pulls Sequelize/`pg` into this layer.
+
+// Auth.js (NextAuth v5) names the session cookie `authjs.session-token`, prefixed
+// with `__Secure-` over HTTPS, and splits it into `.0`/`.1` chunks when the JWT is
+// large. Matching by prefix covers every variant.
+function isAuthenticated(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.endsWith('authjs.session-token') || c.name.includes('authjs.session-token.'));
+}
+
+// Pages that stay open to logged-out visitors. Everything else under the matched
+// paths requires a session. `/`, `/leaderboard` and other top-level routes are
+// simply left out of the matcher, so they're always public.
+function isPublicPath(pathname: string): boolean {
+  // Browse public leagues / join by code
+  if (pathname === '/leagues/discover') return true;
+  // The live spectator screen for a league is meant to be shared publicly
+  if (/^\/leagues\/[^/]+\/watch$/.test(pathname)) return true;
+  return false;
+}
+
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  if (isPublicPath(pathname) || isAuthenticated(request)) {
+    return NextResponse.next();
+  }
+
+  // Not signed in → hand off to the Auth.js sign-in flow (Google is the only
+  // provider) and come back to the originally requested URL afterwards.
+  const signInUrl = new URL('/api/auth/signin', request.url);
+  signInUrl.searchParams.set('callbackUrl', pathname + search);
+  return NextResponse.redirect(signInUrl);
+}
+
+export const config = {
+  // Narrow the proxy to the areas that contain protected pages. `isPublicPath`
+  // then carves out the public exceptions (discover, watch). Static assets, the
+  // Auth.js API, `/`, and `/leaderboard` are never matched, so they stay public.
+  matcher: ['/leagues/:path*', '/profile/:path*'],
+};

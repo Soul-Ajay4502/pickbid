@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { UserCircle, Sun, Moon, LogOut, Plus, Globe } from 'lucide-react';
+import { UserCircle, Sun, Moon, LogOut, Plus, Globe, Trophy } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { MagneticButton } from './ui/magnetic-button';
 
@@ -31,20 +31,25 @@ export default function NavBar() {
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group cursor-pointer rounded-lg bg-linear-to-b  px-4 py-2 font-medium text-white ring-1 ring-white/20 ring-offset-1 ring-offset-green-500 transition-transform duration-150 ring-inset active:scale-98"
 
           >
-            <span className="hidden sm:block font-black text-[15px] tracking-tight text-gradient-green">PickIt</span>
+            <span className=" sm:block font-black text-xs sm:text-[15px] tracking-tight text-gradient-green">Pickbid</span>
           </Link>
         </MagneticButton>
 
-        {/* Nav links (logged in) */}
-        {session && (
-          <nav className="flex items-center gap-1">
+        {/* Nav links — Leaderboard is public; Discover is for signed-in users */}
+        <nav className="flex items-center gap-1">
+          <Link href="/leaderboard"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
+            <Trophy className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Leaderboard</span>
+          </Link>
+          {session && (
             <Link href="/leagues/discover"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
               <Globe className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Discover</span>
             </Link>
-          </nav>
-        )}
+          )}
+        </nav>
 
         {/* Right controls */}
         <div className="flex items-center gap-2">

@@ -408,7 +408,7 @@ export default function Landing() {
             >
               🏏
             </div>
-            <span className="text-sm font-bold text-gradient-green">PickIt</span>
+            <span className="text-sm font-bold text-gradient-green">Pickbid</span>
           </div>
           <p className="text-xs text-muted-foreground/60">
             Built for cricket leagues · Player cards, auctions & more

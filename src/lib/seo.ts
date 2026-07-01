@@ -21,12 +21,12 @@ function resolveSiteUrl(): string {
 export const SITE_URL = resolveSiteUrl();
 
 /** Display name used in title templates, OG site name and structured data. */
-export const SITE_NAME = 'PickIt';
+export const SITE_NAME = 'Pickbid';
 
 /** Default <title> shown on the home page and as the template fallback. */
-export const SITE_TITLE = 'PickIt — Run cricket leagues like a pro';
+export const SITE_TITLE = 'Pickbid — Run cricket leagues like a pro';
 
-/** Suffix appended to inner-page titles, e.g. "Discover · PickIt". */
+/** Suffix appended to inner-page titles, e.g. "Discover · Pickbid". */
 export const TITLE_TEMPLATE = `%s · ${SITE_NAME}`;
 
 export const SITE_DESCRIPTION =
@@ -59,7 +59,7 @@ export const SITE_KEYWORDS = [
 
 export const TWITTER_HANDLE = '@cricketcards';
 
-export const AUTHOR = { name: 'PickIt', url: SITE_URL };
+export const AUTHOR = { name: 'Pickbid', url: SITE_URL };
 
 /** Brand colours, reused by OG images, icons, the manifest and the theme tag. */
 export const BRAND = {

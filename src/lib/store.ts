@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState } from './types';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -519,6 +519,44 @@ export async function resetAuction(leagueId: string): Promise<number> {
     { where: { leagueId, isIcon: false } }
   );
   return count;
+}
+
+// ── Global leaderboard ──────────────────────────────────────────────────────────
+
+/**
+ * The highest winning bids across the entire system — every sold player in
+ * every league, ranked by price. There is no Player↔Team association, so the
+ * league and team names are resolved with two follow-up lookups keyed on the
+ * ids that appear in the top slice (never the whole table).
+ */
+export async function getTopBids(limit = 20): Promise<TopBid[]> {
+  const rows = await PlayerModel.findAll({
+    where: { teamId: { [Op.ne]: null }, soldPrice: { [Op.gt]: 0 } },
+    order: [['soldPrice', 'DESC']],
+    limit,
+  });
+  if (rows.length === 0) return [];
+
+  const leagueIds = [...new Set(rows.map((r) => r.leagueId!))];
+  const teamIds = [...new Set(rows.map((r) => r.teamId!))];
+  const [leagues, teams] = await Promise.all([
+    LeagueModel.findAll({ where: { id: { [Op.in]: leagueIds } }, attributes: ['id', 'name'] }),
+    TeamModel.findAll({ where: { id: { [Op.in]: teamIds } }, attributes: ['id', 'name', 'colorHex'] }),
+  ]);
+  const leagueById = Object.fromEntries(leagues.map((l) => [l.id, l]));
+  const teamById = Object.fromEntries(teams.map((t) => [t.id, t]));
+
+  return rows.map((r) => ({
+    playerId:   r.id,
+    playerName: r.name,
+    photo:      r.photo ?? '',
+    soldPrice:  r.soldPrice ?? 0,
+    isIcon:     r.isIcon ?? false,
+    leagueId:   r.leagueId!,
+    leagueName: leagueById[r.leagueId!]?.name ?? '—',
+    teamName:   teamById[r.teamId!]?.name ?? '—',
+    teamColor:  teamById[r.teamId!]?.colorHex ?? '#64748b',
+  }));
 }
 
 // ── Live auction state ──────────────────────────────────────────────────────────

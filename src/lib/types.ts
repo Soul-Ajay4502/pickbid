@@ -114,6 +114,23 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   hasJoined: boolean;
 }
 
+/**
+ * One entry on the global (system-wide) bid leaderboard: the highest winning
+ * bids across every league. Flattened with the league/team context the board
+ * needs so the client doesn't have to join anything.
+ */
+export interface TopBid {
+  playerId: string;
+  playerName: string;
+  photo: string;
+  soldPrice: number;
+  isIcon: boolean;
+  leagueId: string;
+  leagueName: string;
+  teamName: string;
+  teamColor: string;
+}
+
 /** A team's purse summary shown on the live spectator board */
 export interface LivePurse {
   id: string;
