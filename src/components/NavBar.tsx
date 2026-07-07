@@ -35,20 +35,18 @@ export default function NavBar() {
           </Link>
         </MagneticButton>
 
-        {/* Nav links — Leaderboard is public; Discover is for signed-in users */}
+        {/* Nav links — both pages are public; joining from Discover prompts sign-in */}
         <nav className="flex items-center gap-1">
           <Link href="/leaderboard"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
             <Trophy className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Leaderboard</span>
           </Link>
-          {session && (
-            <Link href="/leagues/discover"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
-              <Globe className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Discover</span>
-            </Link>
-          )}
+          <Link href="/leagues/discover"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200">
+            <Globe className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Discover</span>
+          </Link>
         </nav>
 
         {/* Right controls */}

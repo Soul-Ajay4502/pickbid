@@ -14,7 +14,6 @@ import {
   SITE_DESCRIPTION,
   SHORT_DESCRIPTION,
   SITE_KEYWORDS,
-  TWITTER_HANDLE,
   AUTHOR,
   BRAND,
 } from '@/lib/seo';
@@ -43,9 +42,6 @@ export const metadata: Metadata = {
   publisher: AUTHOR.name,
   category: 'sports',
   referrer: 'origin-when-cross-origin',
-  alternates: {
-    canonical: '/',
-  },
   formatDetection: {
     telephone: false,
     email: false,
@@ -63,8 +59,6 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: SITE_TITLE,
     description: SHORT_DESCRIPTION,
-    site: TWITTER_HANDLE,
-    creator: TWITTER_HANDLE,
   },
   robots: {
     index: true,

@@ -57,8 +57,6 @@ export const SITE_KEYWORDS = [
   'cricket squad poster',
 ];
 
-export const TWITTER_HANDLE = '@cricketcards';
-
 export const AUTHOR = { name: 'Pickbid', url: SITE_URL };
 
 /** Brand colours, reused by OG images, icons, the manifest and the theme tag. */

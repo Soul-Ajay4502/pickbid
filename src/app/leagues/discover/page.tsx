@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getPublicLeagues } from '@/lib/store';
-import { SITE_NAME, TWITTER_HANDLE } from '@/lib/seo';
+import { SITE_NAME } from '@/lib/seo';
 import type { League } from '@/lib/types';
 import DiscoverClient from './DiscoverClient';
 
@@ -31,8 +31,6 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${PAGE_TITLE} · ${SITE_NAME}`,
     description: PAGE_DESCRIPTION,
-    site: TWITTER_HANDLE,
-    creator: TWITTER_HANDLE,
   },
 };
 
