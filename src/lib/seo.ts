@@ -15,7 +15,7 @@ function resolveSiteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
 
-  return 'https://player-card-generator.vercel.app';
+  return 'https://pickbid.vercel.app';
 }
 
 export const SITE_URL = resolveSiteUrl();
