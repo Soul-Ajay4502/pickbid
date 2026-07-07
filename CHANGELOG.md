@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.3.0...v0.4.0) (2026-07-07)
+
+
+### Features
+
+* add animated shiny text component ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+* add platform stats retrieval function and type definition ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+* create border beam component for dynamic border animations ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+* implement number ticker component for animated number display ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+* introduce blur fade component for animated transitions ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+* update bento grid styles for improved aesthetics ([6e1d568](https://github.com/Soul-Ajay4502/player-card-generator/commit/6e1d5686c392eb5aa40f2181b9f4ce65b3be1c3a))
+
 ## [0.3.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.2...v0.3.0) (2026-07-07)
 
 
