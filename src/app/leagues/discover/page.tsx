@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getPublicLeagues } from '@/lib/store';
-import { SITE_NAME } from '@/lib/seo';
+import { SITE_NAME, SITE_URL } from '@/lib/seo';
 import type { League } from '@/lib/types';
 import DiscoverClient from './DiscoverClient';
 
@@ -41,5 +41,28 @@ export default async function DiscoverPage() {
   } catch {
     // Database hiccup — render the page shell; join-by-code still works.
   }
-  return <DiscoverClient initialLeagues={leagues} />;
+
+  // Tell search engines this page is a list of the public leagues on the site.
+  const itemList = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `Public cricket leagues on ${SITE_NAME}`,
+    numberOfItems: leagues.length,
+    itemListElement: leagues.map((league, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: league.name,
+      url: `${SITE_URL}/leagues/${league.id}`,
+    })),
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }}
+      />
+      <DiscoverClient initialLeagues={leagues} />
+    </>
+  );
 }

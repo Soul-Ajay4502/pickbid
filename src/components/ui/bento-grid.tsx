@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils';
 /**
  * Aceternity UI — Bento Grid
  * Responsive masonry-style grid. Items can span multiple columns via
- * className (e.g. `md:col-span-2`). Styled to match the project's
- * premium card surface and emerald accent.
+ * className (e.g. `md:col-span-2`). Surfaces are deliberately quiet —
+ * hairline border, flat card, no glow — to match the landing's art
+ * direction.
  */
 export function BentoGrid({
   className,
@@ -41,14 +42,14 @@ export function BentoGridItem({
   return (
     <div
       className={cn(
-        'group/bento card-premium relative flex h-full flex-col justify-between overflow-hidden p-5 transition-transform duration-200 hover:-translate-y-1',
+        'group/bento relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border bg-card p-5 transition-colors duration-200 hover:border-foreground/20',
         className,
       )}
     >
       {header}
-      <div className="relative z-10 transition-transform duration-200 group-hover/bento:translate-x-1">
+      <div className="relative z-10">
         {icon}
-        <div className="mt-3 font-bold text-foreground">{title}</div>
+        <div className="mt-3 text-[15px] font-medium text-foreground">{title}</div>
         <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</div>
       </div>
     </div>

@@ -2,13 +2,13 @@
 
 import { signIn } from 'next-auth/react';
 import {
-  ArrowRight,
   BarChart3,
   Check,
+  ChevronDown,
   CreditCard,
-  Download,
   Gavel,
   Layers,
+  Link2,
   MessagesSquare,
   MoonStar,
   Radio,
@@ -19,54 +19,45 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
+import { MotionConfig } from 'motion/react';
+import type { PlatformStats } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { Spotlight } from '@/components/ui/spotlight';
 import { BentoGrid, BentoGridItem } from '@/components/ui/bento-grid';
-import { HoverEffect } from '@/components/ui/card-hover-effect';
-import { MovingBorderButton } from '@/components/ui/moving-border';
+import { NumberTicker } from '@/components/ui/number-ticker';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { AnimatedShinyText } from '@/components/ui/animated-shiny-text';
+import { BorderBeam } from '@/components/ui/border-beam';
+import Footer from '../Footer';
 
 const signInGoogle = () => signIn('google');
 
-/* ── Small reusable icon chip, matching the app's avatar palette ───────────── */
+/* ── Monochrome icon chip — a single quiet accent carries the whole page ───── */
 function IconChip({
   icon: Icon,
-  tone,
   className,
 }: {
   icon: React.ComponentType<{ className?: string }>;
-  tone: string;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        'flex h-11 w-11 items-center justify-center rounded-xl border bg-linear-to-br',
-        tone,
+        'flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/50 text-foreground/70',
         className,
       )}
     >
-      <Icon className="h-5 w-5" />
+      <Icon className="h-4.5 w-4.5" />
     </div>
   );
 }
 
-const TONE = {
-  emerald: 'from-emerald-500/20 to-green-600/20 border-emerald-500/25 text-emerald-400',
-  blue: 'from-blue-500/20 to-indigo-600/20 border-blue-500/25 text-blue-400',
-  violet: 'from-violet-500/20 to-purple-600/20 border-violet-500/25 text-violet-400',
-  amber: 'from-orange-500/20 to-amber-600/20 border-amber-500/25 text-amber-400',
-  rose: 'from-rose-500/20 to-pink-600/20 border-rose-500/25 text-rose-400',
-  cyan: 'from-cyan-500/20 to-teal-600/20 border-cyan-500/25 text-cyan-400',
-} as const;
-
 /* ── Decorative header visuals for the wide bento tiles ────────────────────── */
 function PlayerCardVisual() {
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-xl">
-      <div className="absolute inset-0 bg-linear-to-br from-emerald-500/10 via-transparent to-cyan-500/10" />
-      <div className="relative flex w-40 -rotate-3 flex-col gap-2 rounded-2xl border border-emerald-500/25 bg-card/80 p-3 shadow-2xl shadow-emerald-500/10 backdrop-blur-sm transition-transform duration-300 group-hover/bento:rotate-0">
+    <div className="relative flex flex-1 items-center justify-center rounded-xl py-2">
+      <div className="relative flex w-36 -rotate-3 flex-col gap-1.5 rounded-2xl border border-border bg-card p-2.5 shadow-lg shadow-black/10 transition-transform duration-300 group-hover/bento:rotate-0">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-full bg-linear-to-br from-emerald-400/40 to-cyan-500/40 ring-2 ring-emerald-400/30" />
+          <div className="h-8 w-8 rounded-full bg-foreground/15 ring-2 ring-foreground/10" />
           <div className="flex-1 space-y-1.5">
             <div className="h-2 w-3/4 rounded-full bg-foreground/20" />
             <div className="h-1.5 w-1/2 rounded-full bg-foreground/10" />
@@ -74,16 +65,16 @@ function PlayerCardVisual() {
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           {['98', '76', '88'].map((n) => (
-            <div key={n} className="rounded-md bg-emerald-500/10 py-1 text-center">
-              <span className="text-[11px] font-black text-emerald-400">{n}</span>
+            <div key={n} className="rounded-md bg-muted py-1 text-center">
+              <span className="text-[11px] font-semibold text-foreground/80">{n}</span>
             </div>
           ))}
         </div>
         <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-2 py-1">
-          <span className="text-[9px] font-bold uppercase tracking-wide text-amber-400">Rating</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-500">Rating</span>
           <span className="flex gap-0.5">
             {[0, 1, 2].map((i) => (
-              <Sparkles key={i} className="h-2.5 w-2.5 text-amber-400" />
+              <Sparkles key={i} className="h-2.5 w-2.5 text-amber-500" />
             ))}
           </span>
         </div>
@@ -95,10 +86,9 @@ function PlayerCardVisual() {
 function LiveAuctionVisual() {
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-xl">
-      <div className="absolute inset-0 bg-linear-to-br from-rose-500/10 via-transparent to-violet-500/10" />
-      <div className="relative w-full max-w-[15rem] space-y-2 rounded-2xl border border-border bg-card/80 p-3 backdrop-blur-sm">
+      <div className="relative w-full max-w-60 space-y-2 rounded-2xl border border-border bg-card p-3">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-400">
+          <span className="flex items-center gap-1.5 rounded-full bg-foreground/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
             Live
           </span>
@@ -106,7 +96,7 @@ function LiveAuctionVisual() {
         </div>
         <div className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2">
           <span className="text-xs font-medium text-muted-foreground">Current bid</span>
-          <span className="font-mono text-base font-black text-emerald-400">₹2.4 Cr</span>
+          <span className="font-mono text-base font-semibold text-primary">₹2.4 Cr</span>
         </div>
         <div className="flex gap-1.5">
           {['Royals', 'Kings', 'Titans'].map((t, i) => (
@@ -115,7 +105,7 @@ function LiveAuctionVisual() {
               className={cn(
                 'flex-1 rounded-md py-1 text-center text-[10px] font-semibold',
                 i === 0
-                  ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                  ? 'bg-primary/15 text-primary ring-1 ring-primary/25'
                   : 'bg-muted/50 text-muted-foreground',
               )}
             >
@@ -128,13 +118,102 @@ function LiveAuctionVisual() {
   );
 }
 
-/* ── Section heading ───────────────────────────────────────────────────────── */
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
+/* ── Compact mock-UI visuals for the persona rows ──────────────────────────── */
+function LeagueSetupVisual() {
   return (
-    <div className="eyebrow-badge mx-auto mb-5">
-      <Sparkles className="h-3 w-3" />
-      {children}
+    <div className="w-full max-w-60 space-y-2 rounded-2xl border border-border bg-card p-3">
+      <div className="rounded-lg bg-muted/60 px-3 py-2">
+        <p className="text-[9px] uppercase tracking-wide text-muted-foreground">League name</p>
+        <p className="text-xs font-semibold text-foreground">Sunday Premier League</p>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="rounded-lg bg-muted/60 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wide text-muted-foreground">Team budget</p>
+          <p className="text-xs font-semibold text-foreground">₹10 Cr</p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wide text-muted-foreground">Squad size</p>
+          <p className="text-xs font-semibold text-foreground">11</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+        <span className="text-[10px] font-semibold text-primary">Registration link ready</span>
+        <Link2 className="h-3.5 w-3.5 text-primary" />
+      </div>
     </div>
+  );
+}
+
+function SquadPurseVisual() {
+  const teams = [
+    { name: 'Royals', bar: 'bg-primary/80', pct: '72%', squad: '9/11' },
+    { name: 'Kings', bar: 'bg-foreground/25', pct: '45%', squad: '6/11' },
+    { name: 'Titans', bar: 'bg-foreground/25', pct: '58%', squad: '7/11' },
+  ];
+  return (
+    <div className="w-full max-w-60 space-y-2.5 rounded-2xl border border-border bg-card p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Purse used</p>
+      {teams.map((t) => (
+        <div key={t.name} className="space-y-1">
+          <div className="flex justify-between text-[10px]">
+            <span className="font-semibold text-foreground">{t.name}</span>
+            <span className="text-muted-foreground">{t.squad} squad</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted/60">
+            <div className={cn('h-full rounded-full', t.bar)} style={{ width: t.pct }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StandingsVisual() {
+  const rows = [
+    { pos: 1, team: 'Royals', pts: 12, leader: true },
+    { pos: 2, team: 'Titans', pts: 10, leader: false },
+    { pos: 3, team: 'Kings', pts: 7, leader: false },
+  ];
+  return (
+    <div className="w-full max-w-60 space-y-1.5 rounded-2xl border border-border bg-card p-3">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Standings</p>
+        <span className="flex items-center gap-1 text-[9px] font-semibold text-primary">
+          <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
+          Live
+        </span>
+      </div>
+      {rows.map((r) => (
+        <div
+          key={r.pos}
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-2.5 py-1.5',
+            r.leader ? 'bg-amber-500/10 ring-1 ring-amber-500/25' : 'bg-muted/50',
+          )}
+        >
+          <span className="font-mono text-[10px] font-semibold text-muted-foreground">{r.pos}</span>
+          <span className="flex-1 text-[11px] font-semibold text-foreground">{r.team}</span>
+          {r.leader && <Trophy className="h-3 w-3 text-amber-500" />}
+          <span className="font-mono text-[11px] font-semibold text-foreground/80">{r.pts} pts</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Section heading — quiet title + muted sub, revealed on scroll ─────────── */
+function SectionHeading({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <BlurFade inView className="mb-14 text-center">
+      <h2 className="text-3xl font-medium tracking-[-0.01em] text-foreground sm:text-5xl sm:leading-[1.1]">
+        {title}
+      </h2>
+      {sub && (
+        <p className="mx-auto mt-4 max-w-2xl text-base font-medium text-muted-foreground sm:text-lg">
+          {sub}
+        </p>
+      )}
+    </BlurFade>
   );
 }
 
@@ -145,276 +224,459 @@ const STEPS = [
     title: 'Create your league',
     body: 'Name your tournament, set the team budget and squad rules. Takes under a minute.',
     icon: Trophy,
-    tone: TONE.emerald,
   },
   {
     n: '02',
     title: 'Add players & cards',
     body: 'Upload photos and stats — they format instantly into premium, share-ready player cards.',
     icon: CreditCard,
-    tone: TONE.blue,
   },
   {
     n: '03',
     title: 'Go live & share',
     body: 'Run the auction in real time, broadcast a watch link to fans, and export squad PDFs.',
     icon: Radio,
-    tone: TONE.rose,
   },
 ];
 
-/* ── "Everything in the box" — hover-effect grid ───────────────────────────── */
+/* ── "Everything in the box" — quiet icon + copy pairs ─────────────────────── */
 const EXTRAS = [
   {
     title: 'Instant Google sign-in',
     description: 'No passwords, no setup. Sign in and your leagues are ready in seconds.',
-    icon: <Check className="h-5 w-5 text-emerald-400" />,
+    icon: Check,
   },
   {
     title: 'Public share links',
     description: 'Send a single link — players and fans open everything in the browser, no app needed.',
-    icon: <Share2 className="h-5 w-5 text-blue-400" />,
+    icon: Share2,
   },
   {
     title: 'Installable PWA',
     description: 'Add it to your home screen for a fast, app-like experience on any device.',
-    icon: <Layers className="h-5 w-5 text-violet-400" />,
+    icon: Layers,
   },
   {
     title: 'Light & dark themes',
     description: 'A polished, premium interface that looks great in either mode, day or night.',
-    icon: <MoonStar className="h-5 w-5 text-amber-400" />,
+    icon: MoonStar,
   },
   {
     title: 'Real-time updates',
     description: 'Bids, sales and standings sync live across every connected screen.',
-    icon: <Zap className="h-5 w-5 text-cyan-400" />,
+    icon: Zap,
   },
   {
     title: 'WhatsApp broadcast',
     description: 'Share player cards and auction results straight to WhatsApp in a tap.',
-    icon: <MessagesSquare className="h-5 w-5 text-emerald-400" />,
+    icon: MessagesSquare,
   },
 ];
 
-export default function Landing() {
+/* ── "For everyone" persona rows, CricHeroes-style ─────────────────────────── */
+const PERSONAS = [
+  {
+    label: 'For organizers',
+    title: 'Run the whole show, minus the spreadsheets',
+    body: 'Set up the league, collect entries and put every player under the hammer — all from one screen.',
+    bullets: [
+      'Create a league with budgets and squad rules in under a minute',
+      'Share a registration link — players add their own details and photos',
+      'Run the live auction room and export final squads as PDFs',
+    ],
+    icon: Trophy,
+    visual: <LeagueSetupVisual />,
+  },
+  {
+    label: 'For team owners',
+    title: 'Build your dream squad on a budget',
+    body: 'Bid in real time, watch your purse update with every hammer and keep the squad balanced.',
+    bullets: [
+      'Live bidding with instant budget and purse tracking',
+      'Squad analytics — spend, balance and value at a glance',
+      'Rosters and team officials managed in one place',
+    ],
+    icon: Users,
+    visual: <SquadPurseVisual />,
+  },
+  {
+    label: 'For players',
+    title: 'Get a card worthy of a superstar',
+    body: 'A photo and a few stats become a broadcast-quality player card, ready to share anywhere.',
+    bullets: [
+      'Premium player cards on multiple templates',
+      'No account needed — register through the league link',
+      'Share your card straight to WhatsApp',
+    ],
+    icon: CreditCard,
+    visual: <PlayerCardVisual />,
+  },
+  {
+    label: 'For fans',
+    title: 'Follow every bid, live',
+    body: 'A public watch link mirrors the auction and standings on any screen — no sign-in, no app.',
+    bullets: [
+      'Watch mode for every auction, open to everyone',
+      'Leaderboards that update the moment a result lands',
+      'Works in any browser, on any device',
+    ],
+    icon: Tv,
+    visual: <StandingsVisual />,
+  },
+];
+
+/* ── FAQ (also emitted as FAQPage JSON-LD for search engines) ──────────────── */
+const FAQS = [
+  {
+    q: 'Is Pickbid free to use?',
+    a: 'Yes — sign in with Google and start building your league for free. No credit card needed.',
+  },
+  {
+    q: 'Do players need an account to join a league?',
+    a: 'No. Organizers share a registration link; players open it, add their details and photo, and their card is created — no sign-in required.',
+  },
+  {
+    q: 'Can fans watch the auction without signing in?',
+    a: 'Yes. Every auction has a public watch link that mirrors bids, sales and standings live in any browser.',
+  },
+  {
+    q: 'Does Pickbid work on phones?',
+    a: 'Pickbid runs in any modern browser and can be installed to your home screen as an app for a fast, full-screen experience.',
+  },
+  {
+    q: 'What do I need to start a league?',
+    a: 'Just a name, a team budget and squad rules — setup takes under a minute. Add players and cards whenever you like.',
+  },
+  {
+    q: 'Can I export or share results?',
+    a: 'Yes — one-tap PDF squad sheets, WhatsApp sharing for player cards and results, and public links for leaderboards.',
+  },
+];
+
+const FAQ_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQS.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+
+/**
+ * 1 → {1} · 47 → {40, "+"} · 1,160 → {1.1, "K+"} — modest rounding, never
+ * inflated. Split into number + suffix so the number can tick up on scroll
+ * while the suffix stays put.
+ */
+function statParts(n: number): { value: number; decimals: number; suffix: string } {
+  if (n >= 10000) return { value: Math.floor(n / 1000), decimals: 0, suffix: 'K+' };
+  if (n >= 1000) return { value: Math.floor(n / 100) / 10, decimals: 1, suffix: 'K+' };
+  if (n >= 20) return { value: Math.floor(n / 10) * 10, decimals: 0, suffix: '+' };
+  return { value: n, decimals: 0, suffix: '' };
+}
+
+// A counter only impresses once it has something to count: each stat appears
+// after it crosses this floor, and the strip stays hidden until at least two
+// qualify — no code change needed as the platform grows into the rest.
+const STAT_DISPLAY_FLOOR = 25;
+
+export default function Landing({ stats }: { stats?: PlatformStats | null }) {
+  const statItems = stats
+    ? [
+        { value: stats.leagues, label: 'Leagues created' },
+        { value: stats.players, label: 'Player cards made' },
+        { value: stats.teams, label: 'Teams built' },
+        { value: stats.playersSold, label: 'Players sold at auction' },
+      ].filter((s) => s.value >= STAT_DISPLAY_FLOOR)
+    : [];
+
   return (
-    <div className="relative overflow-hidden">
+    // reducedMotion="user" keeps the JS-driven Magic UI animations in step
+    // with the CSS-side prefers-reduced-motion collapse in globals.css.
+    <MotionConfig reducedMotion="user">
+    <div className="landing-scope relative overflow-hidden">
       {/* ════════════════════════ HERO ════════════════════════ */}
       <section className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center">
-        {/* Aceternity Spotlight */}
-        <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" fill="#10b981" />
-
-        {/* Atmospheric orbs */}
-        <div className="pointer-events-none absolute left-1/4 top-0 h-150 w-150 animate-orb rounded-full bg-green-500/5 blur-[140px]" aria-hidden="true" />
-        <div className="pointer-events-none absolute bottom-10 right-1/4 h-125 w-125 animate-orb rounded-full bg-blue-500/4 blur-[120px]" style={{ animationDelay: '4s' }} aria-hidden="true" />
-
-        {/* Subtle grid */}
+        {/* A single faint aura, masked out toward the bottom — all the scene-setting */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.18] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_50%,transparent_100%)]"
+          className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(to_bottom,black_55%,transparent_95%)]"
           style={{
-            backgroundImage:
-              'linear-gradient(to right, oklch(0.62 0.19 150 / 0.12) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.62 0.19 150 / 0.12) 1px, transparent 1px)',
-            backgroundSize: '46px 46px',
+            background:
+              'radial-gradient(90% 70% at 50% -10%, oklch(0.62 0.19 150 / 0.12), transparent 65%)',
           }}
           aria-hidden="true"
         />
 
-        <div className="relative z-10 flex flex-col items-center gap-8">
-          <div className="eyebrow-badge animate-badge-pop" style={{ animationDelay: '0.05s' }}>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-            The all-in-one cricket league platform
-          </div>
+        <div className="relative z-10 flex flex-col items-center">
+          <p className="animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+            <AnimatedShinyText className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+              The all-in-one cricket league platform
+            </AnimatedShinyText>
+          </p>
 
-          <div className="animate-fade-in-up space-y-6" style={{ animationDelay: '0.1s' }}>
-            <h1 className="text-5xl font-black leading-[1.02] tracking-tight sm:text-7xl lg:text-8xl">
-              <span className="block text-foreground/90">Run cricket leagues</span>
-              <span className="block text-gradient-green">like a pro.</span>
-            </h1>
-            <p className="mx-auto max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
-              Design premium player cards, host real-time auctions, track live leaderboards and share
-              it all with a single link — beautifully, in one place.
-            </p>
-          </div>
+          <h1
+            className="landing-hero-title mt-6 animate-fade-in-up text-5xl font-semibold leading-[1.05] tracking-[-0.02em] sm:text-7xl lg:text-[80px]"
+            style={{ animationDelay: '0.15s' }}
+          >
+            Run cricket leagues
+            <br />
+            like a pro.
+          </h1>
 
-          <div className="flex animate-fade-in-up flex-col items-center gap-4 sm:flex-row" style={{ animationDelay: '0.2s' }}>
-            <MovingBorderButton onClick={signInGoogle}>
-              <span className="bg-linear-to-r from-emerald-400 to-cyan-300 bg-clip-text font-bold text-transparent">
-                Get Started Free
-              </span>
-              <ArrowRight className="h-4 w-4 text-emerald-400" />
-            </MovingBorderButton>
+          <p
+            className="mt-6 max-w-xl animate-fade-in-up text-lg leading-relaxed text-foreground/70 sm:text-xl"
+            style={{ animationDelay: '0.25s' }}
+          >
+            Design premium player cards, host real-time auctions, track live leaderboards and share
+            it all with a single link — beautifully, in one place.
+          </p>
+
+          <div
+            className="mt-9 flex animate-fade-in-up flex-col items-center gap-5 sm:flex-row"
+            style={{ animationDelay: '0.35s' }}
+          >
+            <button onClick={signInGoogle} className="landing-btn">
+              Get Started Free
+            </button>
             <a
               href="#features"
-              className="btn-outline inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 text-base font-semibold"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Explore features
             </a>
           </div>
 
-          <p className="animate-fade-in-up text-xs tracking-wide text-muted-foreground/50" style={{ animationDelay: '0.25s' }}>
+          <p
+            className="mt-7 animate-fade-in-up text-xs text-muted-foreground/70"
+            style={{ animationDelay: '0.45s' }}
+          >
             Sign in with Google · Free to start · No credit card needed
           </p>
-
-          {/* Stats row */}
-          <div className="mt-4 flex animate-fade-in-up flex-wrap items-center justify-center gap-x-10 gap-y-4" style={{ animationDelay: '0.3s' }}>
-            {[
-              { icon: CreditCard, label: 'Player Cards' },
-              { icon: Gavel, label: 'Live Auctions' },
-              { icon: Trophy, label: 'Leaderboards' },
-              { icon: Download, label: 'PDF Export' },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="stat-chip">
-                <Icon className="h-4 w-4 text-primary/70" />
-                {label}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
+      {/* ════════════════════════ LIVE PLATFORM NUMBERS ════════════════════════ */}
+      {statItems.length >= 2 && (
+        <section className="border-y border-border">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <div className="flex flex-wrap items-start justify-center gap-x-16 gap-y-10 text-center">
+              {statItems.map((s, i) => {
+                const parts = statParts(s.value);
+                return (
+                  <BlurFade key={s.label} inView delay={i * 0.1} className="min-w-32">
+                    <p className="text-[44px] font-medium leading-none tracking-tight text-foreground tabular-nums sm:text-5xl">
+                      <NumberTicker
+                        value={parts.value}
+                        decimalPlaces={parts.decimals}
+                        delay={0.2 + i * 0.1}
+                        className="tracking-tight text-foreground dark:text-foreground"
+                      />
+                      {parts.suffix}
+                    </p>
+                    <p className="mt-3 text-[13px] font-medium text-muted-foreground">{s.label}</p>
+                  </BlurFade>
+                );
+              })}
+            </div>
+            <p className="mt-9 text-center text-xs text-muted-foreground/60">
+              Live totals from leagues running on Pickbid right now
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* ════════════════════════ FEATURES (Bento) ════════════════════════ */}
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-24 sm:px-6 lg:px-8">
-        <div className="mb-14 text-center">
-          <SectionEyebrow>Everything you need</SectionEyebrow>
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            One platform, the <span className="text-gradient-green">whole tournament</span>
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
-            From the first player card to the final whistle — every part of running a cricket league,
-            crafted to feel premium.
-          </p>
-        </div>
+        <SectionHeading
+          title="One platform, the whole tournament"
+          sub="From the first player card to the final whistle — every part of running a cricket league, crafted to feel premium."
+        />
 
+        <BlurFade inView delay={0.1}>
         <BentoGrid>
           <BentoGridItem
             className="md:col-span-2"
             header={<PlayerCardVisual />}
-            icon={<IconChip icon={CreditCard} tone={TONE.emerald} />}
+            icon={<IconChip icon={CreditCard} />}
             title="Premium player cards"
             description="Upload a photo, add stats and ratings — get gorgeous, broadcast-quality cards in seconds. Multiple templates, fully yours."
           />
           <BentoGridItem
-            icon={<IconChip icon={Gavel} tone={TONE.rose} />}
+            icon={<IconChip icon={Gavel} />}
             title="Live auctions"
             description="Put players under the hammer with a real-time bidding room. Budgets and squads update instantly."
           />
 
           <BentoGridItem
-            icon={<IconChip icon={BarChart3} tone={TONE.blue} />}
+            icon={<IconChip icon={BarChart3} />}
             title="Squad analytics"
             description="See spend, squad balance and value at a glance with clean, insightful charts."
           />
           <BentoGridItem
             className="md:col-span-2"
             header={<LiveAuctionVisual />}
-            icon={<IconChip icon={Tv} tone={TONE.violet} />}
+            icon={<IconChip icon={Tv} />}
             title="Watch mode for fans"
             description="Broadcast a public watch link so spectators follow every bid and reveal live — no sign-in required."
           />
 
           <BentoGridItem
-            icon={<IconChip icon={Trophy} tone={TONE.amber} />}
+            icon={<IconChip icon={Trophy} />}
             title="Real-time leaderboard"
             description="Standings that update the moment a result lands, ready to share."
           />
           <BentoGridItem
-            icon={<IconChip icon={Users} tone={TONE.cyan} />}
+            icon={<IconChip icon={Users} />}
             title="Teams & budgets"
             description="Manage rosters, owners and team officials with budget tracking built in."
           />
           <BentoGridItem
-            icon={<IconChip icon={Share2} tone={TONE.emerald} />}
+            icon={<IconChip icon={Share2} />}
             title="Share & export"
             description="One-tap PDF squad sheets and WhatsApp sharing for cards, results and links."
           />
         </BentoGrid>
+        </BlurFade>
+      </section>
+
+      {/* ════════════════════════ FOR EVERYONE (personas) ════════════════════════ */}
+      <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mb-16">
+          <SectionHeading
+            title="Pickbid is for every cricket lover"
+            sub="Whether you run the league, own a team, walk out to bat or cheer from the stands."
+          />
+        </div>
+
+        <div className="space-y-16 md:space-y-24">
+          {PERSONAS.map((p, i) => {
+            const Icon = p.icon;
+            return (
+              <BlurFade
+                key={p.label}
+                inView
+                className="grid items-center gap-10 md:grid-cols-2 md:gap-14"
+              >
+                <div className={cn(i % 2 === 1 && 'md:order-2')}>
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <Icon className="h-3.5 w-3.5" />
+                    {p.label}
+                  </p>
+                  <h3 className="mt-4 text-2xl font-medium tracking-[-0.01em] text-foreground sm:text-3xl">
+                    {p.title}
+                  </h3>
+                  <p className="mt-3 text-base leading-relaxed text-muted-foreground">{p.body}</p>
+                  <ul className="mt-6 space-y-3">
+                    {p.bullets.map((b) => (
+                      <li key={b} className="flex items-start gap-3 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className={cn('flex justify-center', i % 2 === 1 && 'md:order-1')}>
+                  <div className="flex w-full max-w-sm items-center justify-center rounded-3xl border border-border bg-card/50 p-8">
+                    {p.visual}
+                  </div>
+                </div>
+              </BlurFade>
+            );
+          })}
+        </div>
       </section>
 
       {/* ════════════════════════ HOW IT WORKS ════════════════════════ */}
       <section className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div className="mb-14 text-center">
-          <SectionEyebrow>Up and running in minutes</SectionEyebrow>
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            Three steps to <span className="text-gradient-green">match day</span>
-          </h2>
-        </div>
+        <SectionHeading title="Three steps to match day" sub="Up and running in minutes." />
 
         <div className="grid gap-5 md:grid-cols-3">
           {STEPS.map((s, i) => (
-            <div key={s.n} className="card-premium group relative p-7">
-              {/* connector line */}
-              {i < STEPS.length - 1 && (
-                <div className="absolute -right-2.5 top-1/2 z-10 hidden h-px w-5 bg-border md:block" aria-hidden="true" />
-              )}
-              <div className="flex items-center justify-between">
-                <IconChip icon={s.icon} tone={s.tone} className="h-12 w-12" />
-                <span className="font-mono text-3xl font-black text-muted-foreground/15">{s.n}</span>
+            <BlurFade key={s.n} inView delay={i * 0.12}>
+              <div className="relative h-full rounded-2xl border border-border bg-card p-7">
+                {/* connector line */}
+                {i < STEPS.length - 1 && (
+                  <div className="absolute -right-2.5 top-1/2 z-10 hidden h-px w-5 bg-border md:block" aria-hidden="true" />
+                )}
+                <div className="flex items-center justify-between">
+                  <IconChip icon={s.icon} className="h-12 w-12" />
+                  <span className="font-mono text-3xl font-medium text-foreground/10">{s.n}</span>
+                </div>
+                <h3 className="mt-5 text-[17px] font-medium text-foreground">{s.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
               </div>
-              <h3 className="mt-5 text-lg font-bold text-foreground">{s.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-            </div>
+            </BlurFade>
           ))}
         </div>
       </section>
 
       {/* ════════════════════════ EVERYTHING IN THE BOX ════════════════════════ */}
-      <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div className="mb-10 text-center">
-          <SectionEyebrow>Thoughtful details</SectionEyebrow>
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            Everything in the <span className="text-gradient-green">box</span>
-          </h2>
+      <section className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
+        <SectionHeading title="Everything in the box" sub="Thoughtful details, included by default." />
+        <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
+          {EXTRAS.map((e, i) => {
+            const Icon = e.icon;
+            return (
+              <BlurFade key={e.title} inView delay={i * 0.06} className="flex items-start gap-3.5">
+                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-[15px] font-medium text-foreground">{e.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{e.description}</p>
+                </div>
+              </BlurFade>
+            );
+          })}
         </div>
-        <HoverEffect items={EXTRAS} />
+      </section>
+
+      {/* ════════════════════════ FAQ ════════════════════════ */}
+      <section className="mx-auto max-w-2xl px-4 py-24 sm:px-6">
+        <SectionHeading title="Frequently asked questions" />
+        <div>
+          {FAQS.map((f, i) => (
+            <BlurFade key={f.q} inView delay={i * 0.05}>
+              <details className="group -mx-4 rounded-xl transition-colors hover:bg-foreground/4.5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-5 text-[15px] font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                  {f.q}
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <p className="px-4 pb-5 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
+              </details>
+            </BlurFade>
+          ))}
+        </div>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
+        />
       </section>
 
       {/* ════════════════════════ FINAL CTA ════════════════════════ */}
-      <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-linear-to-br from-emerald-500/10 via-card to-cyan-500/10 px-6 py-16 text-center sm:py-20">
-          <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 animate-orb rounded-full bg-emerald-500/15 blur-[100px]" aria-hidden="true" />
-          <div className="pointer-events-none absolute -bottom-20 -right-20 h-72 w-72 animate-orb rounded-full bg-cyan-500/10 blur-[100px]" style={{ animationDelay: '3s' }} aria-hidden="true" />
-
-          <div className="relative z-10 flex flex-col items-center gap-7">
-            <div className="flex h-16 w-16 animate-float items-center justify-center rounded-3xl bg-linear-to-br from-green-500/20 to-emerald-600/20 text-3xl shadow-[0_0_40px_oklch(0.62_0.19_150/0.15)] ring-1 ring-emerald-500/25 select-none">
-              🏏
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
+      <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+        <BlurFade inView>
+          <div className="relative overflow-hidden rounded-3xl border border-border bg-card/50 px-6 py-20 text-center sm:py-24">
+            <BorderBeam
+              size={90}
+              duration={9}
+              colorFrom="var(--primary)"
+              colorTo="var(--foreground)"
+            />
+            <div className="relative z-10 flex flex-col items-center gap-6">
+              <h2 className="text-3xl font-medium tracking-[-0.01em] text-foreground sm:text-5xl">
                 Ready to run your league?
               </h2>
-              <p className="mx-auto max-w-md text-base text-muted-foreground sm:text-lg">
+              <p className="max-w-md text-base text-muted-foreground sm:text-lg">
                 Build your first player card and host your auction today — completely free to start.
               </p>
+              <button onClick={signInGoogle} className="landing-btn mt-2">
+                Get Started Free
+              </button>
             </div>
-            <button
-              onClick={signInGoogle}
-              className="btn-premium inline-flex items-center gap-2.5 rounded-2xl px-10 py-4 text-base font-semibold"
-            >
-              Get Started Free
-              <ArrowRight className="h-4 w-4" />
-            </button>
           </div>
-        </div>
+        </BlurFade>
       </section>
-
-      {/* ════════════════════════ FOOTER ════════════════════════ */}
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-sm shadow-[0_0_16px_oklch(0.62_0.19_150/0.35)]"
-              style={{ background: 'linear-gradient(135deg, #16a34a 0%, #059669 55%, #0d9488 100%)' }}
-            >
-              🏏
-            </div>
-            <span className="text-sm font-bold text-gradient-green">Pickbid</span>
-          </div>
-          <p className="text-xs text-muted-foreground/60">
-            Built for cricket leagues · Player cards, auctions & more
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
+    </MotionConfig>
   );
 }

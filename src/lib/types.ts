@@ -131,6 +131,14 @@ export interface TopBid {
   teamColor: string;
 }
 
+/** Whole-platform totals shown on the signed-out landing page */
+export interface PlatformStats {
+  leagues: number;
+  players: number;
+  teams: number;
+  playersSold: number;
+}
+
 /** A team's purse summary shown on the live spectator board */
 export interface LivePurse {
   id: string;

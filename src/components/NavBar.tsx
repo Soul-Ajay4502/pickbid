@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UserCircle, Sun, Moon, LogOut, Plus, Globe, Trophy } from 'lucide-react';
@@ -72,8 +73,8 @@ export default function NavBar() {
                 title="Edit your cricket profile">
                 <div className="relative">
                   {session.user?.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={session.user.image} alt={session.user.name ?? ''}
+                    <Image src={session.user.image} alt={session.user.name ?? ''}
+                      width={28} height={28}
                       className="w-7 h-7 rounded-full ring-2 ring-primary/30 ring-offset-1 ring-offset-background"
                       referrerPolicy="no-referrer" />
                   ) : (

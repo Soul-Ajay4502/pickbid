@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Trophy, Crown, Medal, Star, Globe, ArrowUpRight } from 'lucide-react';
 import type { TopBid } from '@/lib/types';
 
@@ -68,7 +69,13 @@ function Avatar({ photo, name, color, size, ring }: { photo: string; name: strin
         {initials(name)}
       </span>
       {photo && (
-        <div className="absolute inset-0 bg-cover" style={{ backgroundImage: `url(${thumb(photo)})`, backgroundPosition: 'center top' }} />
+        <Image
+          src={thumb(photo)}
+          alt={`${name} — cricket player photo`}
+          fill
+          sizes={`${size}px`}
+          className="object-cover object-top"
+        />
       )}
     </div>
   );

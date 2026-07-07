@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid } from './types';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -557,6 +557,20 @@ export async function getTopBids(limit = 20): Promise<TopBid[]> {
     teamName:   teamById[r.teamId!]?.name ?? '—',
     teamColor:  teamById[r.teamId!]?.colorHex ?? '#64748b',
   }));
+}
+
+/**
+ * Whole-platform totals for the landing page's stats strip. "Sold" uses the
+ * same definition as the bid leaderboard: assigned to a team at a price > 0.
+ */
+export async function getPlatformStats(): Promise<PlatformStats> {
+  const [leagues, players, teams, playersSold] = await Promise.all([
+    LeagueModel.count(),
+    PlayerModel.count(),
+    TeamModel.count(),
+    PlayerModel.count({ where: { teamId: { [Op.ne]: null }, soldPrice: { [Op.gt]: 0 } } }),
+  ]);
+  return { leagues, players, teams, playersSold };
 }
 
 // ── Live auction state ──────────────────────────────────────────────────────────
