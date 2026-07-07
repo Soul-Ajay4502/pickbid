@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.2...v0.3.0) (2026-07-07)
+
+
+### Features
+
+* implement DiscoverClient component for league discovery and joining ([80f2eaf](https://github.com/Soul-Ajay4502/player-card-generator/commit/80f2eaffe695d9f403679880b63affc410958a73))
+
+
+### Code Refactoring
+
+* update project name from PickIt to Pickbid across all files ([89398c5](https://github.com/Soul-Ajay4502/player-card-generator/commit/89398c57413caa7cad811216b22c8bd6f1495d58))
+
 ## [0.2.2](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.2.1...v0.2.2) (2026-06-24)
 
 
