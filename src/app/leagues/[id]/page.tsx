@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
-  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus,
+  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -857,6 +857,9 @@ function LeaguePageInner() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <button onClick={() => router.push(`/leagues/${id}/wrapped`)} className="toolbar-btn text-amber-600 dark:text-amber-400">
+              <Sparkles className="w-3.5 h-3.5" />Auction Wrapped
+            </button>
             {(data.isCreator || data.isPublic) && (
               <>
                 <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">

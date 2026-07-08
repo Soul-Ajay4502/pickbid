@@ -12,11 +12,12 @@ export default function NavBar() {
   const { data: session, status } = useSession();
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
-  const isAuctionPage = /^\/leagues\/[^/]+\/auction$/.test(pathname);
-  const isWatchPage = /^\/leagues\/[^/]+\/watch$/.test(pathname);
-
-  // The auction runs as an immersive full-screen experience
-  if (isAuctionPage || isWatchPage) return null;
+  // The auction, watch, wrapped and squad-reveal screens run as immersive
+  // full-screen experiences with no app chrome
+  const isImmersive =
+    /^\/leagues\/[^/]+\/(auction|watch|wrapped)$/.test(pathname) ||
+    /^\/leagues\/[^/]+\/teams\/[^/]+\/reveal$/.test(pathname);
+  if (isImmersive) return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-2xl">

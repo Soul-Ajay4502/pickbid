@@ -8,7 +8,7 @@ import type { LeagueWithPlayers, Player, Team, LiveAuctionState, LivePurse } fro
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy } from 'lucide-react';
+import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
@@ -380,7 +380,10 @@ export default function AuctionPage() {
             })}
           </div>
         )}
-        <div className="flex gap-4" style={{ animation: 'fadeInUp .55s .35s cubic-bezier(.22,1,.36,1) both' }}>
+        <div className="flex flex-wrap justify-center gap-4" style={{ animation: 'fadeInUp .55s .35s cubic-bezier(.22,1,.36,1) both' }}>
+          <Button onClick={() => router.push(`/leagues/${id}/wrapped`)} className="bg-amber-500 hover:bg-amber-400 text-black font-bold shadow-lg shadow-amber-500/25">
+            <Sparkles className="w-4 h-4 mr-2" />Auction Wrapped
+          </Button>
           <Button variant="outline" onClick={resetAuction} disabled={resetting} className="border-foreground/20 text-foreground hover:bg-foreground/10">
             {resetting
               ? <span className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin mr-2" />

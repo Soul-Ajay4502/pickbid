@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy } from 'lucide-react';
+import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerFullView from '@/components/PlayerFullView';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -114,9 +114,18 @@ export default function TeamDetailPage() {
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5 group">
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" /> Back to Teams
         </button>
-        <div className="flex items-center gap-3">
-          <span className="w-4 h-4 rounded-full shrink-0" style={{ background: team.colorHex, boxShadow: `0 0 12px ${team.colorHex}80` }} />
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground truncate">{team.name}</h1>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-4 h-4 rounded-full shrink-0" style={{ background: team.colorHex, boxShadow: `0 0 12px ${team.colorHex}80` }} />
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground truncate">{team.name}</h1>
+          </div>
+          {squad.length > 0 && (
+            <button onClick={() => router.push(`/leagues/${id}/teams/${teamId}/reveal`)}
+              title="Open this squad like a card pack"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-black bg-linear-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 transition-colors shadow-lg shadow-amber-500/25 shrink-0">
+              <Sparkles className="w-4 h-4" />Squad Reveal
+            </button>
+          )}
         </div>
         <p className="text-muted-foreground text-sm mt-1">{data.name} · Conducted by {data.conductedBy}</p>
       </div>

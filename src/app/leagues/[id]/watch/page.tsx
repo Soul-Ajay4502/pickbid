@@ -243,7 +243,7 @@ export default function WatchPage() {
         ) : phase === 'picking' ? (
           <PickingScreen />
         ) : phase === 'done' ? (
-          <DoneScreen live={live} />
+          <DoneScreen live={live} leagueId={id} />
         ) : live.current ? (
           <div className="relative z-10 flex flex-col items-center gap-5">
             {phase === 'sold' && <Confetti key={live.v} />}
@@ -332,7 +332,7 @@ function PickingScreen() {
   );
 }
 
-function DoneScreen({ live }: { live: LiveAuctionState }) {
+function DoneScreen({ live, leagueId }: { live: LiveAuctionState; leagueId: string }) {
   const topTeam = [...live.purses].sort((a, b) => b.spent - a.spent)[0];
   return (
     <div className="relative z-10 flex flex-col items-center gap-6 text-center">
@@ -345,6 +345,10 @@ function DoneScreen({ live }: { live: LiveAuctionState }) {
           <p className="text-white/40 text-sm mt-3">Biggest spender · <span className="text-white/80 font-semibold">{topTeam.name}</span> ({fmt(topTeam.spent)})</p>
         )}
       </div>
+      <a href={`/leagues/${leagueId}/wrapped`}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-black font-black text-sm sm:text-base transition-colors shadow-xl shadow-amber-500/25">
+        ✨ View the Auction Wrapped
+      </a>
     </div>
   );
 }
