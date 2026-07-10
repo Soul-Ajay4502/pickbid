@@ -9,7 +9,7 @@
 // and the league API never exposes contact numbers to non-creators. The whole
 // point of the page is to be forwarded around after auction night.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Download, Share2, RotateCcw, X, Users } from 'lucide-react';
@@ -65,7 +65,9 @@ export default function WrappedPage() {
   const [loaded, setLoaded] = useState(false);
   const [idx, setIdx] = useState(0);
   const [exporting, setExporting] = useState(false);
-  const shareRef = useRef<HTMLDivElement | null>(null);
+  // The summary poster is rendered server-side (fixed 1080×1350, same on every
+  // device); the finale previews and downloads this exact image.
+  const posterUrl = `/leagues/${id}/wrapped/poster`;
 
   useEffect(() => {
     (async () => {
@@ -120,17 +122,13 @@ export default function WrappedPage() {
   }
 
   async function downloadImage(): Promise<Blob | null> {
-    const node = shareRef.current;
-    if (!node) return null;
-    // Same capture recipe as the card PDFs: html2canvas-pro for Tailwind v4's
-    // modern colour functions, stylesheets stripped from the clone because the
-    // summary card is styled entirely inline.
-    const { default: html2canvas } = await import('html2canvas-pro');
-    const canvas = await html2canvas(node, {
-      scale: 3, useCORS: true, backgroundColor: null, logging: false,
-      onclone: (doc) => doc.querySelectorAll('link[rel="stylesheet"], style').forEach((el) => el.remove()),
-    });
-    return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    try {
+      const res = await fetch(posterUrl);
+      if (!res.ok) return null;
+      return await res.blob();
+    } catch {
+      return null;
+    }
   }
 
   async function handleDownload() {
@@ -276,7 +274,7 @@ export default function WrappedPage() {
           {slide === 'numbers' && <NumbersSlide data={data} stats={stats} />}
           {slide === 'finale' && (
             <FinaleSlide
-              data={data} stats={stats} shareRef={shareRef} exporting={exporting}
+              posterUrl={posterUrl} exporting={exporting}
               onDownload={handleDownload} onShare={handleShare} onCopyLink={handleCopyLink}
               onReplay={() => setIdx(0)} onSquads={() => router.push(`/leagues/${id}/teams`)}
             />
@@ -517,10 +515,8 @@ function NumbersSlide({ data, stats }: { data: LeagueWithPlayers; stats: Wrapped
 
 // ── Finale + shareable summary card ──────────────────────────────────────────
 
-function FinaleSlide({ data, stats, shareRef, exporting, onDownload, onShare, onCopyLink, onReplay, onSquads }: {
-  data: LeagueWithPlayers;
-  stats: WrappedStats;
-  shareRef: React.RefObject<HTMLDivElement | null>;
+function FinaleSlide({ posterUrl, exporting, onDownload, onShare, onCopyLink, onReplay, onSquads }: {
+  posterUrl: string;
   exporting: boolean;
   onDownload: () => void;
   onShare: () => void;
@@ -528,10 +524,32 @@ function FinaleSlide({ data, stats, shareRef, exporting, onDownload, onShare, on
   onReplay: () => void;
   onSquads: () => void;
 }) {
+  const [posterReady, setPosterReady] = useState(false);
   return (
     <div className="min-h-full flex flex-col items-center justify-center gap-5 px-4 py-6">
-      <div style={{ animation: 'wrapPop .55s cubic-bezier(.34,1.56,.64,1) both' }}>
-        <ShareCard ref={shareRef} data={data} stats={stats} />
+      {/* Preview of the server-rendered poster — exactly what Download saves.
+          Sized by viewport (not a fixed 340px) so it fits every screen. */}
+      <div
+        className="relative overflow-hidden rounded-2xl border border-white/15 shadow-2xl"
+        style={{
+          width: 'min(340px, 84vw, calc((100dvh - 340px) * 0.8))',
+          aspectRatio: '1080 / 1350',
+          animation: 'wrapPop .55s cubic-bezier(.34,1.56,.64,1) both',
+        }}
+      >
+        {!posterReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/5">
+            <p className="text-white/35 text-xs uppercase tracking-[3px] font-bold animate-pulse">Rendering…</p>
+          </div>
+        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={posterUrl} alt="Auction Wrapped summary poster"
+          width={1080} height={1350}
+          onLoad={() => setPosterReady(true)}
+          className="w-full h-full object-cover transition-opacity duration-300"
+          style={{ opacity: posterReady ? 1 : 0 }}
+        />
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2.5" data-noadvance
         style={{ animation: 'wrapFadeUp .5s .25s cubic-bezier(.22,1,.36,1) both' }}>
@@ -561,104 +579,3 @@ function FinaleSlide({ data, stats, shareRef, exporting, onDownload, onShare, on
   );
 }
 
-/**
- * The downloadable/shareable summary. Styled entirely inline (like PlayerCard)
- * so html2canvas can capture it with the app stylesheets stripped.
- */
-function ShareCard({ ref, data, stats }: {
-  ref: React.RefObject<HTMLDivElement | null>;
-  data: LeagueWithPlayers;
-  stats: WrappedStats;
-}) {
-  const t = getTemplate(data.templateId);
-  const top = stats.topBuys[0];
-  const topTeam = top ? teamOf(top, stats.teamSpends) : null;
-  const spender = stats.teamSpends[0];
-  const gold = '#fbbf24';
-  const label: React.CSSProperties = { color: 'rgba(255,255,255,0.4)', fontSize: 8, letterSpacing: 2.5, textTransform: 'uppercase', fontWeight: 700 };
-
-  return (
-    <div ref={ref} style={{
-      width: 340, background: `linear-gradient(160deg, ${t.rootBg} 0%, #05070d 100%)`,
-      border: `2px solid ${t.borderColor}`, borderRadius: 20, padding: '22px 22px 16px',
-      fontFamily: "'Arial', 'Helvetica', sans-serif", color: '#fff', position: 'relative', overflow: 'hidden',
-    }}>
-      <div style={{ position: 'absolute', top: -80, right: -80, width: 240, height: 240, borderRadius: '50%', background: `rgba(${t.accentRgb},0.12)`, filter: 'blur(40px)', pointerEvents: 'none' }} />
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, position: 'relative' }}>
-        {data.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.logoUrl} alt="" crossOrigin="anonymous" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-        ) : (
-          <div style={{ width: 44, height: 44, borderRadius: 8, background: `rgba(${t.accentRgb},0.15)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🏏</div>
-        )}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.15 }}>{data.name}</div>
-          <div style={{ ...label, color: t.awardColor, marginTop: 3 }}>Auction Wrapped · {stats.season}</div>
-        </div>
-      </div>
-
-      {/* Total spend */}
-      <div style={{ textAlign: 'center', padding: '14px 0 16px', borderTop: '1px solid rgba(255,255,255,0.1)', position: 'relative' }}>
-        <div style={label}>Total Spend</div>
-        <div style={{ fontSize: 36, fontWeight: 900, color: gold, marginTop: 4 }}>{fmt(stats.totalSpend)}</div>
-      </div>
-
-      {/* Record buy */}
-      {top && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', marginBottom: 10, position: 'relative' }}>
-          {top.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb(top.photo)} alt="" crossOrigin="anonymous" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${gold}`, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🏏</div>
-          )}
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={label}>👑 Record Buy</div>
-            <div style={{ fontSize: 15, fontWeight: 800, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{top.name}</div>
-            {topTeam && (
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: topTeam.colorHex, flexShrink: 0 }} />{topTeam.name}
-              </div>
-            )}
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 900, color: gold, flexShrink: 0 }}>{fmt(top.soldPrice ?? 0)}</div>
-        </div>
-      )}
-
-      {/* Biggest spender */}
-      {spender && spender.spent > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', marginBottom: 14, position: 'relative' }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: spender.colorHex, flexShrink: 0 }} />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={label}>Biggest Spender</div>
-            <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{spender.name}</div>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 900, color: '#4ade80', flexShrink: 0 }}>{fmt(spender.spent)}</div>
-        </div>
-      )}
-
-      {/* Mini stats */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, position: 'relative' }}>
-        {[
-          { v: String(stats.soldPlayers.length), l: 'Sold' },
-          { v: fmt(stats.avgPrice), l: 'Avg Bid' },
-          { v: String(stats.teamSpends.filter((ts) => ts.count > 0).length), l: 'Squads' },
-          { v: String(stats.unsoldCount), l: 'Unsold' },
-        ].map((s) => (
-          <div key={s.l} style={{ flex: 1, textAlign: 'center', padding: '8px 2px', borderRadius: 10, background: `rgba(${t.accentRgb},0.08)`, border: `1px solid rgba(${t.accentRgb},0.18)` }}>
-            <div style={{ fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>{s.v}</div>
-            <div style={{ ...label, fontSize: 7, marginTop: 2 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, position: 'relative' }}>
-        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)' }}>Conducted by {data.conductedBy}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, color: t.awardColor, letterSpacing: 1 }}>pickbid.vercel.app</span>
-      </div>
-    </div>
-  );
-}

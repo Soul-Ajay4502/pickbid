@@ -131,6 +131,8 @@ const jsonLd = {
         'Public watch mode for fans',
         'Teams, budgets and officials management',
         'One-tap PDF squad sheets and WhatsApp sharing',
+        'Auction Wrapped recap stories',
+        'Holographic pack-opening squad reveals',
       ],
     },
   ],

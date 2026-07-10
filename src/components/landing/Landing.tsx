@@ -5,12 +5,15 @@ import {
   BarChart3,
   Check,
   ChevronDown,
+  Clapperboard,
   CreditCard,
+  Crown,
   Gavel,
   Layers,
   Link2,
   MessagesSquare,
   MoonStar,
+  Package,
   Radio,
   Share2,
   Sparkles,
@@ -112,6 +115,77 @@ function LiveAuctionVisual() {
               {t}
             </span>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WrappedVisual() {
+  const spends = [
+    { name: 'Royals', bar: 'bg-primary/80', pct: '86%', amt: '₹8.6 Cr' },
+    { name: 'Titans', bar: 'bg-foreground/25', pct: '58%', amt: '₹5.8 Cr' },
+  ];
+  return (
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-xl">
+      <div className="relative w-full max-w-60 space-y-2 rounded-2xl border border-border bg-card p-3">
+        {/* story progress segments */}
+        <div className="flex gap-1" aria-hidden="true">
+          {[100, 100, 50, 0, 0, 0].map((fill, i) => (
+            <span key={i} className="h-0.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <span className="block h-full rounded-full bg-foreground/40" style={{ width: `${fill}%` }} />
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Auction Wrapped
+          </span>
+          <span className="text-[9px] text-muted-foreground">Slide 3 / 7</span>
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-1.5 ring-1 ring-amber-500/20">
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-500">
+            <Crown className="h-3 w-3" />
+            Record buy
+          </span>
+          <span className="font-mono text-sm font-semibold text-foreground">₹2.4 Cr</span>
+        </div>
+        {spends.map((t) => (
+          <div key={t.name} className="space-y-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="font-semibold text-foreground">{t.name}</span>
+              <span className="text-muted-foreground">{t.amt}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted/60">
+              <div className={cn('h-full rounded-full', t.bar)} style={{ width: t.pct }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PackRevealVisual() {
+  return (
+    <div className="relative flex flex-1 items-center justify-center rounded-xl py-2">
+      <div className="relative w-28 -rotate-3 overflow-hidden rounded-xl border border-border bg-card p-2 shadow-lg shadow-black/10 transition-transform duration-300 group-hover/bento:rotate-0">
+        {/* holographic foil sweep */}
+        <div
+          className="pointer-events-none absolute inset-0 z-10 transition-transform duration-500 group-hover/bento:translate-x-3"
+          style={{
+            background:
+              'linear-gradient(115deg, transparent 25%, rgba(56,189,248,0.16) 42%, rgba(168,85,247,0.16) 52%, rgba(251,191,36,0.16) 62%, transparent 78%)',
+          }}
+          aria-hidden="true"
+        />
+        <div className="flex h-14 items-center justify-center rounded-lg bg-foreground/10">
+          <div className="h-7 w-7 rounded-full bg-foreground/15 ring-2 ring-foreground/10" />
+        </div>
+        <div className="mt-2 h-2 w-3/4 rounded-full bg-foreground/20" />
+        <div className="mt-2 flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-1">
+          <Sparkles className="h-2.5 w-2.5 text-amber-500" />
+          <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-amber-500">Legendary</span>
         </div>
       </div>
     </div>
@@ -295,6 +369,7 @@ const PERSONAS = [
       'Live bidding with instant budget and purse tracking',
       'Squad analytics — spend, balance and value at a glance',
       'Rosters and team officials managed in one place',
+      'Open your finished squad as a pack of holographic, rarity-tiered cards',
     ],
     icon: Users,
     visual: <SquadPurseVisual />,
@@ -317,6 +392,7 @@ const PERSONAS = [
     body: 'A public watch link mirrors the auction and standings on any screen — no sign-in, no app.',
     bullets: [
       'Watch mode for every auction, open to everyone',
+      'Auction Wrapped — a tap-through recap of the night, made to be shared',
       'Leaderboards that update the moment a result lands',
       'Works in any browser, on any device',
     ],
@@ -350,6 +426,10 @@ const FAQS = [
   {
     q: 'Can I export or share results?',
     a: 'Yes — one-tap PDF squad sheets, WhatsApp sharing for player cards and results, and public links for leaderboards.',
+  },
+  {
+    q: 'What happens after the auction ends?',
+    a: 'The fun keeps going. Every league gets an Auction Wrapped — a tap-through recap of record buys, big spenders and steals — and each team can open its squad as a pack of holographic, rarity-tiered player cards. Both are shareable with a link.',
   },
 ];
 
@@ -534,6 +614,20 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
             icon={<IconChip icon={Share2} />}
             title="Share & export"
             description="One-tap PDF squad sheets and WhatsApp sharing for cards, results and links."
+          />
+
+          <BentoGridItem
+            className="md:col-span-2"
+            header={<WrappedVisual />}
+            icon={<IconChip icon={Clapperboard} />}
+            title="Auction Wrapped"
+            description="When the hammer falls, the story begins — a tap-through recap of record buys, big spenders and steals, ready to share anywhere."
+          />
+          <BentoGridItem
+            header={<PackRevealVisual />}
+            icon={<IconChip icon={Package} />}
+            title="Pack-opening squad reveals"
+            description="Open your finished squad like a pack of holographic cards — every signing rarity-tiered by its winning bid."
           />
         </BentoGrid>
         </BlurFade>
