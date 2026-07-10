@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.4.0...v0.5.0) (2026-07-08)
+
+
+### Features
+
+* enhance immersive experience and add HoloCard component ([239546e](https://github.com/Soul-Ajay4502/player-card-generator/commit/239546e31c2d5192909ef320b5fe8a9ab053290e))
+
 ## [0.4.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.3.0...v0.4.0) (2026-07-07)
 
 
