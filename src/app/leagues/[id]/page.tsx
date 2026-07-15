@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
-  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles,
+  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -624,6 +624,9 @@ function LeaguePageInner() {
               <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
                 <Trophy className="w-3.5 h-3.5" />Leaderboard
               </button>
+              <button onClick={() => router.push(`/leagues/${id}/sponsors/manage`)} className="toolbar-btn">
+                <Handshake className="w-3.5 h-3.5" />Sponsors
+              </button>
               <button onClick={() => setTemplatePanelOpen((v) => !v)} className="toolbar-btn" aria-expanded={templatePanelOpen}>
                 <Palette className="w-3.5 h-3.5" />
                 {templatePanelOpen ? 'Hide Templates' : 'Template'}
@@ -657,6 +660,9 @@ function LeaguePageInner() {
               </button>
               <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
                 <Trophy className="w-3.5 h-3.5" />Leaderboard
+              </button>
+              <button onClick={() => router.push(`/leagues/${id}/sponsors`)} className="toolbar-btn">
+                <Handshake className="w-3.5 h-3.5" />Sponsors
               </button>
             </>
           )}

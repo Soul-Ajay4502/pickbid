@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats } from './types';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel } from './models';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ function toLeague(row: LeagueModel): League {
     isPublic:     row.isPublic ?? false,
     joinCode:     row.joinCode ?? null,
     registrationClosed: row.registrationClosed ?? false,
+    pickPreference: (row.pickPreference as League['pickPreference']) ?? null,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -147,6 +148,7 @@ export async function createLeague(data: {
   templateId?: string;
   logoUrl?: string;
   isPublic?: boolean;
+  pickPreference?: League['pickPreference'];
 }): Promise<League> {
   await ensureUser(data.creatorId, data.creatorEmail);
   const joinCode = data.isPublic ? generateJoinCode() : null;
@@ -160,6 +162,7 @@ export async function createLeague(data: {
     logoUrl:      data.logoUrl ?? '',
     isPublic:     data.isPublic ?? false,
     joinCode,
+    pickPreference: data.pickPreference ?? null,
   });
   return toLeague(row);
 }
@@ -204,7 +207,7 @@ export async function cloneLeague(
   sourceId: string,
   creatorId: string,
   creatorEmail: string,
-  overrides: Partial<Pick<League, 'name' | 'conductedBy' | 'totalPlayers' | 'templateId' | 'logoUrl'>> = {},
+  overrides: Partial<Pick<League, 'name' | 'conductedBy' | 'totalPlayers' | 'templateId' | 'logoUrl' | 'pickPreference'>> = {},
   options: {
     includeTeams?: boolean;
     includePlayers?: boolean;
@@ -236,6 +239,8 @@ export async function cloneLeague(
         isPublic:     false,
         joinCode:     null,
         registrationClosed: false,
+        // Pick preference carries over from the source league by default
+        pickPreference: overrides.pickPreference !== undefined ? overrides.pickPreference : (source.pickPreference as League['pickPreference']),
       },
       { transaction: t }
     );
@@ -404,6 +409,55 @@ export async function updateOfficial(
 
 export async function deleteOfficial(id: string): Promise<boolean> {
   const deleted = await TeamOfficialModel.destroy({ where: { id } });
+  return deleted > 0;
+}
+
+// ── Sponsors ──────────────────────────────────────────────────────────────────
+
+function toSponsor(row: SponsorModel): Sponsor {
+  return {
+    id:        row.id,
+    leagueId:  row.leagueId!,
+    name:      row.name,
+    logoUrl:   row.logoUrl ?? '',
+    website:   row.website ?? null,
+    createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+export async function getSponsors(leagueId: string): Promise<Sponsor[]> {
+  const rows = await SponsorModel.findAll({ where: { leagueId }, order: [['createdAt', 'ASC']] });
+  return rows.map(toSponsor);
+}
+
+export async function getSponsor(id: string): Promise<Sponsor | null> {
+  const row = await SponsorModel.findByPk(id);
+  return row ? toSponsor(row) : null;
+}
+
+export async function createSponsor(data: Omit<Sponsor, 'id' | 'createdAt'>): Promise<Sponsor> {
+  const row = await SponsorModel.create({
+    id:       uuidv4(),
+    leagueId: data.leagueId,
+    name:     data.name,
+    logoUrl:  data.logoUrl ?? '',
+    website:  data.website ?? null,
+  });
+  return toSponsor(row);
+}
+
+export async function updateSponsor(
+  id: string,
+  data: Partial<Omit<Sponsor, 'id' | 'leagueId' | 'createdAt'>>
+): Promise<Sponsor | null> {
+  const row = await SponsorModel.findByPk(id);
+  if (!row) return null;
+  await row.update(data);
+  return toSponsor(row);
+}
+
+export async function deleteSponsor(id: string): Promise<boolean> {
+  const deleted = await SponsorModel.destroy({ where: { id } });
   return deleted > 0;
 }
 
@@ -684,13 +738,14 @@ export async function cleanupImages(urls: Array<string | null | undefined>): Pro
 
   await Promise.allSettled(
     candidates.map(async (url) => {
-      const [playerRefs, profileRefs, logoRefs, officialRefs] = await Promise.all([
+      const [playerRefs, profileRefs, logoRefs, officialRefs, sponsorRefs] = await Promise.all([
         PlayerModel.count({ where: { photo: url } }),
         UserModel.count({ where: { photo: url } }),
         LeagueModel.count({ where: { logoUrl: url } }),
         TeamOfficialModel.count({ where: { photo: url } }),
+        SponsorModel.count({ where: { logoUrl: url } }),
       ]);
-      if (playerRefs + profileRefs + logoRefs + officialRefs === 0) {
+      if (playerRefs + profileRefs + logoRefs + officialRefs + sponsorRefs === 0) {
         await deleteFromCloudinary(url);
       }
     })

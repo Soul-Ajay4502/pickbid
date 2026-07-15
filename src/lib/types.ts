@@ -1,3 +1,25 @@
+export type PlayerRole = 'Batter' | 'Bowler' | 'All-Rounder' | 'Wicket-Keeper Batter';
+
+/** Every role a player can have, in the app's canonical display order. */
+export const PLAYER_ROLES: PlayerRole[] = ['Batter', 'Bowler', 'All-Rounder', 'Wicket-Keeper Batter'];
+
+/**
+ * Validates a pick-preference payload from a request body: an ordered list of
+ * unique player roles, or null/empty to mean "no preference — pick randomly".
+ * Returns undefined when the payload is malformed, so callers can 400.
+ */
+export function parsePickPreference(value: unknown): PlayerRole[] | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (!Array.isArray(value)) return undefined;
+  if (value.length === 0) return null;
+  const seen = new Set<string>();
+  for (const v of value) {
+    if (typeof v !== 'string' || !PLAYER_ROLES.includes(v as PlayerRole) || seen.has(v)) return undefined;
+    seen.add(v);
+  }
+  return value as PlayerRole[];
+}
+
 export interface League {
   id: string;
   name: string;
@@ -10,6 +32,12 @@ export interface League {
   joinCode: string | null;
   /** When true, the creator has closed registration — non-creators can no longer join */
   registrationClosed: boolean;
+  /**
+   * Optional ordered role priority for the auction draw (e.g. all Bowlers,
+   * then all Batters, then all All-Rounders). Roles left out of the list are
+   * drawn last, together, at random. Null/empty means a pure random draw.
+   */
+  pickPreference: PlayerRole[] | null;
   createdAt: string;
 }
 
@@ -29,7 +57,7 @@ export interface Player {
     | 'Left-Arm Medium'
     | 'Left-Arm Spin'
     | 'N/A';
-  role: 'Batter' | 'Bowler' | 'All-Rounder' | 'Wicket-Keeper Batter';
+  role: PlayerRole;
   isWicketKeeper: boolean;
   creatorToken: string;
   /** Personal contact number — records only; never shown on cards/posters or exposed to non-creators */
@@ -76,6 +104,20 @@ export interface TeamOfficial {
   contactNumber: string | null;
   role: string;
   photo: string;
+  createdAt: string;
+}
+
+/**
+ * A sponsor/partner logo shown in the league's sponsor marquee. Sponsors
+ * never affect the auction — they're purely a display/recognition feature.
+ */
+export interface Sponsor {
+  id: string;
+  leagueId: string;
+  name: string;
+  logoUrl: string;
+  /** Optional link opened when the logo is clicked in the marquee */
+  website: string | null;
   createdAt: string;
 }
 

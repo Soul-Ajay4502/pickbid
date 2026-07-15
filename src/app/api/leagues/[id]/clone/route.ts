@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeague, cloneLeague } from '@/lib/store';
+import { parsePickPreference } from '@/lib/types';
 import { auth } from '@/auth';
 
 export async function POST(
@@ -19,7 +20,12 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, conductedBy, totalPlayers, templateId, logoUrl, includeTeams, includePlayers, includeOfficials } = body;
+    const { name, conductedBy, totalPlayers, templateId, logoUrl, pickPreference, includeTeams, includePlayers, includeOfficials } = body;
+
+    const parsedPickPreference = parsePickPreference(pickPreference);
+    if (pickPreference !== undefined && parsedPickPreference === undefined) {
+      return NextResponse.json({ error: 'Invalid pick preference' }, { status: 400 });
+    }
 
     const overrides = {
       ...(name !== undefined && { name: String(name).trim() }),
@@ -27,6 +33,7 @@ export async function POST(
       ...(totalPlayers !== undefined && { totalPlayers: Number(totalPlayers) }),
       ...(templateId !== undefined && { templateId }),
       ...(logoUrl !== undefined && { logoUrl }),
+      ...(pickPreference !== undefined && { pickPreference: parsedPickPreference }),
     };
 
     const clone = await cloneLeague(id, session.user.id, session.user.email, overrides, {

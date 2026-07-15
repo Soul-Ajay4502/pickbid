@@ -27,6 +27,9 @@ function isPublicPath(pathname: string): boolean {
   // The Auction Wrapped recap (and its poster image) is deliberately shareable,
   // like /watch — it shows only what the spectator screen already broadcast
   if (/^\/leagues\/[^/]+\/wrapped(\/poster)?$/.test(pathname)) return true;
+  // The sponsor marquee is a public display board, like /watch. Its /manage
+  // sub-route is intentionally excluded — that one stays gated.
+  if (/^\/leagues\/[^/]+\/sponsors$/.test(pathname)) return true;
   return false;
 }
 

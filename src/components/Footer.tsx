@@ -24,10 +24,10 @@ const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }
 
 export default function Footer() {
   const pathname = usePathname();
-  // The auction, watch, wrapped and squad-reveal screens run as immersive
-  // full-screen experiences with no app chrome
+  // The auction, watch, wrapped, sponsors marquee and squad-reveal screens run
+  // as immersive full-screen experiences with no app chrome
   if (
-    /^\/leagues\/[^/]+\/(auction|watch|wrapped)$/.test(pathname) ||
+    /^\/leagues\/[^/]+\/(auction|watch|wrapped|sponsors)$/.test(pathname) ||
     /^\/leagues\/[^/]+\/teams\/[^/]+\/reveal$/.test(pathname)
   ) return null;
 

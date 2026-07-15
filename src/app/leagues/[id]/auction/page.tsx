@@ -4,13 +4,21 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
-import type { LeagueWithPlayers, Player, Team, LiveAuctionState, LivePurse } from '@/lib/types';
+import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, LivePurse } from '@/lib/types';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
+
+// A sold/unsold call sits here for GRACE_MS before it's actually persisted —
+// gives the auctioneer a window to undo a mis-click before it locks in.
+type PendingAction =
+  | { type: 'sold'; player: Player; teamId: string; teamName: string; teamColor: string; price: number }
+  | { type: 'unsold'; player: Player };
+
+const GRACE_MS = 5000;
 
 function fmt(n: number) {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -22,6 +30,23 @@ function fmt(n: number) {
  * base price in reserve for every squad slot it still has to fill after
  * winning the current player.
  */
+/**
+ * Picks the next player out of the remaining pool. With a role pick
+ * preference set, the first listed role that still has players left wins the
+ * whole draw (uniformly at random among just that role); once every listed
+ * role is exhausted, any roles left off the list are drawn from together,
+ * still uniformly at random. No preference falls back to a pure random draw
+ * across the whole pool.
+ */
+function selectFromPool(from: Player[], pickPreference: PlayerRole[] | null | undefined): Player {
+  let candidates = from;
+  if (pickPreference && pickPreference.length > 0) {
+    const bucket = pickPreference.map(role => from.filter(p => p.role === role)).find(b => b.length > 0);
+    if (bucket) candidates = bucket;
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 function teamStats(team: Team, roster: Player[], basePrice: number) {
   const squad = roster.filter(p => p.teamId === team.id);
   const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
@@ -50,7 +75,10 @@ export default function AuctionPage() {
   const [spentByTeam, setSpentByTeam] = useState<Record<string, number>>({});
   const [soldTeamId, setSoldTeamId] = useState('');
   const [soldPrice, setSoldPrice] = useState('');
-  const [submittingSold, setSubmittingSold] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [graceSecondsLeft, setGraceSecondsLeft] = useState(0);
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const graceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [resetting, setResetting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [viewTeam, setViewTeam] = useState<Team | null>(null);
@@ -107,7 +135,13 @@ export default function AuctionPage() {
     }
     upd(); window.addEventListener('resize', upd); return () => window.removeEventListener('resize', upd);
   }, [league, purseOpen]);
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  // Note: the grace *timeout* itself is intentionally left running on unmount
+  // (e.g. the auctioneer navigates away) so a pending sold/unsold call still
+  // commits and persists — only its countdown-display interval is cleared.
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+  }, []);
 
   // ── Live broadcast ───────────────────────────────────────────────────────
   // Push the current auction state to the server on each transition so the
@@ -199,8 +233,8 @@ export default function AuctionPage() {
       from = [...unsoldQueue]; r = round + 1; setRound(r); setUnsoldQueue([]); unsoldNow = [];
       toast.info(`Round ${r} — ${from.length} unsold re-entering`);
     }
-    const idx = Math.floor(Math.random() * from.length), picked = from[idx];
-    const newPool = from.filter((_, i) => i !== idx);
+    const picked = selectFromPool(from, league?.pickPreference);
+    const newPool = from.filter(p => p.id !== picked.id);
     setPool(newPool); setPhase('picking');
     postLive(buildLive({ phase: 'picking', current: null, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
     runSlot(from.map(p => p.name), picked.name, () => {
@@ -209,7 +243,62 @@ export default function AuctionPage() {
     });
   }
 
-  async function confirmSold() {
+  // Commits a sold/unsold call once its grace window has fully elapsed —
+  // this is the only place either result is actually persisted or broadcast.
+  async function commitAction(action: PendingAction) {
+    setPendingAction(null);
+    if (action.type === 'sold') {
+      const { player, teamId, teamName, teamColor, price } = action;
+      try {
+        const res = await fetch(`/api/leagues/${id}/players/${player.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId, soldPrice: price, isUnsold: false }) });
+        if (!res.ok) throw new Error();
+        const soldP: Player = { ...player, teamId, soldPrice: price };
+        const ns = [...soldPlayers, soldP];
+        const doneNow = ns.length === league!.players.length;
+        setSpentByTeam(prev => ({ ...prev, [teamId]: (prev[teamId] ?? 0) + price }));
+        setSoldPlayers(ns); setCurrent(null);
+        setPhase(doneNow ? 'done' : 'idle');
+        // Keep the "SOLD" celebration live for spectators until the next pick
+        postLive(buildLive({
+          phase: doneNow ? 'done' : 'sold',
+          current: soldP,
+          lastSold: { player: soldP, teamName, teamColor, price },
+          roster: ns, pool, unsold: unsoldQueue, round,
+        }));
+        toast.success('Player sold!');
+      } catch { toast.error('Failed to record sale'); }
+    } else {
+      const player = action.player;
+      await fetch(`/api/leagues/${id}/players/${player.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isUnsold: true, teamId: null, soldPrice: null }) });
+      const nu = [...unsoldQueue, player];
+      setUnsoldQueue(nu); setCurrent(null); setPhase('idle');
+      // Keep the "UNSOLD" moment live for spectators until the next pick
+      postLive(buildLive({ phase: 'unsold', current: player, roster: soldPlayers, pool, unsold: nu, round }));
+      toast.info(`${player.name} went unsold`);
+    }
+  }
+
+  // Starts the 5s panic-button window: nothing is written to the server or
+  // broadcast to spectators until it elapses — an Undo click within the
+  // window cancels commitAction entirely, with zero side effects.
+  function startGrace(action: PendingAction) {
+    setPendingAction(action);
+    setGraceSecondsLeft(Math.round(GRACE_MS / 1000));
+    graceIntervalRef.current = setInterval(() => setGraceSecondsLeft(s => Math.max(0, s - 1)), 1000);
+    graceTimerRef.current = setTimeout(() => {
+      if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+      commitAction(action);
+    }, GRACE_MS);
+  }
+
+  function undoGrace() {
+    if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
+    if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+    setPendingAction(null);
+    toast.info('Undone — back to the block');
+  }
+
+  function confirmSold() {
     if (!current || !soldTeamId) return;
     const price = parseInt(soldPrice) || 0;
     // Enforce squad-size and max-bid rules when real teams exist
@@ -219,37 +308,15 @@ export default function AuctionPage() {
       if (st.slotsLeft === 0) { toast.error(`${team.name} squad is already full (${st.maxPlayers} players)`); return; }
       if (price > st.maxBid) { toast.error(`Exceeds ${team.name}'s max bid of ${fmt(st.maxBid)}`); return; }
     }
-    setSubmittingSold(true);
-    try {
-      const res = await fetch(`/api/leagues/${id}/players/${current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: soldTeamId, soldPrice: price, isUnsold: false }) });
-      if (!res.ok) throw new Error();
-      const soldP: Player = { ...current, teamId: soldTeamId, soldPrice: price };
-      const ns = [...soldPlayers, soldP];
-      const doneNow = ns.length === league!.players.length;
-      setSpentByTeam(prev => ({ ...prev, [soldTeamId]: (prev[soldTeamId] ?? 0) + price }));
-      setSoldPlayers(ns); setCurrent(null); setSoldTeamId(''); setSoldPrice('');
-      setPhase(doneNow ? 'done' : 'idle');
-      // Keep the "SOLD" celebration live for spectators until the next pick
-      postLive(buildLive({
-        phase: doneNow ? 'done' : 'sold',
-        current: soldP,
-        lastSold: { player: soldP, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price },
-        roster: ns, pool, unsold: unsoldQueue, round,
-      }));
-      toast.success('Player sold!');
-    } catch { toast.error('Failed to record sale'); }
-    finally { setSubmittingSold(false); }
+    const action: PendingAction = { type: 'sold', player: current, teamId: soldTeamId, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price };
+    setSoldTeamId(''); setSoldPrice('');
+    setPhase('showing');
+    startGrace(action);
   }
 
-  async function markUnsold() {
+  function markUnsold() {
     if (!current) return;
-    const cur = current;
-    await fetch(`/api/leagues/${id}/players/${cur.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isUnsold: true, teamId: null, soldPrice: null }) });
-    const nu = [...unsoldQueue, cur];
-    setUnsoldQueue(nu); setCurrent(null); setPhase('idle');
-    // Keep the "UNSOLD" moment live for spectators until the next pick
-    postLive(buildLive({ phase: 'unsold', current: cur, roster: soldPlayers, pool, unsold: nu, round }));
-    toast.info(`${cur.name} went unsold`);
+    startGrace({ type: 'unsold', player: current });
   }
 
   if (loading || !league) return (
@@ -406,6 +473,7 @@ export default function AuctionPage() {
         @keyframes cardDropIn{from{opacity:0;transform:scale(.82) translateY(-24px);filter:blur(10px)}to{opacity:1;transform:scale(1) translateY(0);filter:blur(0)}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         @keyframes lobbyCta{0%,100%{box-shadow:0 0 28px 4px rgba(22,163,74,.5),0 10px 36px rgba(22,163,74,.3)}50%{box-shadow:0 0 52px 10px rgba(22,163,74,.7),0 10px 52px rgba(22,163,74,.45)}}
+        @keyframes graceShrink{from{width:100%}to{width:0%}}
       `}</style>
       <div className="h-screen flex flex-col bg-background text-foreground">
         <div className="flex items-center justify-between px-5 py-3 bg-foreground/3 border-b border-foreground/8 shrink-0 backdrop-blur-xl">
@@ -468,12 +536,23 @@ export default function AuctionPage() {
                     <PlayerCard player={current} templateId={league.templateId} leagueName={league.name} conductedBy={league.conductedBy} logoUrl={league.logoUrl} pdfMode />
                   </div>
                 </div>
-                {phase === 'showing' && (
+                {phase === 'showing' && (pendingAction ? (
+                  <div className="flex flex-col items-center gap-3 shrink-0" style={{ animation: 'fadeInUp .3s cubic-bezier(.22,1,.36,1) both' }}>
+                    <p className={`text-xl font-bold ${pendingAction.type === 'sold' ? 'text-green-500' : 'text-amber-500'}`}>
+                      {pendingAction.type === 'sold' ? `Sold to ${pendingAction.teamName} for ${fmt(pendingAction.price)}` : `${pendingAction.player.name} marked Unsold`}
+                    </p>
+                    <button onClick={undoGrace}
+                      className="relative overflow-hidden flex items-center gap-2 px-10 py-5 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-lg font-bold shadow-xl shadow-red-500/25 transition-transform">
+                      <span key={pendingAction.player.id} className="absolute inset-y-0 left-0 bg-white/20 pointer-events-none" style={{ animation: `graceShrink ${GRACE_MS}ms linear forwards` }} />
+                      <RotateCcw className="w-5 h-5 relative" /><span className="relative">Undo ({graceSecondsLeft}s)</span>
+                    </button>
+                  </div>
+                ) : (
                   <div className="flex gap-5 shrink-0" style={{ animation: 'fadeInUp .45s .3s cubic-bezier(.22,1,.36,1) both' }}>
                     <Button size="lg" onClick={markUnsold} className="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-amber-500/20">Unsold</Button>
                     <Button size="lg" onClick={() => setPhase('sold-modal')} className="bg-green-600 hover:bg-green-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-green-500/20">Sold ✓</Button>
                   </div>
-                )}
+                ))}
                 {phase === 'sold-modal' && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-popover border border-foreground/12 rounded-2xl p-6 w-full max-w-sm space-y-5 animate-scale-in shadow-2xl">
@@ -525,9 +604,9 @@ export default function AuctionPage() {
                       </div>
                       <div className="flex gap-3">
                         <button onClick={() => setPhase('showing')} className="flex-1 py-2.5 rounded-xl border border-foreground/15 text-foreground/60 hover:text-foreground hover:border-foreground/30 transition-colors text-sm font-medium">Cancel</button>
-                        <button onClick={confirmSold} disabled={!soldTeamId || submittingSold}
+                        <button onClick={confirmSold} disabled={!soldTeamId}
                           className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
-                          {submittingSold && <span className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin" />}Confirm Sold
+                          Confirm Sold
                         </button>
                       </div>
                     </div>

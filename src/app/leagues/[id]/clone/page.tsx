@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import TemplateSelector from '@/components/TemplateSelector';
+import PickPreferenceSelector from '@/components/PickPreferenceSelector';
 import PlayerCard from '@/components/PlayerCard';
 import { sanitizeFolder, uploadFile } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
-import type { Player, LeagueWithPlayers } from '@/lib/types';
-import { ArrowLeft, Upload, X, Copy, Palette, ChevronRight, Users, UserPlus, UsersRound } from 'lucide-react';
+import type { Player, PlayerRole, LeagueWithPlayers } from '@/lib/types';
+import { ArrowLeft, Upload, X, Copy, Palette, ChevronRight, Users, UserPlus, UsersRound, ListOrdered } from 'lucide-react';
 
 const PREVIEW_PLAYER: Player = {
   id: 'preview',
@@ -42,6 +43,7 @@ export default function CloneLeaguePage() {
   const [sourceLogoUrl, setSourceLogoUrl] = useState('');
   const [form, setForm] = useState({ name: '', conductedBy: '', totalPlayers: '' });
   const [include, setInclude] = useState({ teams: true, players: true, officials: true });
+  const [pickPreference, setPickPreference] = useState<PlayerRole[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') signIn('google');
@@ -66,6 +68,7 @@ export default function CloneLeaguePage() {
         setTemplateId(data.templateId || DEFAULT_TEMPLATE_ID);
         setSourceLogoUrl(data.logoUrl || '');
         setLogoPreview(data.logoUrl || '');
+        setPickPreference(data.pickPreference ?? []);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Something went wrong');
         router.push(`/leagues/${id}`);
@@ -130,6 +133,7 @@ export default function CloneLeaguePage() {
           totalPlayers: total,
           templateId,
           logoUrl,
+          pickPreference: pickPreference.length > 0 ? pickPreference : null,
           includeTeams: include.teams,
           includePlayers: include.players,
           includeOfficials: include.officials,
@@ -364,6 +368,22 @@ export default function CloneLeaguePage() {
                 </Label>
               </div>
               <TemplateSelector value={templateId} onChange={setTemplateId} />
+            </div>
+
+            <Separator />
+
+            {/* Player pick preference */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ListOrdered className="w-3.5 h-3.5 text-muted-foreground" />
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Auction Pick Order (optional)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Pick a role order (e.g. Bowlers first, then Batters) to control who comes up first in the auction. Leave empty to pick everyone randomly.
+              </p>
+              <PickPreferenceSelector value={pickPreference} onChange={setPickPreference} />
             </div>
 
             {/* Submit */}

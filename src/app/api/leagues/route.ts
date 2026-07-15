@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeaguesByCreator, getLeaguesJoinedByUser, createLeague } from '@/lib/store';
+import { parsePickPreference } from '@/lib/types';
 import { auth } from '@/auth';
 
 export async function GET() {
@@ -28,10 +29,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, totalPlayers, conductedBy, templateId, logoUrl } = body;
+    const { name, totalPlayers, conductedBy, templateId, logoUrl, pickPreference } = body;
 
     if (!name || !totalPlayers || !conductedBy) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const parsedPickPreference = parsePickPreference(pickPreference);
+    if (parsedPickPreference === undefined) {
+      return NextResponse.json({ error: 'Invalid pick preference' }, { status: 400 });
     }
 
     const league = await createLeague({
@@ -42,6 +48,7 @@ export async function POST(request: NextRequest) {
       creatorEmail: session.user.email,
       templateId: templateId ?? 'classic-green',
       logoUrl: logoUrl ?? '',
+      pickPreference: parsedPickPreference,
     });
 
     return NextResponse.json(league, { status: 201 });

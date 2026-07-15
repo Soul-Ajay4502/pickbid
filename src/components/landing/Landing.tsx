@@ -9,8 +9,10 @@ import {
   CreditCard,
   Crown,
   Gavel,
+  Handshake,
   Layers,
   Link2,
+  ListOrdered,
   MessagesSquare,
   MoonStar,
   Package,
@@ -192,6 +194,24 @@ function PackRevealVisual() {
   );
 }
 
+function SponsorWallVisual() {
+  return (
+    <div className="relative mb-2 flex flex-1 items-center justify-center overflow-hidden rounded-xl bg-black py-2">
+      <div
+        className="grid grid-cols-3 gap-2"
+        style={{ transform: 'rotateX(14deg) rotateY(-10deg) rotateZ(4deg)' }}
+      >
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex h-9 w-15 items-center justify-center rounded-md bg-white/95 shadow-sm">
+            <div className="h-2 w-8 rounded-full bg-foreground/20" />
+          </div>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-black to-transparent" />
+    </div>
+  );
+}
+
 /* ── Compact mock-UI visuals for the persona rows ──────────────────────────── */
 function LeagueSetupVisual() {
   return (
@@ -357,6 +377,8 @@ const PERSONAS = [
       'Create a league with budgets and squad rules in under a minute',
       'Share a registration link — players add their own details and photos',
       'Run the live auction room and export final squads as PDFs',
+      'Set a pick order preference so the draw pulls bowlers, batters or any role first',
+      'Add sponsor logos and light up a big-screen 3D marquee wall for the venue',
     ],
     icon: Trophy,
     visual: <LeagueSetupVisual />,
@@ -428,6 +450,10 @@ const FAQS = [
     a: 'Yes — one-tap PDF squad sheets, WhatsApp sharing for player cards and results, and public links for leaderboards.',
   },
   {
+    q: 'Can I show sponsors at my auction?',
+    a: 'Yes — add sponsor logos and links from the league dashboard, then display them as a full-screen, animated 3D marquee wall for the venue or stream.',
+  },
+  {
     q: 'What happens after the auction ends?',
     a: 'The fun keeps going. Every league gets an Auction Wrapped — a tap-through recap of record buys, big spenders and steals — and each team can open its squad as a pack of holographic, rarity-tiered player cards. Both are shareable with a link.',
   },
@@ -463,314 +489,327 @@ const STAT_DISPLAY_FLOOR = 25;
 export default function Landing({ stats }: { stats?: PlatformStats | null }) {
   const statItems = stats
     ? [
-        { value: stats.leagues, label: 'Leagues created' },
-        { value: stats.players, label: 'Player cards made' },
-        { value: stats.teams, label: 'Teams built' },
-        { value: stats.playersSold, label: 'Players sold at auction' },
-      ].filter((s) => s.value >= STAT_DISPLAY_FLOOR)
+      { value: stats.leagues, label: 'Leagues created' },
+      { value: stats.players, label: 'Player cards made' },
+      { value: stats.teams, label: 'Teams built' },
+      { value: stats.playersSold, label: 'Players sold at auction' },
+    ].filter((s) => s.value >= STAT_DISPLAY_FLOOR)
     : [];
 
   return (
     // reducedMotion="user" keeps the JS-driven Magic UI animations in step
     // with the CSS-side prefers-reduced-motion collapse in globals.css.
     <MotionConfig reducedMotion="user">
-    <div className="landing-scope relative overflow-hidden">
-      {/* ════════════════════════ HERO ════════════════════════ */}
-      <section className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center">
-        {/* A single faint aura, masked out toward the bottom — all the scene-setting */}
-        <div
-          className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(to_bottom,black_55%,transparent_95%)]"
-          style={{
-            background:
-              'radial-gradient(90% 70% at 50% -10%, oklch(0.62 0.19 150 / 0.12), transparent 65%)',
-          }}
-          aria-hidden="true"
-        />
-
-        <div className="relative z-10 flex flex-col items-center">
-          <p className="animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
-            <AnimatedShinyText className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
-              The all-in-one cricket league platform
-            </AnimatedShinyText>
-          </p>
-
-          <h1
-            className="landing-hero-title mt-6 animate-fade-in-up text-5xl font-semibold leading-[1.05] tracking-[-0.02em] sm:text-7xl lg:text-[80px]"
-            style={{ animationDelay: '0.15s' }}
-          >
-            Run cricket leagues
-            <br />
-            like a pro.
-          </h1>
-
-          <p
-            className="mt-6 max-w-xl animate-fade-in-up text-lg leading-relaxed text-foreground/70 sm:text-xl"
-            style={{ animationDelay: '0.25s' }}
-          >
-            Design premium player cards, host real-time auctions, track live leaderboards and share
-            it all with a single link — beautifully, in one place.
-          </p>
-
+      <div className="landing-scope relative overflow-hidden">
+        {/* ════════════════════════ HERO ════════════════════════ */}
+        <section className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center">
+          {/* A single faint aura, masked out toward the bottom — all the scene-setting */}
           <div
-            className="mt-9 flex animate-fade-in-up flex-col items-center gap-5 sm:flex-row"
-            style={{ animationDelay: '0.35s' }}
-          >
-            <button onClick={signInGoogle} className="landing-btn">
-              Get Started Free
-            </button>
-            <a
-              href="#features"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(to_bottom,black_55%,transparent_95%)]"
+            style={{
+              background:
+                'radial-gradient(90% 70% at 50% -10%, oklch(0.62 0.19 150 / 0.12), transparent 65%)',
+            }}
+            aria-hidden="true"
+          />
+
+          <div className="relative z-10 flex flex-col items-center">
+            <p className="animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+              <AnimatedShinyText className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
+                The all-in-one cricket league platform
+              </AnimatedShinyText>
+            </p>
+
+            <h1
+              className="landing-hero-title mt-6 animate-fade-in-up text-5xl font-semibold leading-[1.05] tracking-[-0.02em] sm:text-7xl lg:text-[80px]"
+              style={{ animationDelay: '0.15s' }}
             >
-              Explore features
-            </a>
-          </div>
+              Run cricket leagues
+              <br />
+              like a pro.
+            </h1>
 
-          <p
-            className="mt-7 animate-fade-in-up text-xs text-muted-foreground/70"
-            style={{ animationDelay: '0.45s' }}
-          >
-            Sign in with Google · Free to start · No credit card needed
-          </p>
-        </div>
-      </section>
+            <p
+              className="mt-6 max-w-xl animate-fade-in-up text-lg leading-relaxed text-foreground/70 sm:text-xl"
+              style={{ animationDelay: '0.25s' }}
+            >
+              Design premium player cards, host real-time auctions, track live leaderboards and share
+              it all with a single link — beautifully, in one place.
+            </p>
 
-      {/* ════════════════════════ LIVE PLATFORM NUMBERS ════════════════════════ */}
-      {statItems.length >= 2 && (
-        <section className="border-y border-border">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-            <div className="flex flex-wrap items-start justify-center gap-x-16 gap-y-10 text-center">
-              {statItems.map((s, i) => {
-                const parts = statParts(s.value);
-                return (
-                  <BlurFade key={s.label} inView delay={i * 0.1} className="min-w-32">
-                    <p className="text-[44px] font-medium leading-none tracking-tight text-foreground tabular-nums sm:text-5xl">
-                      <NumberTicker
-                        value={parts.value}
-                        decimalPlaces={parts.decimals}
-                        delay={0.2 + i * 0.1}
-                        className="tracking-tight text-foreground dark:text-foreground"
-                      />
-                      {parts.suffix}
-                    </p>
-                    <p className="mt-3 text-[13px] font-medium text-muted-foreground">{s.label}</p>
-                  </BlurFade>
-                );
-              })}
+            <div
+              className="mt-9 flex animate-fade-in-up flex-col items-center gap-5 sm:flex-row"
+              style={{ animationDelay: '0.35s' }}
+            >
+              <button onClick={signInGoogle} className="landing-btn">
+                Get Started Free
+              </button>
+              <a
+                href="#features"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Explore features
+              </a>
             </div>
-            <p className="mt-9 text-center text-xs text-muted-foreground/60">
-              Live totals from leagues running on Pickbid right now
+
+            <p
+              className="mt-7 animate-fade-in-up text-xs text-muted-foreground/70"
+              style={{ animationDelay: '0.45s' }}
+            >
+              Sign in with Google · Free to start · No credit card needed
             </p>
           </div>
         </section>
-      )}
 
-      {/* ════════════════════════ FEATURES (Bento) ════════════════════════ */}
-      <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-24 sm:px-6 lg:px-8">
-        <SectionHeading
-          title="One platform, the whole tournament"
-          sub="From the first player card to the final whistle — every part of running a cricket league, crafted to feel premium."
-        />
-
-        <BlurFade inView delay={0.1}>
-        <BentoGrid>
-          <BentoGridItem
-            className="md:col-span-2"
-            header={<PlayerCardVisual />}
-            icon={<IconChip icon={CreditCard} />}
-            title="Premium player cards"
-            description="Upload a photo, add stats and ratings — get gorgeous, broadcast-quality cards in seconds. Multiple templates, fully yours."
-          />
-          <BentoGridItem
-            icon={<IconChip icon={Gavel} />}
-            title="Live auctions"
-            description="Put players under the hammer with a real-time bidding room. Budgets and squads update instantly."
-          />
-
-          <BentoGridItem
-            icon={<IconChip icon={BarChart3} />}
-            title="Squad analytics"
-            description="See spend, squad balance and value at a glance with clean, insightful charts."
-          />
-          <BentoGridItem
-            className="md:col-span-2"
-            header={<LiveAuctionVisual />}
-            icon={<IconChip icon={Tv} />}
-            title="Watch mode for fans"
-            description="Broadcast a public watch link so spectators follow every bid and reveal live — no sign-in required."
-          />
-
-          <BentoGridItem
-            icon={<IconChip icon={Trophy} />}
-            title="Real-time leaderboard"
-            description="Standings that update the moment a result lands, ready to share."
-          />
-          <BentoGridItem
-            icon={<IconChip icon={Users} />}
-            title="Teams & budgets"
-            description="Manage rosters, owners and team officials with budget tracking built in."
-          />
-          <BentoGridItem
-            icon={<IconChip icon={Share2} />}
-            title="Share & export"
-            description="One-tap PDF squad sheets and WhatsApp sharing for cards, results and links."
-          />
-
-          <BentoGridItem
-            className="md:col-span-2"
-            header={<WrappedVisual />}
-            icon={<IconChip icon={Clapperboard} />}
-            title="Auction Wrapped"
-            description="When the hammer falls, the story begins — a tap-through recap of record buys, big spenders and steals, ready to share anywhere."
-          />
-          <BentoGridItem
-            header={<PackRevealVisual />}
-            icon={<IconChip icon={Package} />}
-            title="Pack-opening squad reveals"
-            description="Open your finished squad like a pack of holographic cards — every signing rarity-tiered by its winning bid."
-          />
-        </BentoGrid>
-        </BlurFade>
-      </section>
-
-      {/* ════════════════════════ FOR EVERYONE (personas) ════════════════════════ */}
-      <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <div className="mb-16">
-          <SectionHeading
-            title="Pickbid is for every cricket lover"
-            sub="Whether you run the league, own a team, walk out to bat or cheer from the stands."
-          />
-        </div>
-
-        <div className="space-y-16 md:space-y-24">
-          {PERSONAS.map((p, i) => {
-            const Icon = p.icon;
-            return (
-              <BlurFade
-                key={p.label}
-                inView
-                className="grid items-center gap-10 md:grid-cols-2 md:gap-14"
-              >
-                <div className={cn(i % 2 === 1 && 'md:order-2')}>
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <Icon className="h-3.5 w-3.5" />
-                    {p.label}
-                  </p>
-                  <h3 className="mt-4 text-2xl font-medium tracking-[-0.01em] text-foreground sm:text-3xl">
-                    {p.title}
-                  </h3>
-                  <p className="mt-3 text-base leading-relaxed text-muted-foreground">{p.body}</p>
-                  <ul className="mt-6 space-y-3">
-                    {p.bullets.map((b) => (
-                      <li key={b} className="flex items-start gap-3 text-sm text-muted-foreground">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        {b}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className={cn('flex justify-center', i % 2 === 1 && 'md:order-1')}>
-                  <div className="flex w-full max-w-sm items-center justify-center rounded-3xl border border-border bg-card/50 p-8">
-                    {p.visual}
-                  </div>
-                </div>
-              </BlurFade>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ════════════════════════ HOW IT WORKS ════════════════════════ */}
-      <section className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <SectionHeading title="Three steps to match day" sub="Up and running in minutes." />
-
-        <div className="grid gap-5 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <BlurFade key={s.n} inView delay={i * 0.12}>
-              <div className="relative h-full rounded-2xl border border-border bg-card p-7">
-                {/* connector line */}
-                {i < STEPS.length - 1 && (
-                  <div className="absolute -right-2.5 top-1/2 z-10 hidden h-px w-5 bg-border md:block" aria-hidden="true" />
-                )}
-                <div className="flex items-center justify-between">
-                  <IconChip icon={s.icon} className="h-12 w-12" />
-                  <span className="font-mono text-3xl font-medium text-foreground/10">{s.n}</span>
-                </div>
-                <h3 className="mt-5 text-[17px] font-medium text-foreground">{s.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+        {/* ════════════════════════ LIVE PLATFORM NUMBERS ════════════════════════ */}
+        {statItems.length >= 2 && (
+          <section className="border-y border-border">
+            <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+              <div className="flex flex-wrap items-start justify-center gap-x-16 gap-y-10 text-center">
+                {statItems.map((s, i) => {
+                  const parts = statParts(s.value);
+                  return (
+                    <BlurFade key={s.label} inView delay={i * 0.1} className="min-w-32">
+                      <p className="text-[44px] font-medium leading-none tracking-tight text-foreground tabular-nums sm:text-5xl">
+                        <NumberTicker
+                          value={parts.value}
+                          decimalPlaces={parts.decimals}
+                          delay={0.2 + i * 0.1}
+                          className="tracking-tight text-foreground dark:text-foreground"
+                        />
+                        {parts.suffix}
+                      </p>
+                      <p className="mt-3 text-[13px] font-medium text-muted-foreground">{s.label}</p>
+                    </BlurFade>
+                  );
+                })}
               </div>
-            </BlurFade>
-          ))}
-        </div>
-      </section>
+              <p className="mt-9 text-center text-xs text-muted-foreground/60">
+                Live totals from leagues running on Pickbid right now
+              </p>
+            </div>
+          </section>
+        )}
 
-      {/* ════════════════════════ EVERYTHING IN THE BOX ════════════════════════ */}
-      <section className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
-        <SectionHeading title="Everything in the box" sub="Thoughtful details, included by default." />
-        <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
-          {EXTRAS.map((e, i) => {
-            const Icon = e.icon;
-            return (
-              <BlurFade key={e.title} inView delay={i * 0.06} className="flex items-start gap-3.5">
-                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">{e.title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{e.description}</p>
+        {/* ════════════════════════ FEATURES (Bento) ════════════════════════ */}
+        <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-24 sm:px-6 lg:px-8">
+          <SectionHeading
+            title="One platform, the whole tournament"
+            sub="From the first player card to the final whistle — every part of running a cricket league, crafted to feel premium."
+          />
+
+          <BlurFade inView delay={0.1}>
+            <BentoGrid>
+              <BentoGridItem
+                className="md:col-span-2"
+                header={<PlayerCardVisual />}
+                icon={<IconChip icon={CreditCard} />}
+                title="Premium player cards"
+                description="Upload a photo, add stats and ratings — get gorgeous, broadcast-quality cards in seconds. Multiple templates, fully yours."
+              />
+              <BentoGridItem
+                icon={<IconChip icon={Gavel} />}
+                title="Live auctions"
+                description="Put players under the hammer with a real-time bidding room. Budgets and squads update instantly."
+              />
+
+              <BentoGridItem
+                icon={<IconChip icon={BarChart3} />}
+                title="Squad analytics"
+                description="See spend, squad balance and value at a glance with clean, insightful charts."
+              />
+              <BentoGridItem
+                className="md:col-span-2"
+                header={<LiveAuctionVisual />}
+                icon={<IconChip icon={Tv} />}
+                title="Watch mode for fans"
+                description="Broadcast a public watch link so spectators follow every bid and reveal live — no sign-in required."
+              />
+
+              <BentoGridItem
+                icon={<IconChip icon={Trophy} />}
+                title="Real-time leaderboard"
+                description="Standings that update the moment a result lands, ready to share."
+              />
+              <BentoGridItem
+                icon={<IconChip icon={Users} />}
+                title="Teams & budgets"
+                description="Manage rosters, owners and team officials with budget tracking built in."
+              />
+              <BentoGridItem
+                icon={<IconChip icon={Share2} />}
+                title="Share & export"
+                description="One-tap PDF squad sheets and WhatsApp sharing for cards, results and links."
+              />
+
+              <BentoGridItem
+                className="md:col-span-2"
+                header={<WrappedVisual />}
+                icon={<IconChip icon={Clapperboard} />}
+                title="Auction Wrapped"
+                description="When the hammer falls, the story begins — a tap-through recap of record buys, big spenders and steals, ready to share anywhere."
+              />
+              <BentoGridItem
+                header={<PackRevealVisual />}
+                icon={<IconChip icon={Package} />}
+                title="Pack-opening squad reveals"
+                description="Open your finished squad like a pack of holographic cards — every signing rarity-tiered by its winning bid."
+              />
+
+              <BentoGridItem
+                className="md:col-span-2"
+                header={<SponsorWallVisual />}
+                icon={<IconChip icon={Handshake} />}
+                title="Sponsor wall"
+                description="Add sponsor logos and links, then display them as an animated 3D marquee wall — built for the big screen at the venue."
+              />
+              <BentoGridItem
+                icon={<IconChip icon={ListOrdered} />}
+                title="Custom pick order"
+                description="Set a role order — bowlers first, then batters — so the auction draws players in exactly the sequence you want."
+              />
+            </BentoGrid>
+          </BlurFade>
+        </section>
+
+        {/* ════════════════════════ FOR EVERYONE (personas) ════════════════════════ */}
+        <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <div className="mb-16">
+            <SectionHeading
+              title="Pickbid is for every cricket lover"
+              sub="Whether you run the league, own a team, walk out to bat or cheer from the stands."
+            />
+          </div>
+
+          <div className="space-y-16 md:space-y-24">
+            {PERSONAS.map((p, i) => {
+              const Icon = p.icon;
+              return (
+                <BlurFade
+                  key={p.label}
+                  inView
+                  className="grid items-center gap-10 md:grid-cols-2 md:gap-14"
+                >
+                  <div className={cn(i % 2 === 1 && 'md:order-2')}>
+                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <Icon className="h-3.5 w-3.5" />
+                      {p.label}
+                    </p>
+                    <h3 className="mt-4 text-2xl font-medium tracking-[-0.01em] text-foreground sm:text-3xl">
+                      {p.title}
+                    </h3>
+                    <p className="mt-3 text-base leading-relaxed text-muted-foreground">{p.body}</p>
+                    <ul className="mt-6 space-y-3">
+                      {p.bullets.map((b) => (
+                        <li key={b} className="flex items-start gap-3 text-sm text-muted-foreground">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className={cn('flex justify-center', i % 2 === 1 && 'md:order-1')}>
+                    <div className="flex w-full max-w-sm items-center justify-center rounded-3xl border border-border bg-card/50 p-8">
+                      {p.visual}
+                    </div>
+                  </div>
+                </BlurFade>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ════════════════════════ HOW IT WORKS ════════════════════════ */}
+        <section className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <SectionHeading title="Three steps to match day" sub="Up and running in minutes." />
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <BlurFade key={s.n} inView delay={i * 0.12}>
+                <div className="relative h-full rounded-2xl border border-border bg-card p-7">
+                  {/* connector line */}
+                  {i < STEPS.length - 1 && (
+                    <div className="absolute -right-2.5 top-1/2 z-10 hidden h-px w-5 bg-border md:block" aria-hidden="true" />
+                  )}
+                  <div className="flex items-center justify-between">
+                    <IconChip icon={s.icon} className="h-12 w-12" />
+                    <span className="font-mono text-3xl font-medium text-foreground/10">{s.n}</span>
+                  </div>
+                  <h3 className="mt-5 text-[17px] font-medium text-foreground">{s.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
                 </div>
               </BlurFade>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ════════════════════════ FAQ ════════════════════════ */}
-      <section className="mx-auto max-w-2xl px-4 py-24 sm:px-6">
-        <SectionHeading title="Frequently asked questions" />
-        <div>
-          {FAQS.map((f, i) => (
-            <BlurFade key={f.q} inView delay={i * 0.05}>
-              <details className="group -mx-4 rounded-xl transition-colors hover:bg-foreground/4.5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-5 text-[15px] font-medium text-foreground [&::-webkit-details-marker]:hidden">
-                  {f.q}
-                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
-                </summary>
-                <p className="px-4 pb-5 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
-              </details>
-            </BlurFade>
-          ))}
-        </div>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
-        />
-      </section>
-
-      {/* ════════════════════════ FINAL CTA ════════════════════════ */}
-      <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-        <BlurFade inView>
-          <div className="relative overflow-hidden rounded-3xl border border-border bg-card/50 px-6 py-20 text-center sm:py-24">
-            <BorderBeam
-              size={90}
-              duration={9}
-              colorFrom="var(--primary)"
-              colorTo="var(--foreground)"
-            />
-            <div className="relative z-10 flex flex-col items-center gap-6">
-              <h2 className="text-3xl font-medium tracking-[-0.01em] text-foreground sm:text-5xl">
-                Ready to run your league?
-              </h2>
-              <p className="max-w-md text-base text-muted-foreground sm:text-lg">
-                Build your first player card and host your auction today — completely free to start.
-              </p>
-              <button onClick={signInGoogle} className="landing-btn mt-2">
-                Get Started Free
-              </button>
-            </div>
+            ))}
           </div>
-        </BlurFade>
-      </section>
-      <Footer />
-    </div>
+        </section>
+
+        {/* ════════════════════════ EVERYTHING IN THE BOX ════════════════════════ */}
+        <section className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
+          <SectionHeading title="Everything in the box" sub="Thoughtful details, included by default." />
+          <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
+            {EXTRAS.map((e, i) => {
+              const Icon = e.icon;
+              return (
+                <BlurFade key={e.title} inView delay={i * 0.06} className="flex items-start gap-3.5">
+                  <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="text-[15px] font-medium text-foreground">{e.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{e.description}</p>
+                  </div>
+                </BlurFade>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ════════════════════════ FAQ ════════════════════════ */}
+        <section className="mx-auto max-w-2xl px-4 py-24 sm:px-6">
+          <SectionHeading title="Frequently asked questions" />
+          <div>
+            {FAQS.map((f, i) => (
+              <BlurFade key={f.q} inView delay={i * 0.05}>
+                <details className="group -mx-4 rounded-xl transition-colors hover:bg-foreground/4.5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-5 text-[15px] font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                    {f.q}
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                  </summary>
+                  <p className="px-4 pb-5 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
+                </details>
+              </BlurFade>
+            ))}
+          </div>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
+          />
+        </section>
+
+        {/* ════════════════════════ FINAL CTA ════════════════════════ */}
+        <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
+          <BlurFade inView>
+            <div className="relative overflow-hidden rounded-3xl border border-border bg-card/50 px-6 py-20 text-center sm:py-24">
+              <BorderBeam
+                size={90}
+                duration={9}
+                colorFrom="var(--primary)"
+                colorTo="var(--foreground)"
+              />
+              <div className="relative z-10 flex flex-col items-center gap-6">
+                <h2 className="text-3xl font-medium tracking-[-0.01em] text-foreground sm:text-5xl">
+                  Ready to run your league?
+                </h2>
+                <p className="max-w-md text-base text-muted-foreground sm:text-lg">
+                  Build your first player card and host your auction today — completely free to start.
+                </p>
+                <button onClick={signInGoogle} className="landing-btn mt-2">
+                  Get Started Free
+                </button>
+              </div>
+            </div>
+          </BlurFade>
+        </section>
+        <Footer />
+      </div>
     </MotionConfig>
   );
 }

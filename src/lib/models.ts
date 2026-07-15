@@ -58,6 +58,7 @@ export class LeagueModel extends Model<
   declare isPublic: CreationOptional<boolean>;
   declare joinCode: CreationOptional<string | null>;
   declare registrationClosed: CreationOptional<boolean>;
+  declare pickPreference: CreationOptional<string[] | null>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -73,6 +74,7 @@ LeagueModel.init(
     isPublic:           { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     joinCode:           { type: DataTypes.STRING(8), allowNull: true, defaultValue: null },
     registrationClosed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    pickPreference:     { type: DataTypes.JSONB,   allowNull: true,  defaultValue: null },
     createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }
@@ -222,6 +224,31 @@ TeamOfficialModel.init(
   { sequelize, tableName: 'team_officials', timestamps: false, underscored: true }
 );
 
+// ── Sponsor ───────────────────────────────────────────────────────────────────
+export class SponsorModel extends Model<
+  InferAttributes<SponsorModel>,
+  InferCreationAttributes<SponsorModel, { omit: 'createdAt' }>
+> {
+  declare id: string;
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare name: string;
+  declare logoUrl: CreationOptional<string>;
+  declare website: CreationOptional<string | null>;
+  declare createdAt: CreationOptional<Date>;
+}
+
+SponsorModel.init(
+  {
+    id:        { type: DataTypes.STRING,  primaryKey: true },
+    leagueId:  { type: DataTypes.STRING,  allowNull: false },
+    name:      { type: DataTypes.STRING,  allowNull: false },
+    logoUrl:   { type: DataTypes.TEXT,    allowNull: false, defaultValue: '' },
+    website:   { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    createdAt: { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'sponsors', timestamps: false, underscored: true }
+);
+
 // ── Auction Live State ──────────────────────────────────────────────────────────
 // One ephemeral JSON blob per league: the creator's auction page writes it on
 // each transition and spectators poll it to mirror the auction in real time.
@@ -264,3 +291,6 @@ TeamOfficialModel.belongsTo(TeamModel,   { foreignKey: 'teamId' });
 
 LeagueModel.hasOne(AuctionLiveModel,     { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 AuctionLiveModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });
+
+LeagueModel.hasMany(SponsorModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+SponsorModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });

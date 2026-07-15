@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import TemplateSelector from '@/components/TemplateSelector';
+import PickPreferenceSelector from '@/components/PickPreferenceSelector';
 import PlayerCard from '@/components/PlayerCard';
 import { sanitizeFolder, uploadFile } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
-import type { Player } from '@/lib/types';
-import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight } from 'lucide-react';
+import type { Player, PlayerRole } from '@/lib/types';
+import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered } from 'lucide-react';
 
 const PREVIEW_PLAYER: Player = {
   id: 'preview',
@@ -36,6 +37,7 @@ export default function NewLeaguePage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [form, setForm] = useState({ name: '', conductedBy: '', totalPlayers: '' });
+  const [pickPreference, setPickPreference] = useState<PlayerRole[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') signIn('google');
@@ -91,6 +93,7 @@ export default function NewLeaguePage() {
           totalPlayers: total,
           templateId,
           logoUrl,
+          pickPreference: pickPreference.length > 0 ? pickPreference : null,
         }),
       });
 
@@ -247,6 +250,22 @@ export default function NewLeaguePage() {
                 </Label>
               </div>
               <TemplateSelector value={templateId} onChange={setTemplateId} />
+            </div>
+
+            <Separator />
+
+            {/* Player pick preference */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ListOrdered className="w-3.5 h-3.5 text-muted-foreground" />
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Auction Pick Order (optional)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Pick a role order (e.g. Bowlers first, then Batters) to control who comes up first in the auction. Leave empty to pick everyone randomly.
+              </p>
+              <PickPreferenceSelector value={pickPreference} onChange={setPickPreference} />
             </div>
 
             {/* Submit */}
