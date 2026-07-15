@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.5.0...v0.6.0) (2026-07-15)
+
+
+### Features
+
+* add Auction Wrapped recap and poster generation ([10fd583](https://github.com/Soul-Ajay4502/player-card-generator/commit/10fd583d34b0f7b56367133c66d3910e052d46e3))
+* add sponsor management and display features ([723193c](https://github.com/Soul-Ajay4502/player-card-generator/commit/723193c6deed11a96eb693553b986f8b352ad435))
+
 ## [0.5.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.4.0...v0.5.0) (2026-07-08)
 
 
