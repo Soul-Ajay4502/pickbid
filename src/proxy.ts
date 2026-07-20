@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, userAgent } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Next.js 16 renamed the `middleware` file convention to `proxy` (same feature,
@@ -30,6 +30,9 @@ function isPublicPath(pathname: string): boolean {
   // The sponsor marquee is a public display board, like /watch. Its /manage
   // sub-route is intentionally excluded — that one stays gated.
   if (/^\/leagues\/[^/]+\/sponsors$/.test(pathname)) return true;
+  // Generated Open Graph / Twitter card images. Link-preview crawlers fetch
+  // these without a session; the image shows nothing beyond league name/logo.
+  if (/^\/leagues\/[^/]+\/(opengraph-image|twitter-image)(-\w+)?$/.test(pathname)) return true;
   return false;
 }
 
@@ -37,6 +40,15 @@ export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (isPublicPath(pathname) || isAuthenticated(request)) {
+    return NextResponse.next();
+  }
+
+  // Link-preview crawlers (WhatsApp, Slack, Googlebot, …) never carry a
+  // session cookie, so redirecting them lands on the Auth.js sign-in page and
+  // every shared league link previews as "Sign In". Let bots render the page
+  // shell instead: league pages are client components, so the HTML exposes
+  // only <head> metadata — all real data still loads via the auth'd APIs.
+  if (userAgent(request).isBot) {
     return NextResponse.next();
   }
 
