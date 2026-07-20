@@ -91,9 +91,8 @@ export async function POST(
       }
       playerUserId = await findOrCreateUserIdByEmail(email.trim());
     } else {
-      playerUserId = null;
+      playerUserId = session?.user?.id ?? null;;
     }
-
     const player = await createPlayer({
       leagueId: id,
       userId: playerUserId,
