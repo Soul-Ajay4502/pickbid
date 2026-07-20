@@ -9,7 +9,7 @@ import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, Liv
 import { toast } from 'sonner';
 import { copyToClipboard, formatINR, buildPlayerSoldMessage, whatsappShareLink } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle } from 'lucide-react';
+import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
@@ -81,6 +81,8 @@ export default function AuctionPage() {
   const [resetting, setResetting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [viewTeam, setViewTeam] = useState<Team | null>(null);
+  // Full-screen photo lightbox for the player on the block
+  const [photoOpen, setPhotoOpen] = useState(false);
   const liveSeq = useRef(0);
   // Confetti burst on each committed sale — the counter keys the remount so
   // back-to-back sales replay it; 0 means no confetti on screen
@@ -239,7 +241,7 @@ export default function AuctionPage() {
     }
     const picked = selectFromPool(from, league?.pickPreference);
     const newPool = from.filter(p => p.id !== picked.id);
-    setPool(newPool); setPhase('picking');
+    setPool(newPool); setPhase('picking'); setPhotoOpen(false);
     postLive(buildLive({ phase: 'picking', current: null, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
     runSlot(from.map(p => p.name), picked.name, () => {
       setCurrent(picked); setPhase('showing');
@@ -558,7 +560,14 @@ export default function AuctionPage() {
                   <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
                     <PlayerCard player={current} templateId={league.templateId} leagueName={league.name} conductedBy={league.conductedBy} logoUrl={league.logoUrl} pdfMode />
                   </div>
+                  {current.photo && (
+                    <button onClick={() => setPhotoOpen(true)} title="View full photo" aria-label="View full player photo"
+                      className="absolute top-2.5 right-2.5 z-10 w-9 h-9 flex items-center justify-center rounded-lg bg-black/45 hover:bg-black/70 text-white/75 hover:text-white backdrop-blur-sm border border-white/15 transition-colors">
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
+                {photoOpen && current.photo && <PlayerPhotoModal src={current.photo} name={current.name} onClose={() => setPhotoOpen(false)} />}
                 {phase === 'showing' && (pendingAction ? (
                   <div className="flex flex-col items-center gap-3 shrink-0" style={{ animation: 'fadeInUp .3s cubic-bezier(.22,1,.36,1) both' }}>
                     <p className={`text-xl font-bold ${pendingAction.type === 'sold' ? 'text-green-500' : 'text-amber-500'}`}>
@@ -772,6 +781,29 @@ function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; rost
           <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Max Bid</p><p className="text-sm font-bold text-amber-600 dark:text-amber-300 tabular-nums">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</p></div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Full-screen lightbox for the current player's photo — the card crops it to
+// its frame, so this gives the room an uncropped look at the whole picture.
+function PlayerPhotoModal({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-70 flex items-center justify-center p-4 sm:p-8 bg-black/90 backdrop-blur-md" onClick={onClose}>
+      <button onClick={onClose} aria-label="Close full photo"
+        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors">
+        <X className="w-5 h-5" />
+      </button>
+      <figure className="flex flex-col items-center gap-4 min-h-0 max-h-full animate-scale-in" onClick={e => e.stopPropagation()}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={name} className="min-h-0 max-w-full max-h-[calc(100vh-8rem)] object-contain rounded-2xl shadow-2xl" />
+        <figcaption className="text-white text-lg font-bold tracking-wide shrink-0 drop-shadow">{name}</figcaption>
+      </figure>
     </div>
   );
 }
