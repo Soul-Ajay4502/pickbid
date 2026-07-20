@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getLeague, getPlayers } from '@/lib/store';
+import { SITE_HOST } from '@/lib/seo';
 
 export const runtime = 'nodejs';
 export const alt = 'Cricket league on Pickbid';
@@ -122,7 +123,10 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     league = await getLeague(id);
     if (league) {
       try {
-        playerCount = (await getPlayers(id)).length;
+        // Before registration fills in, actual card rows can be 0 while the
+        // league's declared size is what the OG description already quotes —
+        // keep the card consistent with it rather than showing "0 players".
+        playerCount = (await getPlayers(id)).length || (league.totalPlayers ?? 0);
       } catch {
         playerCount = league.totalPlayers ?? 0;
       }
@@ -231,7 +235,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             <Chip color="#fb7185" label="Live auction" />
             <Chip color="#fbbf24" label="Leaderboard" />
           </div>
-          <span style={{ fontSize: 22, color: 'rgba(255,255,255,0.45)' }}>player-card-generator.vercel.app</span>
+          <span style={{ fontSize: 22, color: 'rgba(255,255,255,0.45)' }}>{SITE_HOST}</span>
         </div>
       </Shell>
     ),
