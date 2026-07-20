@@ -68,6 +68,28 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+/** Indian-style rupee formatting, matching the auction UI (₹1,50,000). */
+export function formatINR(n: number): string {
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
+}
+
+/**
+ * The "player sold" announcement organizers paste into their league's
+ * WhatsApp group. Keep this exact 3-line structure — it's the agreed format.
+ */
+export function buildPlayerSoldMessage(d: { playerName: string; soldPrice: number; teamName: string }): string {
+  return `Player name: ${d.playerName}\nSold Price: ${formatINR(d.soldPrice)}\nSold To: ${d.teamName}`;
+}
+
+/**
+ * WhatsApp click-to-chat link with no fixed recipient, so it opens the
+ * share sheet / contact picker (WhatsApp app on mobile, WhatsApp Web on
+ * desktop). encodeURIComponent handles apostrophes, emojis and newlines.
+ */
+export function whatsappShareLink(message: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

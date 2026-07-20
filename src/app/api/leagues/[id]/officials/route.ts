@@ -1,26 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getLeague, getOfficial,
+  getOfficial,
   createOfficial, updateOfficial, deleteOfficial, cleanupImages,
 } from '@/lib/store';
-import { auth } from '@/auth';
-
-// Officials are squad-poster metadata, never part of the auction. Only the
-// league creator may add, edit or remove them.
-async function requireCreator(leagueId: string) {
-  const [session, league] = await Promise.all([auth(), getLeague(leagueId)]);
-  if (!session?.user?.id) return { error: 'Unauthorised', status: 401 };
-  if (!league) return { error: 'League not found', status: 404 };
-  if (league.creatorId !== session.user.id) return { error: 'Forbidden', status: 403 };
-  return { error: null, status: 200 };
-}
+import { requireLeagueManager } from '@/lib/leagueAuth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { teamId, name, role, contactNumber, photo } = await request.json();
@@ -43,7 +33,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { officialId, name, role, contactNumber, photo } = await request.json();
@@ -73,7 +63,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { officialId } = await request.json();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, cloneLeague } from '@/lib/store';
+import { getLeague, cloneLeague, canManageLeague } from '@/lib/store';
 import { parsePickPreference } from '@/lib/types';
 import { auth } from '@/auth';
 
@@ -20,7 +20,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, conductedBy, totalPlayers, templateId, logoUrl, pickPreference, includeTeams, includePlayers, includeOfficials } = body;
+    const { name, conductedBy, totalPlayers, templateId, logoUrl, pickPreference, includeTeams, includePlayers, includeOfficials, preserveAuctionResults } = body;
 
     const parsedPickPreference = parsePickPreference(pickPreference);
     if (pickPreference !== undefined && parsedPickPreference === undefined) {
@@ -40,9 +40,11 @@ export async function POST(
       includeTeams,
       includePlayers,
       includeOfficials,
-      // Contact numbers are the organiser's private records — only carry them
-      // over when the person cloning owns the source league
-      copyContactNumbers: source.creatorId === session.user.id,
+      preserveAuctionResults: Boolean(preserveAuctionResults),
+      // Contact numbers are the organisers' private records — only carry them
+      // over when the person cloning runs the source league (creator or
+      // co-organizer; they can already see these numbers there)
+      copyContactNumbers: await canManageLeague(session.user.id, source),
     });
 
     return NextResponse.json(clone, { status: 201 });

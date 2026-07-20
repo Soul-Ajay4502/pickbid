@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, getOfficials, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { auth } from '@/auth';
 
 export async function GET(
@@ -12,11 +13,15 @@ export async function GET(
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const [players, teams, officials] = await Promise.all([getPlayers(id), getTeams(id), getOfficials(id)]);
-    const isCreator = session?.user?.id === league.creatorId;
+    const [players, teams, officials, coOrganizers] = await Promise.all([
+      getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id),
+    ]);
+    const userId = session?.user?.id;
+    const isCreator = userId === league.creatorId;
+    // Creator or co-organizer — either can manage the league and run its auction
+    const canManage = isCreator || (!!userId && coOrganizers.some((c) => c.userId === userId));
     // Whether the requester has joined: matched by userId stamped at join time,
     // so it stays consistent across devices (unlike the old localStorage check)
-    const userId = session?.user?.id;
     const hasJoined = !!userId && players.some((p) => p.userId === userId);
     const { creatorId, ...safeLeague } = league;
     // Resolve each icon player to the team they're pre-assigned to, so cards can show the badge
@@ -28,12 +33,16 @@ export async function GET(
         iconOfTeam: team ? { id: team.id, name: team.name, colorHex: team.colorHex } : null,
       };
     });
-    // Contact numbers are for the organiser's records only — never expose them to non-creators
-    const safePlayers = isCreator ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
-    const safeOfficials = isCreator ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
-    // isCreator/hasJoined first, before the (potentially large) players array, so
-    // they're easy to find in the response rather than buried after the arrays
-    return NextResponse.json({ ...safeLeague, isCreator, hasJoined, players: safePlayers, teams, officials: safeOfficials });
+    // Contact numbers are for the organisers' records only — never expose them
+    // to anyone who isn't running this league (creator or co-organizer)
+    const safePlayers = canManage ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
+    const safeOfficials = canManage ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
+    // Co-organizer names/photos are public (they're shown as badges), but their
+    // emails are only the creator's business — they power the manage list
+    const safeCoOrganizers = isCreator ? coOrganizers : coOrganizers.map((c) => ({ ...c, email: null }));
+    // isCreator/canManage/hasJoined first, before the (potentially large) players
+    // array, so they're easy to find in the response rather than buried after it
+    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
@@ -46,17 +55,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-    }
-    const league = await getLeague(id);
-    if (!league) {
-      return NextResponse.json({ error: 'League not found' }, { status: 404 });
-    }
-    if (league.creatorId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // League settings are shared management — co-organizers may edit them too
+    const { error, status } = await requireLeagueManager(id);
+    if (error) return NextResponse.json({ error }, { status });
     const body = await request.json();
     const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
@@ -74,17 +75,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-    }
-    const league = await getLeague(id);
-    if (!league) {
-      return NextResponse.json({ error: 'League not found' }, { status: 404 });
-    }
-    if (league.creatorId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Deleting a league is creator-only — co-organizers never get this
+    const { error, status, league } = await requireLeagueCreator(id);
+    if (error !== null) return NextResponse.json({ error }, { status });
     // Collect image URLs before the cascade delete wipes the player rows
     const players = await getPlayers(id);
     const imageUrls = [league.logoUrl, ...players.map((p) => p.photo)];

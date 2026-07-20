@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeaguesByCreator, getLeaguesJoinedByUser, createLeague } from '@/lib/store';
+import { getLeaguesByCreator, getLeaguesJoinedByUser, getLeaguesCoOrganizedByUser, createLeague } from '@/lib/store';
 import { parsePickPreference } from '@/lib/types';
 import { auth } from '@/auth';
 
@@ -10,11 +10,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
     }
 
-    const [created, joined] = await Promise.all([
+    const [created, joinedRaw, coOrganizing] = await Promise.all([
       getLeaguesByCreator(session.user.id),
       getLeaguesJoinedByUser(session.user.id),
+      getLeaguesCoOrganizedByUser(session.user.id),
     ]);
-    return NextResponse.json({ created, joined });
+    // A co-organizer who also has a player card would show up twice — the
+    // management role is the more meaningful listing, so it wins
+    const coOrganizingIds = new Set(coOrganizing.map((l) => l.id));
+    const joined = joinedRaw.filter((l) => !coOrganizingIds.has(l.id));
+    return NextResponse.json({ created, coOrganizing, joined });
   } catch (error) {
     console.error('Error fetching leagues:', error);
     return NextResponse.json({ error: 'Failed to fetch leagues' }, { status: 500 });

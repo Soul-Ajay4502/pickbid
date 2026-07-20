@@ -43,6 +43,7 @@ export default function CloneLeaguePage() {
   const [sourceLogoUrl, setSourceLogoUrl] = useState('');
   const [form, setForm] = useState({ name: '', conductedBy: '', totalPlayers: '' });
   const [include, setInclude] = useState({ teams: true, players: true, officials: true });
+  const [preserveAuctionResults, setPreserveAuctionResults] = useState(false);
   const [pickPreference, setPickPreference] = useState<PlayerRole[]>([]);
 
   useEffect(() => {
@@ -137,6 +138,7 @@ export default function CloneLeaguePage() {
           includeTeams: include.teams,
           includePlayers: include.players,
           includeOfficials: include.officials,
+          preserveAuctionResults: include.teams && include.players && preserveAuctionResults,
         }),
       });
 
@@ -174,7 +176,9 @@ export default function CloneLeaguePage() {
       key: 'players' as const,
       icon: UserPlus,
       label: 'Players',
-      hint: `${playerCount} player${playerCount === 1 ? '' : 's'} · auction results reset`,
+      hint: `${playerCount} player${playerCount === 1 ? '' : 's'} · ${
+        include.teams && preserveAuctionResults ? 'auction results kept' : 'auction results reset'
+      }`,
       disabled: playerCount === 0,
     },
     {
@@ -342,6 +346,8 @@ export default function CloneLeaguePage() {
                           // Officials can't outlive their teams
                           ...(key === 'teams' && !next ? { officials: false } : {}),
                         }));
+                        // Preserved sales need a team to point to
+                        if (key === 'teams' && !next) setPreserveAuctionResults(false);
                       }}
                     />
                     <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -351,6 +357,30 @@ export default function CloneLeaguePage() {
                     </div>
                   </label>
                 ))}
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
+                    include.teams && include.players
+                      ? 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
+                      : 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-green-600"
+                    checked={include.teams && include.players && preserveAuctionResults}
+                    disabled={!include.teams || !include.players || loading}
+                    onChange={(e) => setPreserveAuctionResults(e.target.checked)}
+                  />
+                  <ListOrdered className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Keep auction results</p>
+                    <p className="text-xs text-muted-foreground">
+                      {include.teams && include.players
+                        ? 'Sold prices and team assignments carry over instead of resetting'
+                        : 'Needs players and teams'}
+                    </p>
+                  </div>
+                </label>
               </div>
               <p className="text-xs text-muted-foreground">
                 The copy starts as a private league. Matches and live auction state are never carried over.

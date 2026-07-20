@@ -29,6 +29,8 @@ export async function GET(
       teams,
       officials: [],
       isCreator: false,
+      canManage: false,
+      coOrganizers: [],
       hasJoined: false,
     });
     if (stats.soldPlayers.length === 0) {

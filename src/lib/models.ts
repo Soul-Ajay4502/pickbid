@@ -249,6 +249,32 @@ SponsorModel.init(
   { sequelize, tableName: 'sponsors', timestamps: false, underscored: true }
 );
 
+// ── League Co-Organizer ───────────────────────────────────────────────────────
+// A user the creator has invited to help run a league: co-organizers get the
+// same management access as the creator except deleting the league or managing
+// the co-organizer list itself.
+export class LeagueCoOrganizerModel extends Model<
+  InferAttributes<LeagueCoOrganizerModel>,
+  InferCreationAttributes<LeagueCoOrganizerModel, { omit: 'createdAt' }>
+> {
+  declare id: string;
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare userId: ForeignKey<UserModel['id']>;
+  declare addedBy: ForeignKey<UserModel['id']>;
+  declare createdAt: CreationOptional<Date>;
+}
+
+LeagueCoOrganizerModel.init(
+  {
+    id:        { type: DataTypes.STRING, primaryKey: true },
+    leagueId:  { type: DataTypes.STRING, allowNull: false },
+    userId:    { type: DataTypes.STRING, allowNull: false },
+    addedBy:   { type: DataTypes.STRING, allowNull: false },
+    createdAt: { type: DataTypes.DATE,   allowNull: true, defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'league_co_organizers', timestamps: false, underscored: true }
+);
+
 // ── Auction Live State ──────────────────────────────────────────────────────────
 // One ephemeral JSON blob per league: the creator's auction page writes it on
 // each transition and spectators poll it to mirror the auction in real time.
@@ -294,3 +320,10 @@ AuctionLiveModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });
 
 LeagueModel.hasMany(SponsorModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 SponsorModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+LeagueModel.hasMany(LeagueCoOrganizerModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+LeagueCoOrganizerModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+// Deleting a user account removes their co-organizer roles with it
+UserModel.hasMany(LeagueCoOrganizerModel,   { foreignKey: 'userId', onDelete: 'CASCADE' });
+LeagueCoOrganizerModel.belongsTo(UserModel, { foreignKey: 'userId' });

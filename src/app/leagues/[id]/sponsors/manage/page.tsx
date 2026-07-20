@@ -44,7 +44,7 @@ export default function ManageSponsorsPage() {
     if (!leagueRes.ok) { router.push('/'); return; }
     const leagueJson: LeagueWithPlayers = await leagueRes.json();
     // Managing sponsors is a creator-only action — everyone else just watches the marquee
-    if (!leagueJson.isCreator) { router.push(`/leagues/${id}/sponsors`); return; }
+    if (!leagueJson.canManage) { router.push(`/leagues/${id}/sponsors`); return; }
     setLeague(leagueJson);
 
     const sponsorsRes = await fetch(`/api/leagues/${id}/sponsors`);

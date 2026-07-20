@@ -95,7 +95,7 @@ export default function LeaderboardPage() {
     if (!res.ok) { router.push('/'); return; }
     const json: LeagueWithPlayers = await res.json();
     // Leaderboard is open on public leagues; private ones stay creator-only
-    if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
+    if (!json.canManage && !json.isPublic) { router.push(`/leagues/${id}`); return; }
     setData(json);
     setLoading(false);
   }, [id, router]);

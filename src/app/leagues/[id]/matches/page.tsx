@@ -111,7 +111,7 @@ export default function MatchesPage() {
   const teams = data.teams ?? [];
   const standings = calcStandings(teams, matches);
   const teamById = Object.fromEntries(teams.map(t => [t.id, t]));
-  const isCreator = data.isCreator;
+  const isCreator = data.canManage;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in-up">

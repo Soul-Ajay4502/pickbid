@@ -4,11 +4,12 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
+import Confetti from '@/components/Confetti';
 import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, LivePurse } from '@/lib/types';
 import { toast } from 'sonner';
-import { copyToClipboard } from '@/lib/utils';
+import { copyToClipboard, formatINR, buildPlayerSoldMessage, whatsappShareLink } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles } from 'lucide-react';
+import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
@@ -20,9 +21,7 @@ type PendingAction =
 
 const GRACE_MS = 5000;
 
-function fmt(n: number) {
-  return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
+const fmt = formatINR;
 
 /**
  * Per-team auction purse maths.
@@ -83,6 +82,10 @@ export default function AuctionPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [viewTeam, setViewTeam] = useState<Team | null>(null);
   const liveSeq = useRef(0);
+  // Confetti burst on each committed sale — the counter keys the remount so
+  // back-to-back sales replay it; 0 means no confetti on screen
+  const [confettiBurst, setConfettiBurst] = useState(0);
+  const confettiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Base price per player — used for the max-bid rule; persisted per league
   const [basePrice, setBasePrice] = useState(0);
@@ -112,7 +115,7 @@ export default function AuctionPage() {
       const res = await fetch(`/api/leagues/${id}`);
       if (!res.ok) { router.push('/'); return; }
       const json: LeagueWithPlayers = await res.json();
-      if (!json.isCreator) { toast.error('Only the creator can run auctions'); router.push(`/leagues/${id}`); return; }
+      if (!json.canManage) { toast.error('Only the league organizers can run auctions'); router.push(`/leagues/${id}`); return; }
       if (json.players.length === 0) { toast.error('Add players first'); router.push(`/leagues/${id}`); return; }
       setLeague(json);
       const s: Record<string, number> = {};
@@ -141,6 +144,7 @@ export default function AuctionPage() {
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
+    if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
   }, []);
 
   // ── Live broadcast ───────────────────────────────────────────────────────
@@ -265,7 +269,20 @@ export default function AuctionPage() {
           lastSold: { player: soldP, teamName, teamColor, price },
           roster: ns, pool, unsold: unsoldQueue, round,
         }));
-        toast.success('Player sold!');
+        // Celebrate on the control screen too, same as spectators see
+        setConfettiBurst(k => k + 1);
+        if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
+        confettiTimerRef.current = setTimeout(() => setConfettiBurst(0), 4500);
+        // Announce the sale to the league's WhatsApp group straight from the
+        // confirmation toast; the squad modal offers a resend later.
+        const shareMessage = buildPlayerSoldMessage({ playerName: player.name, soldPrice: price, teamName });
+        toast.success('Player sold!', {
+          duration: 12000,
+          action: {
+            label: 'Share to WhatsApp',
+            onClick: () => window.open(whatsappShareLink(shareMessage), '_blank', 'noopener'),
+          },
+        });
       } catch { toast.error('Failed to record sale'); }
     } else {
       const player = action.player;
@@ -340,7 +357,10 @@ export default function AuctionPage() {
       <div className="absolute bottom-0 right-1/4 w-125 h-125 rounded-full bg-emerald-400/5 blur-[110px] animate-orb pointer-events-none" style={{ animationDelay: '5s' }} />
       <div className="border-b border-foreground/8 px-6 py-4 relative z-10 backdrop-blur-xl bg-foreground/2 flex items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/50 hover:text-foreground hover:bg-foreground/10">← Back to League</Button>
-        <ShareLiveButton onClick={() => setShareOpen(true)} />
+        <div className="flex items-center gap-3">
+          {!league.isCreator && <CoOrganizerBadge />}
+          <ShareLiveButton onClick={() => setShareOpen(true)} />
+        </div>
       </div>
       <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
       {viewTeam && <TeamSquadModal team={viewTeam} roster={league.players} basePrice={basePrice} onClose={() => setViewTeam(null)} />}
@@ -425,6 +445,7 @@ export default function AuctionPage() {
 
   if (phase === 'done') return (
     <div className="min-h-screen flex flex-col bg-background text-foreground relative overflow-hidden">
+      {confettiBurst > 0 && <Confetti key={confettiBurst} fixed />}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-150 rounded-full bg-amber-500/4 blur-[120px] pointer-events-none" />
       <div className="border-b border-foreground/8 px-6 py-4">
         <Button variant="ghost" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/50 hover:text-foreground hover:bg-foreground/10">← Back to League</Button>
@@ -476,6 +497,7 @@ export default function AuctionPage() {
         @keyframes graceShrink{from{width:100%}to{width:0%}}
       `}</style>
       <div className="h-screen flex flex-col bg-background text-foreground">
+        {confettiBurst > 0 && <Confetti key={confettiBurst} fixed />}
         <div className="flex items-center justify-between px-5 py-3 bg-foreground/3 border-b border-foreground/8 shrink-0 backdrop-blur-xl">
           <Button variant="ghost" size="sm" onClick={() => router.push(`/leagues/${id}`)} className="text-foreground/40 hover:text-foreground hover:bg-foreground/10">← League</Button>
           <div className="flex items-center gap-4 text-xs sm:text-sm font-semibold">
@@ -485,6 +507,7 @@ export default function AuctionPage() {
             {round > 1 && <><span className="text-foreground/15">|</span><span className="text-indigo-600 dark:text-indigo-400 text-xs uppercase tracking-widest font-bold">Rnd {round}</span></>}
           </div>
           <div className="flex items-center gap-3">
+            {!league.isCreator && <CoOrganizerBadge />}
             <ShareLiveButton onClick={() => setShareOpen(true)} />
             <div className="text-foreground/20 text-xs tabular-nums font-mono">{soldCount}/{totalPlayers}</div>
           </div>
@@ -725,6 +748,7 @@ function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; rost
                   <th className="py-2 pr-2 text-left font-bold w-6">#</th>
                   <th className="py-2 text-left font-bold">Player</th>
                   <th className="py-2 pl-2 text-right font-bold">Price</th>
+                  <th className="py-2 pl-2 text-right font-bold">Share</th>
                 </tr>
               </thead>
               <tbody>
@@ -733,6 +757,9 @@ function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; rost
                     <td className="py-2 pr-2 text-left tabular-nums text-foreground/35">{i + 1}</td>
                     <td className="py-2 text-left font-medium text-foreground/85 truncate">{p.name}</td>
                     <td className="py-2 pl-2 text-right tabular-nums text-foreground/70">{fmt(p.soldPrice ?? 0)}</td>
+                    <td className="py-2 pl-2 text-right whitespace-nowrap">
+                      <SoldShareActions playerName={p.name} soldPrice={p.soldPrice ?? null} teamName={team.name} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -746,6 +773,42 @@ function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; rost
         </div>
       </div>
     </div>
+  );
+}
+
+function CoOrganizerBadge() {
+  return (
+    <span className="inline-flex items-center px-2.5 h-6 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/25 shrink-0">
+      Co-organizer
+    </span>
+  );
+}
+
+// Re-share a past sale from the squad list: WhatsApp deep link plus a
+// clipboard fallback for other messengers. Disabled when there's no recorded
+// price (e.g. a pre-assigned icon player) — no button beats a broken message.
+function SoldShareActions({ playerName, soldPrice, teamName }: { playerName: string; soldPrice: number | null; teamName: string }) {
+  const disabled = soldPrice == null || !teamName;
+  const message = disabled ? '' : buildPlayerSoldMessage({ playerName, soldPrice: soldPrice!, teamName });
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        disabled={disabled}
+        onClick={() => window.open(whatsappShareLink(message), '_blank', 'noopener')}
+        title={disabled ? 'No sale price recorded' : 'Share to WhatsApp'}
+        aria-label={`Share ${playerName}'s sale to WhatsApp`}
+        className="w-7 h-7 inline-flex items-center justify-center rounded-md text-green-600 dark:text-green-400 hover:bg-green-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        <MessageCircle className="w-3.5 h-3.5" />
+      </button>
+      <button
+        disabled={disabled}
+        onClick={() => { copyToClipboard(message).then((ok) => { if (ok) toast.success('Sale message copied'); else toast.error('Could not copy'); }); }}
+        title={disabled ? 'No sale price recorded' : 'Copy message (for Telegram/SMS)'}
+        aria-label={`Copy ${playerName}'s sale message`}
+        className="w-7 h-7 inline-flex items-center justify-center rounded-md text-foreground/40 hover:text-foreground hover:bg-foreground/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        <Copy className="w-3.5 h-3.5" />
+      </button>
+    </span>
   );
 }
 

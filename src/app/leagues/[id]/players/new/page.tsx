@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import PlayerForm, { type PlayerFormData } from '@/components/PlayerForm';
+import PlayerSearchPicker from '@/components/PlayerSearchPicker';
 import { generateToken, sanitizeFolder, uploadFile } from '@/lib/utils';
-import type { LeagueWithPlayers, UserProfile } from '@/lib/types';
+import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
 import { toast } from 'sonner';
 import { ArrowLeft, Sparkles, UserPlus, Users } from 'lucide-react';
 
@@ -20,6 +21,8 @@ export default function NewPlayerPage() {
   // Bumped after each creator-mode add so the form remounts blank
   const [formKey, setFormKey] = useState(0);
   const [addedCount, setAddedCount] = useState(0);
+  // Player picked from search — prefills the form below instead of a blank one
+  const [searchSelection, setSearchSelection] = useState<Player | null>(null);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -37,7 +40,7 @@ export default function NewPlayerPage() {
       .finally(() => setFetching(false));
   }, [id, status]);
 
-  const isCreatorMode = !!league?.isCreator;
+  const isCreatorMode = !!league?.canManage;
 
   async function handleSubmit(data: PlayerFormData) {
     setLoading(true);
@@ -64,6 +67,8 @@ export default function NewPlayerPage() {
           isWicketKeeper: data.isWicketKeeper,
           contactNumber: data.contactNumber.trim() || null,
           creatorToken,
+          // Picking an existing player reuses their account — don't also send an email
+          ...(searchSelection ? { sourcePlayerId: searchSelection.id } : { email: data.email }),
         }),
       });
 
@@ -82,6 +87,7 @@ export default function NewPlayerPage() {
         toast.success(`${data.name} added — add the next player or go back when done`);
         setLeague((prev) => prev ? { ...prev, players: [...prev.players, player] } : prev);
         setAddedCount((c) => c + 1);
+        setSearchSelection(null);
         setFormKey((k) => k + 1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
@@ -93,6 +99,16 @@ export default function NewPlayerPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSelectExisting(player: Player) {
+    setSearchSelection(player);
+    setFormKey((k) => k + 1);
+  }
+
+  function handleStartBlank() {
+    setSearchSelection(null);
+    setFormKey((k) => k + 1);
   }
 
   if (fetching || status === 'loading') {
@@ -146,7 +162,7 @@ export default function NewPlayerPage() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{league?.name ?? 'Player Details'}</p>
             <p className="text-xs text-muted-foreground">
-              {isCreatorMode ? 'Adding as league creator' : profile ? 'Auto-filled from your profile' : 'Your card appears in the league grid'}
+              {isCreatorMode ? 'Adding as league organizer' : profile ? 'Auto-filled from your profile' : 'Your card appears in the league grid'}
             </p>
           </div>
           {isCreatorMode && league && (
@@ -157,19 +173,49 @@ export default function NewPlayerPage() {
           )}
         </div>
         <div className="p-6">
+          {isCreatorMode && (
+            <div className="mb-5 space-y-2">
+              <PlayerSearchPicker leagueId={id} onSelect={handleSelectExisting} />
+              {searchSelection && (
+                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-green-500/20 bg-green-500/8 text-xs">
+                  <span className="text-foreground">
+                    Prefilled from <span className="font-semibold">{searchSelection.name}</span>&apos;s earlier card — review and add.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleStartBlank}
+                    className="text-muted-foreground hover:text-foreground shrink-0 underline underline-offset-2"
+                  >
+                    Start blank
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <PlayerForm
             key={formKey}
-            initial={!isCreatorMode && profile ? {
-              name: profile.name,
-              photo: profile.photo,
-              battingType: profile.battingType,
-              bowlingType: profile.bowlingType,
-              role: profile.role,
-              isWicketKeeper: profile.isWicketKeeper,
-            } : undefined}
+            initial={
+              searchSelection ? {
+                name: searchSelection.name,
+                photo: searchSelection.photo,
+                battingType: searchSelection.battingType,
+                bowlingType: searchSelection.bowlingType,
+                role: searchSelection.role,
+                isWicketKeeper: searchSelection.isWicketKeeper,
+                contactNumber: searchSelection.contactNumber ?? '',
+              } : !isCreatorMode && profile ? {
+                name: profile.name,
+                photo: profile.photo,
+                battingType: profile.battingType,
+                bowlingType: profile.bowlingType,
+                role: profile.role,
+                isWicketKeeper: profile.isWicketKeeper,
+              } : undefined
+            }
             onSubmit={handleSubmit}
             submitLabel={isCreatorMode ? 'Add Player' : 'Add Card'}
             loading={loading}
+            showEmailField={isCreatorMode && !searchSelection}
           />
         </div>
       </div>

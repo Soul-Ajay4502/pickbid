@@ -51,7 +51,7 @@ export default function TeamDetailPage() {
     if (!res.ok) { router.push('/'); return; }
     const json: LeagueWithPlayers = await res.json();
     // Public leagues are viewable by anyone; private ones stay creator-only
-    if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
+    if (!json.canManage && !json.isPublic) { router.push(`/leagues/${id}`); return; }
     // A team that doesn't belong to this league has nothing to show
     if (!json.teams.some((t) => t.id === teamId)) { router.push(`/leagues/${id}/teams`); return; }
     setData(json);
@@ -89,7 +89,7 @@ export default function TeamDetailPage() {
 
   // Contact numbers are stripped server-side for non-creators, so the column
   // and bulk-copy only make sense for the organiser.
-  const canSeePhones = data.isCreator;
+  const canSeePhones = data.canManage;
   const phoneEntries = squad
     .map((p) => ({ name: p.name, phone: formatIndianPhone(localPhoneDigits(p.contactNumber)) }))
     .filter((e) => e.phone);
@@ -221,11 +221,11 @@ export default function TeamDetailPage() {
                   <th className="px-2 py-3 text-left font-semibold">Role</th>
                   <th className="px-2 py-3 text-left font-semibold">Batting</th>
                   <th className="px-2 py-3 text-left font-semibold">Bowling</th>
-                  <th className="px-2 py-3 text-center font-semibold" title="Matches">Mat</th>
+                  {/* <th className="px-2 py-3 text-center font-semibold" title="Matches">Mat</th>
                   <th className="px-2 py-3 text-center font-semibold" title="Runs">Runs</th>
                   <th className="px-2 py-3 text-center font-semibold" title="Wickets">Wkts</th>
                   <th className="px-2 py-3 text-center font-semibold" title="Average">Avg</th>
-                  <th className="px-2 py-3 text-center font-semibold" title="Strike Rate">SR</th>
+                  <th className="px-2 py-3 text-center font-semibold" title="Strike Rate">SR</th> */}
                   {canSeePhones && <th className="px-2 py-3 text-left font-semibold">Phone</th>}
                   <th className="px-2 py-3 pr-4 text-right font-semibold">Price</th>
                 </tr>
@@ -244,7 +244,7 @@ export default function TeamDetailPage() {
                           {player.name}
                           {player.isIcon && (
                             <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                              <Star className="w-2.5 h-2.5 fill-current" />Icon
+                              <Star className="w-2.5 h-2.5 fill-current" />
                             </span>
                           )}
                         </span>
@@ -255,23 +255,29 @@ export default function TeamDetailPage() {
                     </td>
                     <td className="px-2 py-3 text-muted-foreground">{player.battingType}</td>
                     <td className="px-2 py-3 text-muted-foreground">{player.bowlingType}</td>
-                    <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsMatches)}</td>
+                    {/* <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsMatches)}</td>
                     <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsRuns)}</td>
                     <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsWickets)}</td>
                     <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsAverage)}</td>
-                    <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsSR)}</td>
+                    <td className="px-2 py-3 text-center tabular-nums text-muted-foreground">{stat(player.statsSR)}</td> */}
                     {canSeePhones && (
                       <td className="px-2 py-3 tabular-nums text-muted-foreground whitespace-nowrap">
                         {player.contactNumber
                           ? <button onClick={() => copyPhone(formatIndianPhone(localPhoneDigits(player.contactNumber)))}
-                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors" title="Copy phone number">
-                              <Copy className="w-3 h-3 opacity-60" />{formatIndianPhone(localPhoneDigits(player.contactNumber))}
-                            </button>
+                            className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors" title="Copy phone number">
+                            <Copy className="w-3 h-3 opacity-60" />{formatIndianPhone(localPhoneDigits(player.contactNumber))}
+                          </button>
                           : '—'}
                       </td>
                     )}
                     <td className="px-2 py-3 pr-4 text-right tabular-nums font-semibold text-green-600 dark:text-green-400">
-                      {player.isIcon && !player.soldPrice ? '—' : fmt(player.soldPrice ?? 0)}
+                      {player.isIcon && !player.soldPrice ?
+                        (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                            Icon
+                          </span>
+                        )
+                        : fmt(player.soldPrice ?? 0)}
                     </td>
                   </tr>
                 ))}

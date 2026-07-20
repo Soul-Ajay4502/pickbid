@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getMatches, createMatch, deleteMatch } from '@/lib/store';
-import { auth } from '@/auth';
-
-async function getCreatorSession(leagueId: string) {
-  const [session, league] = await Promise.all([auth(), getLeague(leagueId)]);
-  if (!session?.user?.id) return { error: 'Unauthorised', status: 401 };
-  if (!league) return { error: 'League not found', status: 404 };
-  if (league.creatorId !== session.user.id) return { error: 'Forbidden', status: 403 };
-  return { error: null, status: 200 };
-}
+import { getMatches, createMatch, deleteMatch } from '@/lib/store';
+import { requireLeagueManager } from '@/lib/leagueAuth';
 
 export async function GET(
   _req: NextRequest,
@@ -24,7 +16,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await getCreatorSession(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const body = await request.json();
@@ -40,7 +32,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await getCreatorSession(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { matchId } = await request.json();

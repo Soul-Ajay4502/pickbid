@@ -166,7 +166,7 @@ export default function TeamsPage() {
     if (!res.ok) { router.push('/'); return; }
     const json: LeagueWithPlayers = await res.json();
     // Public leagues are viewable by anyone (read-only); private ones stay creator-only
-    if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
+    if (!json.canManage && !json.isPublic) { router.push(`/leagues/${id}`); return; }
     setData(json);
     setTeams(json.teams);
     setLoading(false);
@@ -237,7 +237,7 @@ export default function TeamsPage() {
 
   // Non-creators reach this page only for public leagues — they get a read-only
   // view, so every add/edit/delete affordance is hidden behind canEdit.
-  const canEdit = data.isCreator;
+  const canEdit = data.canManage;
 
   // Calculate spending per team
   const spentByTeam: Record<string, number> = {};

@@ -9,6 +9,7 @@ import PlayerFullView from '@/components/PlayerFullView';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import TemplateSelector from '@/components/TemplateSelector';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import CoOrganizersModal from '@/components/CoOrganizersModal';
 import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
@@ -17,6 +18,7 @@ import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
   UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
+  ShieldCheck,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -42,6 +44,8 @@ function LeaguePageInner() {
   const [viewPlayer, setViewPlayer] = useState<Player | null>(null);
   // Once an auction is complete the cards are hidden behind a banner; this reveals them
   const [showPlayers, setShowPlayers] = useState(false);
+  // Creator-only co-organizer management modal
+  const [coOrgOpen, setCoOrgOpen] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -196,7 +200,7 @@ function LeaguePageInner() {
     if (typeof window === 'undefined') return false;
     const playerToken = localStorage.getItem(`creator_player_${playerId}`);
     return (
-      data?.isCreator === true ||
+      data?.canManage === true ||
       (!!playerToken && playerToken === playerCreatorToken)
     );
   }
@@ -470,9 +474,11 @@ function LeaguePageInner() {
     : data.players;
 
   const registrationClosed = data.registrationClosed ?? false;
-  // Non-creators can only join via a register link while registration is open
+  // Creator or co-organizer — either can manage this league
+  const canManage = data.canManage;
+  // Non-organizers can only join via a register link while registration is open
   const canJoin = isOpen && !registrationClosed;
-  const showAddCard = data.isCreator || canJoin;
+  const showAddCard = canManage || canJoin;
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
   // The auction is complete once every player is resolved (sold/icon or unsold) and real results exist
@@ -513,10 +519,10 @@ function LeaguePageInner() {
                 {data.isPublic ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                 {data.isPublic ? 'Public' : 'Private'}
               </span>
-              {/* Registration flag. The creator can toggle it open/closed with the
-                  button on its left; non-creators only see the flag when they
+              {/* Registration flag. Organizers can toggle it open/closed with the
+                  button on its left; everyone else only sees the flag when they
                   arrived via a register link (?open=true). */}
-              {data.isCreator ? (
+              {canManage ? (
                 <span className="inline-flex items-center gap-1.5">
                   <button
                     onClick={handleToggleRegistration}
@@ -546,6 +552,26 @@ function LeaguePageInner() {
               )}
             </div>
             <p className="text-muted-foreground mt-1 text-sm">Conducted by {data.conductedBy}</p>
+
+            {/* Everyone helping run this league besides the creator */}
+            {data.coOrganizers.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {data.coOrganizers.map((co) => (
+                  <span key={co.userId} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full border border-violet-500/25 bg-violet-500/10 text-xs">
+                    {co.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={co.photo} alt="" className="w-4.5 h-4.5 rounded-full object-cover" />
+                    ) : (
+                      <span className="w-4.5 h-4.5 rounded-full bg-muted inline-flex items-center justify-center text-[9px] font-bold text-muted-foreground">
+                        {(co.name || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="font-medium text-foreground/80">{co.name || 'Organizer'}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-400">Co-organizer</span>
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div className="mt-3.5 max-w-xs">
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
@@ -593,7 +619,7 @@ function LeaguePageInner() {
                 </button>
               ) : null
             )}
-            {data.isCreator && data.players.length > 0 && (
+            {canManage && data.players.length > 0 && (
               <button
                 onClick={() => router.push(`/leagues/${id}/auction`)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-linear-to-br from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:via-violet-500 hover:to-indigo-500 transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)] hover:shadow-[0_0_36px_rgba(124,58,237,0.45)] hover:-translate-y-0.5 active:translate-y-0"
@@ -607,7 +633,7 @@ function LeaguePageInner() {
 
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2 mt-6">
-          {data.isCreator && (
+          {canManage && (
             <>
               <button onClick={() => router.push(`/leagues/${id}/players/new`)} className="toolbar-btn">
                 <UserPlus className="w-3.5 h-3.5" />Add Player
@@ -627,6 +653,12 @@ function LeaguePageInner() {
               <button onClick={() => router.push(`/leagues/${id}/sponsors/manage`)} className="toolbar-btn">
                 <Handshake className="w-3.5 h-3.5" />Sponsors
               </button>
+              {/* Only the creator manages who co-organizes */}
+              {data.isCreator && (
+                <button onClick={() => setCoOrgOpen(true)} className="toolbar-btn" title="Invite trusted people to help run this league">
+                  <ShieldCheck className="w-3.5 h-3.5" />Co-Organizers
+                </button>
+              )}
               <button onClick={() => setTemplatePanelOpen((v) => !v)} className="toolbar-btn" aria-expanded={templatePanelOpen}>
                 <Palette className="w-3.5 h-3.5" />
                 {templatePanelOpen ? 'Hide Templates' : 'Template'}
@@ -650,7 +682,7 @@ function LeaguePageInner() {
             </>
           )}
           {/* Public leagues are open for anyone to explore the squads & standings */}
-          {!data.isCreator && data.isPublic && (
+          {!canManage && data.isPublic && (
             <>
               <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
                 <Users className="w-3.5 h-3.5" />Teams
@@ -689,7 +721,7 @@ function LeaguePageInner() {
                 <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}`, 'View link'); setShareOpen(false); }}>
                   <Link2 className="w-3.5 h-3.5 text-muted-foreground" />Copy View Link
                 </button>
-                {data.isCreator && (
+                {canManage && (
                   <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}?open=true`, 'Register link'); setShareOpen(false); }}>
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Register Link
                   </button>
@@ -701,7 +733,7 @@ function LeaguePageInner() {
                     <button className="menu-item" onClick={() => { handleDownloadRoster(); setShareOpen(false); }}>
                       <FileText className="w-3.5 h-3.5 text-muted-foreground" />Roster PDF
                     </button>
-                    {data.isCreator && (
+                    {canManage && (
                       <>
                         <button className="menu-item" onClick={() => { handleSquadPoster(); setShareOpen(false); }}>
                           <ImageDown className="w-3.5 h-3.5 text-muted-foreground" />Squad Poster
@@ -716,7 +748,7 @@ function LeaguePageInner() {
                         />
                       </>
                     )}
-                    {data.isCreator && data.teams.length > 0 && (
+                    {canManage && data.teams.length > 0 && (
                       <>
                         <div className="my-1.5 h-px bg-border/70" />
                         <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Teams</p>
@@ -756,7 +788,7 @@ function LeaguePageInner() {
       </div>
 
       {/* Template panel */}
-      {data.isCreator && templatePanelOpen && (
+      {canManage && templatePanelOpen && (
         <div className="mb-6 rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-5 animate-scale-in">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-gradient-green">Card Template</p>
@@ -804,14 +836,14 @@ function LeaguePageInner() {
           <div className="text-center space-y-1.5">
             <h2 className="text-lg font-bold">No player cards yet</h2>
             <p className="text-muted-foreground text-sm text-center max-w-xs leading-relaxed">
-              {data.isCreator
+              {canManage
                 ? 'Add players yourself, or share the register link so they can join on their own.'
                 : showAddCard
                   ? 'Be the first to add your cricket player card to this league!'
                   : 'The creator has not opened this league for registration yet.'}
             </p>
           </div>
-          {data.isCreator && (
+          {canManage && (
             <button
               onClick={() => router.push(`/leagues/${id}/players/new`)}
               className="btn-premium inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold"
@@ -866,7 +898,7 @@ function LeaguePageInner() {
             <button onClick={() => router.push(`/leagues/${id}/wrapped`)} className="toolbar-btn text-amber-600 dark:text-amber-400">
               <Sparkles className="w-3.5 h-3.5" />Auction Wrapped
             </button>
-            {(data.isCreator || data.isPublic) && (
+            {(canManage || data.isPublic) && (
               <>
                 <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
                   <Users className="w-3.5 h-3.5" />View Squads
@@ -923,6 +955,14 @@ function LeaguePageInner() {
           ))}
           </div>
         </>
+      )}
+
+      {/* Co-organizer management (creator only) */}
+      {coOrgOpen && (
+        <CoOrganizersModal
+          leagueId={id}
+          onClose={(changed) => { setCoOrgOpen(false); if (changed) fetchLeague(); }}
+        />
       )}
 
       {/* Full player view */}

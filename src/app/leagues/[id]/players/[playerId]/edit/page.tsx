@@ -46,7 +46,7 @@ export default function EditPlayerPage() {
           const playerToken = typeof window !== 'undefined'
             ? localStorage.getItem(`creator_player_${playerId}`)
             : null;
-          const isLeagueCreator = lg.isCreator;
+          const isLeagueCreator = lg.canManage;
           const isPlayerCreator = !!playerToken && playerToken === p.creatorToken;
 
           if (!isLeagueCreator && !isPlayerCreator) {

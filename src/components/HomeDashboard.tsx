@@ -7,8 +7,11 @@ import type { League } from '@/lib/types';
 
 interface LeagueSections {
   created: League[];
+  coOrganizing: League[];
   joined: League[];
 }
+
+const EMPTY_SECTIONS: LeagueSections = { created: [], coOrganizing: [], joined: [] };
 
 // ── Colour palette for league initials avatars ────────────────────────────────
 const AVATAR_PALETTES = [
@@ -93,10 +96,12 @@ function SkeletonCard() {
   );
 }
 
-function SectionHeader({ label, count, accent = 'green' }: { label: string; count: number; accent?: 'green' | 'blue' }) {
+function SectionHeader({ label, count, accent = 'green' }: { label: string; count: number; accent?: 'green' | 'blue' | 'violet' }) {
   const countCls = accent === 'green'
     ? 'bg-green-500/10 text-green-500 border-green-500/20 dark:text-green-400'
-    : 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:text-blue-400';
+    : accent === 'violet'
+      ? 'bg-violet-500/10 text-violet-500 border-violet-500/20 dark:text-violet-400'
+      : 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:text-blue-400';
 
   return (
     <div className="flex items-center gap-3 mb-5">
@@ -111,22 +116,23 @@ function SectionHeader({ label, count, accent = 'green' }: { label: string; coun
 
 /** Signed-in dashboard — the server page only renders this when a session exists. */
 export default function HomeDashboard() {
-  const [sections, setSections] = useState<LeagueSections>({ created: [], joined: [] });
+  const [sections, setSections] = useState<LeagueSections>(EMPTY_SECTIONS);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     fetch('/api/leagues')
-      .then((r) => (r.ok ? r.json() : { created: [], joined: [] }))
+      .then((r) => (r.ok ? r.json() : EMPTY_SECTIONS))
       .then((data) => setSections({
         created: Array.isArray(data.created) ? data.created : [],
+        coOrganizing: Array.isArray(data.coOrganizing) ? data.coOrganizing : [],
         joined: Array.isArray(data.joined) ? data.joined : [],
       }))
-      .catch(() => setSections({ created: [], joined: [] }))
+      .catch(() => setSections(EMPTY_SECTIONS))
       .finally(() => setLoading(false));
   }, []);
 
-  const isEmpty = !loading && sections.created.length === 0 && sections.joined.length === 0;
+  const isEmpty = !loading && sections.created.length === 0 && sections.coOrganizing.length === 0 && sections.joined.length === 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -136,7 +142,7 @@ export default function HomeDashboard() {
         <div className="space-y-1">
           <h1 className="text-3xl font-black tracking-tight text-gradient-green">My Leagues</h1>
           <p className="text-muted-foreground text-sm">
-            Leagues you&apos;ve created or joined as a player
+            Leagues you&apos;ve created, help organize, or joined as a player
           </p>
         </div>
         <button
@@ -186,6 +192,18 @@ export default function HomeDashboard() {
           <SectionHeader label="Created by you" count={sections.created.length} accent="green" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {sections.created.map((league, i) => (
+              <LeagueCard key={league.id} league={league} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Leagues the user helps run as a co-organizer */}
+      {!loading && sections.coOrganizing.length > 0 && (
+        <section className="mb-10 animate-fade-in-up" style={{ animationDelay: '0.08s' }}>
+          <SectionHeader label="Co-organizing" count={sections.coOrganizing.length} accent="violet" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {sections.coOrganizing.map((league, i) => (
               <LeagueCard key={league.id} league={league} index={i} />
             ))}
           </div>

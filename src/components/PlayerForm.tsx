@@ -16,6 +16,8 @@ import type { Player } from '@/lib/types';
 
 export interface PlayerFormData {
   name: string;
+  /** Player's own email — links their card to their own account instead of the creator's */
+  email: string;
   /** Personal contact number — optional, kept for the organiser's records */
   contactNumber: string;
   /** Existing Cloudinary URL (kept when no new file is selected) */
@@ -33,6 +35,8 @@ interface PlayerFormProps {
   onSubmit: (data: PlayerFormData) => Promise<void>;
   submitLabel?: string;
   loading?: boolean;
+  /** Show the "player's email" field — used when a creator adds a player on their behalf */
+  showEmailField?: boolean;
 }
 
 const BATTING_TYPES: Player['battingType'][] = ['Right-Hand Bat', 'Left-Hand Bat'];
@@ -53,8 +57,10 @@ export default function PlayerForm({
   onSubmit,
   submitLabel = 'Save',
   loading = false,
+  showEmailField = false,
 }: PlayerFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
   const [phone, setPhone] = useState(localPhoneDigits(initial?.contactNumber));
   const [phoneError, setPhoneError] = useState('');
   const [existingPhoto, setExistingPhoto] = useState(initial?.photo ?? '');
@@ -98,6 +104,7 @@ export default function PlayerForm({
     setPhoneError('');
     await onSubmit({
       name,
+      email: email.trim(),
       contactNumber: formatIndianPhone(phone),
       photo: existingPhoto,
       photoFile,
@@ -122,6 +129,24 @@ export default function PlayerForm({
           disabled={loading}
         />
       </div>
+
+      {/* Email — links this card to the player's own account, not the creator's */}
+      {showEmailField && (
+        <div className="space-y-1.5">
+          <Label htmlFor="player-email">Player&apos;s Email (optional)</Label>
+          <Input
+            id="player-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="player@example.com"
+            disabled={loading}
+          />
+          <p className="text-xs text-muted-foreground">
+            Links this card to the player&apos;s own account. Leave blank to add an unclaimed card.
+          </p>
+        </div>
+      )}
 
       {/* Phone Number */}
       <div className="space-y-1.5">

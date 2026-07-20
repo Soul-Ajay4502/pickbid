@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import {
   getLeague, getPlayer, updatePlayer, deletePlayer, cleanupImages,
-  assignPlayerToTeam, AuctionRuleError, getTeams, getOfficials,
+  assignPlayerToTeam, AuctionRuleError, canManageLeague, getTeams, getOfficials,
 } from '@/lib/store';
 import { notifyPlayerSold } from '@/lib/whatsapp';
 import { auth } from '@/auth';
 import type { Player } from '@/lib/types';
 
-// Card changes are allowed for the league creator (proven by session) or for
-// whoever created the card (proven by the creatorToken minted at creation
-// time and kept in that browser's localStorage).
+// Card changes are allowed for the league's organizers — creator or
+// co-organizer, proven by session and re-checked on every request so a
+// removed co-organizer loses access instantly — or for whoever created the
+// card (proven by the creatorToken minted at creation time and kept in that
+// browser's localStorage).
 async function canManagePlayer(
   leagueId: string,
   player: Player,
@@ -19,7 +21,7 @@ async function canManagePlayer(
   const session = await auth();
   if (!session?.user?.id) return false;
   const league = await getLeague(leagueId);
-  return !!league && league.creatorId === session.user.id;
+  return !!league && (await canManageLeague(session.user.id, league));
 }
 
 const UPDATABLE_FIELDS = [

@@ -87,7 +87,7 @@ export default function SquadRevealPage() {
         if (!res.ok) { router.push('/'); return; }
         const json: LeagueWithPlayers = await res.json();
         // Same visibility rule as the team page: public leagues are open, private stay creator-only
-        if (!json.isCreator && !json.isPublic) { router.push(`/leagues/${id}`); return; }
+        if (!json.canManage && !json.isPublic) { router.push(`/leagues/${id}`); return; }
         if (!json.teams.some((t) => t.id === teamId)) { router.push(`/leagues/${id}/teams`); return; }
         setData(json);
         setPhase('pack');

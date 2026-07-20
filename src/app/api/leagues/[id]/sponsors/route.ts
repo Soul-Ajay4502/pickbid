@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getLeague, getSponsors, getSponsor,
+  getSponsors, getSponsor,
   createSponsor, updateSponsor, deleteSponsor, cleanupImages,
 } from '@/lib/store';
-import { auth } from '@/auth';
-
-// Sponsors are a display-only feature (the marquee page) — never part of the
-// auction. Only the league creator may add, edit or remove them.
-async function requireCreator(leagueId: string) {
-  const [session, league] = await Promise.all([auth(), getLeague(leagueId)]);
-  if (!session?.user?.id) return { error: 'Unauthorised', status: 401 };
-  if (!league) return { error: 'League not found', status: 404 };
-  if (league.creatorId !== session.user.id) return { error: 'Forbidden', status: 403 };
-  return { error: null, status: 200 };
-}
+import { requireLeagueManager } from '@/lib/leagueAuth';
 
 export async function GET(
   _request: NextRequest,
@@ -29,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { name, logoUrl, website } = await request.json();
@@ -49,7 +39,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { sponsorId, name, logoUrl, website } = await request.json();
@@ -78,7 +68,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireCreator(id);
+  const { error, status } = await requireLeagueManager(id);
   if (error) return NextResponse.json({ error }, { status });
 
   const { sponsorId } = await request.json();

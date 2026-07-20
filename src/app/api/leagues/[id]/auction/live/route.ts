@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getAuctionLive, setAuctionLive } from '@/lib/store';
-import { auth } from '@/auth';
+import { getAuctionLive, setAuctionLive } from '@/lib/store';
+import { requireLeagueManager } from '@/lib/leagueAuth';
 import type { LiveAuctionState, Player } from '@/lib/types';
 
 // Spectators poll this often — never cache, always read the latest blob.
@@ -25,24 +25,17 @@ export async function GET(
   }
 }
 
-// Creator-only — the auction control page broadcasts on every transition.
+// Organizers only (creator or co-organizer) — the auction control page
+// broadcasts on every transition. Checked per request, so removing a
+// co-organizer cuts off their broadcasts immediately.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-    }
-    const league = await getLeague(id);
-    if (!league) {
-      return NextResponse.json({ error: 'League not found' }, { status: 404 });
-    }
-    if (league.creatorId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { error, status, league } = await requireLeagueManager(id);
+    if (error !== null) return NextResponse.json({ error }, { status });
 
     const body = (await request.json()) as Partial<LiveAuctionState>;
     if (!body || typeof body.phase !== 'string') {

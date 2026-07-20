@@ -133,6 +133,20 @@ export interface Match {
   createdAt: string;
 }
 
+/**
+ * A user the creator has invited to help run a league. Co-organizers can do
+ * everything the creator can — run the auction, manage players/teams, edit
+ * settings — except delete the league or manage the co-organizer list itself.
+ */
+export interface CoOrganizer {
+  userId: string;
+  name: string;
+  /** Only returned to the league creator (it's shown in the manage list); null for everyone else */
+  email: string | null;
+  photo: string;
+  addedAt: string;
+}
+
 export interface UserProfile {
   userId: string;
   name: string;
@@ -152,6 +166,10 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   teams: Team[];
   officials: TeamOfficial[];
   isCreator: boolean;
+  /** Creator OR co-organizer — may run the auction and manage league content */
+  canManage: boolean;
+  /** Users helping run this league besides the creator (emails only visible to the creator) */
+  coOrganizers: CoOrganizer[];
   /** True when the requesting user has a card in this league (matched by userId) */
   hasJoined: boolean;
 }

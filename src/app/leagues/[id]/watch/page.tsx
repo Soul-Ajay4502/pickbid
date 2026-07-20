@@ -1,46 +1,17 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { MessageCircle, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
+import Confetti from '@/components/Confetti';
+import { buildPlayerSoldMessage, whatsappShareLink, copyToClipboard } from '@/lib/utils';
 import type { LiveAuctionState, LivePurse } from '@/lib/types';
 
 function fmt(n: number): string {
   if (!n) return '₹0';
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
-}
-
-const CONFETTI_COLORS = ['#f59e0b', '#22c55e', '#38bdf8', '#a855f7', '#ef4444', '#fcd34d', '#34d399'];
-
-/** Pure deterministic pseudo-random in [0,1) — avoids impure Math.random in render */
-function rand(seed: number): number {
-  const x = Math.sin(seed * 12.9898) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-function Confetti() {
-  const pieces = useMemo(
-    () => Array.from({ length: 70 }, (_, i) => ({
-      left: rand(i + 1) * 100,
-      delay: rand(i + 2.3) * 0.5,
-      dur: 2.2 + rand(i + 5.1) * 1.8,
-      color: CONFETTI_COLORS[Math.floor(rand(i + 7.7) * CONFETTI_COLORS.length)],
-      size: 7 + rand(i + 9.2) * 8,
-      rot: rand(i + 11.4) * 360,
-    })),
-    []
-  );
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden z-30">
-      {pieces.map((p, i) => (
-        <span key={i} style={{
-          position: 'absolute', top: '-5vh', left: `${p.left}%`, width: p.size, height: p.size * 0.6,
-          background: p.color, borderRadius: 2, transform: `rotate(${p.rot}deg)`,
-          animation: `confettiFall ${p.dur}s cubic-bezier(.3,.6,.5,1) ${p.delay}s forwards`,
-        }} />
-      ))}
-    </div>
-  );
 }
 
 function PurseTile({ t, className = '', onClick }: { t: LivePurse; className?: string; onClick?: () => void }) {
@@ -93,8 +64,37 @@ function PurseColumn({ side, purses, onView }: { side: 'left' | 'right'; purses:
   );
 }
 
-// Per-team breakdown — players, prices and purse summary in a table
-function TeamSquadModal({ t, onClose }: { t: LivePurse; onClose: () => void }) {
+// Organizer-only: share a sale to the league's WhatsApp group, with a
+// clipboard fallback for other messengers. Price 0 means no recorded sale in
+// the live feed (e.g. a pre-assigned icon player), so sharing is disabled.
+function SoldShareActions({ playerName, price, teamName }: { playerName: string; price: number; teamName: string }) {
+  const disabled = !(price > 0) || !teamName;
+  const message = disabled ? '' : buildPlayerSoldMessage({ playerName, soldPrice: price, teamName });
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        disabled={disabled}
+        onClick={() => window.open(whatsappShareLink(message), '_blank', 'noopener')}
+        title={disabled ? 'No sale price recorded' : 'Share to WhatsApp'}
+        aria-label={`Share ${playerName}'s sale to WhatsApp`}
+        className="w-7 h-7 inline-flex items-center justify-center rounded-md text-green-400 hover:bg-green-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        <MessageCircle className="w-3.5 h-3.5" />
+      </button>
+      <button
+        disabled={disabled}
+        onClick={() => { copyToClipboard(message).then((ok) => { if (ok) toast.success('Sale message copied'); else toast.error('Could not copy'); }); }}
+        title={disabled ? 'No sale price recorded' : 'Copy message (for Telegram/SMS)'}
+        aria-label={`Copy ${playerName}'s sale message`}
+        className="w-7 h-7 inline-flex items-center justify-center rounded-md text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+        <Copy className="w-3.5 h-3.5" />
+      </button>
+    </span>
+  );
+}
+
+// Per-team breakdown — players, prices and purse summary in a table.
+// Organizers additionally get per-sale WhatsApp share actions (`canShare`).
+function TeamSquadModal({ t, canShare, onClose }: { t: LivePurse; canShare: boolean; onClose: () => void }) {
   const bal = t.budget != null ? t.budget - t.spent : null;
   const full = t.maxPlayers != null && t.count >= t.maxPlayers;
   return (
@@ -119,6 +119,7 @@ function TeamSquadModal({ t, onClose }: { t: LivePurse; onClose: () => void }) {
                   <th className="py-2 pr-2 text-left font-bold w-6">#</th>
                   <th className="py-2 text-left font-bold">Player</th>
                   <th className="py-2 pl-2 text-right font-bold">Price</th>
+                  {canShare && <th className="py-2 pl-2 text-right font-bold">Share</th>}
                 </tr>
               </thead>
               <tbody>
@@ -127,6 +128,11 @@ function TeamSquadModal({ t, onClose }: { t: LivePurse; onClose: () => void }) {
                     <td className="py-2 pr-2 text-left tabular-nums text-white/35">{i + 1}</td>
                     <td className="py-2 text-left font-medium text-white/85 truncate">{p.name}</td>
                     <td className="py-2 pl-2 text-right tabular-nums text-white/70">{fmt(p.price)}</td>
+                    {canShare && (
+                      <td className="py-2 pl-2 text-right whitespace-nowrap">
+                        <SoldShareActions playerName={p.name} price={p.price} teamName={t.name} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -149,6 +155,16 @@ export default function WatchPage() {
   const [loaded, setLoaded] = useState(false);
   const [scale, setScale] = useState(1.2);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  // Organizers (creator or co-organizer) watching along get share actions on
+  // every sale; for everyone else the page stays a pure spectator view
+  const [canManage, setCanManage] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/leagues/${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((league) => setCanManage(league?.canManage === true))
+      .catch(() => { /* stay a spectator */ });
+  }, [id]);
 
   // Poll the live state — best-effort, every 1.5s
   useEffect(() => {
@@ -193,7 +209,6 @@ export default function WatchPage() {
   return (
     <div className="h-screen flex flex-col bg-[oklch(0.085_0.014_260)] text-white overflow-hidden">
       <style>{`
-        @keyframes confettiFall { 0%{transform:translateY(-10vh) rotate(0);opacity:1} 100%{transform:translateY(115vh) rotate(720deg);opacity:.95} }
         @keyframes cardDropIn{from{opacity:0;transform:scale(.82) translateY(-24px);filter:blur(10px)}to{opacity:1;transform:scale(1) translateY(0);filter:blur(0)}}
         @keyframes soldStamp{0%{opacity:0;transform:scale(2.4) rotate(-18deg)}55%{opacity:1;transform:scale(.86) rotate(-12deg)}100%{transform:scale(1) rotate(-12deg)}}
         @keyframes bannerUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
@@ -268,11 +283,26 @@ export default function WatchPage() {
               <p className="text-white/35 text-xs sm:text-sm uppercase tracking-[4px] font-bold relative z-10">On the block</p>
             )} */}
             {phase === 'sold' && live.lastSold && (
-              <div className="relative z-40 flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/8 border border-white/15 backdrop-blur" style={{ animation: 'bannerUp .5s .15s cubic-bezier(.22,1,.36,1) both' }}>
-                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: live.lastSold.teamColor }} />
-                <span className="text-base sm:text-xl font-bold">{live.lastSold.teamName}</span>
-                <span className="text-white/30">·</span>
-                <span className="text-base sm:text-2xl font-black text-green-400 tabular-nums">{fmt(live.lastSold.price)}</span>
+              <div className="relative z-40 flex flex-col items-center gap-2.5" style={{ animation: 'bannerUp .5s .15s cubic-bezier(.22,1,.36,1) both' }}>
+                <div className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/8 border border-white/15 backdrop-blur">
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: live.lastSold.teamColor }} />
+                  <span className="text-base sm:text-xl font-bold">{live.lastSold.teamName}</span>
+                  <span className="text-white/30">·</span>
+                  <span className="text-base sm:text-2xl font-black text-green-400 tabular-nums">{fmt(live.lastSold.price)}</span>
+                </div>
+                {/* Organizers following along can announce the sale straight from here */}
+                {canManage && (
+                  <button
+                    onClick={() => window.open(whatsappShareLink(buildPlayerSoldMessage({
+                      playerName: live.lastSold!.player.name,
+                      soldPrice: live.lastSold!.price,
+                      teamName: live.lastSold!.teamName,
+                    })), '_blank', 'noopener')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold shadow-lg shadow-green-500/25 transition-colors">
+                    <MessageCircle className="w-4 h-4" />
+                    Share to WhatsApp
+                  </button>
+                )}
               </div>
             )}
             {phase === 'unsold' && (
@@ -295,7 +325,7 @@ export default function WatchPage() {
       {/* Mobile: team purses as a horizontal strip below the stage */}
       {purses.length > 0 && <PurseStrip purses={purses} onView={onViewTeam} />}
 
-      {viewPurse && <TeamSquadModal t={viewPurse} onClose={() => setViewTeamId(null)} />}
+      {viewPurse && <TeamSquadModal t={viewPurse} canShare={canManage} onClose={() => setViewTeamId(null)} />}
     </div>
   );
 }

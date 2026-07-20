@@ -15,7 +15,7 @@ export default function SponsorsMarqueePage() {
     if (!leagueRes.ok) { router.push('/'); return; }
     const league = await leagueRes.json();
     // Sponsors are a public display board — private leagues stay creator-only
-    if (!league.isCreator && !league.isPublic) { router.push(`/leagues/${id}`); return; }
+    if (!league.canManage && !league.isPublic) { router.push(`/leagues/${id}`); return; }
 
     const sponsorsRes = await fetch(`/api/leagues/${id}/sponsors`);
     setSponsors(sponsorsRes.ok ? await sponsorsRes.json() : []);

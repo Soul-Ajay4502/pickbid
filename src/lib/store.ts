@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor } from './types';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel } from './models';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -190,11 +190,15 @@ export async function deleteLeague(id: string): Promise<boolean> {
  * Clone a league into a brand-new one owned by `creatorId`.
  *
  * The clone starts a fresh season: the new league is always private (no join
- * code), matches and live-auction state are never carried over, and every
- * copied player has their auction result cleared. Icon players keep their
- * pre-assigned team (remapped to the clone's new team rows); everyone else is
- * reset to unsold. `overrides` lets the caller edit the league's details at
- * clone time; whatever is omitted falls back to the source league's value.
+ * code), and matches and live-auction state are never carried over. By
+ * default every copied player has their auction result cleared — icon
+ * players keep their pre-assigned team (remapped to the clone's new team
+ * rows), everyone else resets to unsold. If `preserveAuctionResults` is set,
+ * every player instead keeps their sold price, sold/unsold status, and team
+ * assignment (remapped); this only takes effect when teams are also
+ * included, since a sold player needs a team to point to. `overrides` lets
+ * the caller edit the league's details at clone time; whatever is omitted
+ * falls back to the source league's value.
  *
  * Teams/players/officials are each opt-in. Officials need teams, so they're
  * only copied when teams are too. Player contact numbers are private to the
@@ -213,6 +217,7 @@ export async function cloneLeague(
     includePlayers?: boolean;
     includeOfficials?: boolean;
     copyContactNumbers?: boolean;
+    preserveAuctionResults?: boolean;
   } = {}
 ): Promise<League | null> {
   const source = await LeagueModel.findByPk(sourceId);
@@ -224,6 +229,9 @@ export async function cloneLeague(
   const includePlayers = options.includePlayers ?? true;
   // Officials live on teams, so they can only come along when teams do
   const includeOfficials = (options.includeOfficials ?? true) && includeTeams;
+  // A preserved sale needs a team to point to, so this only applies when
+  // teams are coming along too
+  const preserveAuctionResults = (options.preserveAuctionResults ?? false) && includeTeams;
 
   return sequelize.transaction(async (t) => {
     const newLeague = await LeagueModel.create(
@@ -271,8 +279,12 @@ export async function cloneLeague(
       const players = await PlayerModel.findAll({ where: { leagueId: sourceId }, order: [['createdAt', 'ASC']], transaction: t });
       for (const p of players) {
         // Icon players are pinned to a team before the auction, so they keep
-        // their team (remapped). Everyone else resets to unsold.
-        const keepTeam = p.isIcon && p.teamId ? teamIdMap.get(p.teamId) ?? null : null;
+        // their team (remapped) even on a fresh season. When preserving
+        // auction results, every sold player keeps their team the same way;
+        // otherwise everyone but icons resets to unsold.
+        const keepTeam = (preserveAuctionResults || p.isIcon) && p.teamId
+          ? teamIdMap.get(p.teamId) ?? null
+          : null;
         await PlayerModel.create(
           {
             id:             uuidv4(),
@@ -290,8 +302,8 @@ export async function cloneLeague(
             contactNumber:  options.copyContactNumbers ? p.contactNumber : null,
             isIcon:         p.isIcon,
             teamId:         keepTeam,
-            soldPrice:      null,
-            isUnsold:       false,
+            soldPrice:      preserveAuctionResults ? p.soldPrice : null,
+            isUnsold:       preserveAuctionResults ? p.isUnsold : false,
             statsMatches:   p.statsMatches,
             statsRuns:      p.statsRuns,
             statsWickets:   p.statsWickets,
@@ -326,6 +338,107 @@ export async function cloneLeague(
 
     return toLeague(newLeague);
   });
+}
+
+// ── Co-organizers ─────────────────────────────────────────────────────────────
+
+/** Co-organizer rule violation (already added, is the creator, …) — safe to show to the user. */
+export class CoOrganizerError extends Error {}
+
+function toCoOrganizer(row: LeagueCoOrganizerModel, user: UserModel | undefined): CoOrganizer {
+  return {
+    userId:  row.userId!,
+    name:    user?.name || '',
+    email:   user?.email ?? null,
+    photo:   user?.photo ?? '',
+    addedAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+export async function getCoOrganizers(leagueId: string): Promise<CoOrganizer[]> {
+  const rows = await LeagueCoOrganizerModel.findAll({ where: { leagueId }, order: [['createdAt', 'ASC']] });
+  if (rows.length === 0) return [];
+  const users = await UserModel.findAll({ where: { id: { [Op.in]: rows.map((r) => r.userId!) } } });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return rows.map((r) => toCoOrganizer(r, byId.get(r.userId!)));
+}
+
+export async function isCoOrganizer(leagueId: string, userId: string): Promise<boolean> {
+  const row = await LeagueCoOrganizerModel.findOne({ where: { leagueId, userId }, attributes: ['id'] });
+  return !!row;
+}
+
+/**
+ * The shared authorization check for league management: the creator and every
+ * co-organizer may manage the league (run the auction, mark players sold,
+ * edit teams/settings). Creator-only actions — deleting the league, managing
+ * the co-organizer list — must check `league.creatorId` directly instead.
+ */
+export async function canManageLeague(userId: string | null | undefined, league: League): Promise<boolean> {
+  if (!userId) return false;
+  if (userId === league.creatorId) return true;
+  return isCoOrganizer(league.id, userId);
+}
+
+export async function addCoOrganizer(league: League, userId: string, addedBy: string): Promise<CoOrganizer> {
+  if (userId === league.creatorId) {
+    throw new CoOrganizerError('The creator already manages this league');
+  }
+  const user = await UserModel.findByPk(userId);
+  if (!user) throw new CoOrganizerError('User not found');
+  // findOrCreate + the DB unique index on (league_id, user_id) makes a double
+  // add safe even when two requests race
+  const [row, created] = await LeagueCoOrganizerModel.findOrCreate({
+    where:    { leagueId: league.id, userId },
+    defaults: { id: uuidv4(), leagueId: league.id, userId, addedBy },
+  });
+  if (!created) {
+    throw new CoOrganizerError(`${user.name || user.email} is already a co-organizer`);
+  }
+  return toCoOrganizer(row, user);
+}
+
+export async function removeCoOrganizer(leagueId: string, userId: string): Promise<boolean> {
+  const deleted = await LeagueCoOrganizerModel.destroy({ where: { leagueId, userId } });
+  return deleted > 0;
+}
+
+export async function getLeaguesCoOrganizedByUser(userId: string): Promise<League[]> {
+  const rows = await LeagueCoOrganizerModel.findAll({ where: { userId }, attributes: ['leagueId'] });
+  if (rows.length === 0) return [];
+  const leagues = await LeagueModel.findAll({
+    where: { id: { [Op.in]: rows.map((r) => r.leagueId!) } },
+    order: [['createdAt', 'DESC']],
+  });
+  return leagues.map(toLeague);
+}
+
+/**
+ * Search existing accounts to add as co-organizers, by name, email or phone
+ * (case-insensitive substring). The creator and anyone already co-organizing
+ * this league are excluded — results are only ever people who *can* be added.
+ */
+export async function searchUsersForCoOrganizer(
+  league: League,
+  query: string,
+  limit = 8
+): Promise<Array<{ id: string; name: string; email: string; photo: string }>> {
+  const existing = await LeagueCoOrganizerModel.findAll({ where: { leagueId: league.id }, attributes: ['userId'] });
+  const excluded = [league.creatorId, ...existing.map((r) => r.userId!)];
+  const q = `%${query}%`;
+  const rows = await UserModel.findAll({
+    where: {
+      id: { [Op.notIn]: excluded },
+      [Op.or]: [
+        { name:          { [Op.iLike]: q } },
+        { email:         { [Op.iLike]: q } },
+        { contactNumber: { [Op.iLike]: q } },
+      ],
+    },
+    order: [['name', 'ASC']],
+    limit,
+  });
+  return rows.map((u) => ({ id: u.id, name: u.name ?? '', email: u.email, photo: u.photo ?? '' }));
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
@@ -471,6 +584,76 @@ export async function getPlayers(leagueId: string): Promise<Player[]> {
 export async function getPlayer(id: string): Promise<Player | null> {
   const row = await PlayerModel.findByPk(id);
   return row ? toPlayer(row) : null;
+}
+
+/**
+ * Search players this creator has previously added, across every league they
+ * run — powers the "search & select" picker on the Add Player page so a
+ * recurring player (same person, new season) doesn't need re-typing.
+ * Matches by name (case-insensitive substring), skips the league being added
+ * to, and collapses the same person's repeat cards (matched by name + phone)
+ * down to their most recent one.
+ */
+export async function searchPlayersByCreator(
+  creatorId: string,
+  query: string,
+  excludeLeagueId: string,
+  limit = 8
+): Promise<Player[]> {
+  const leagues = await LeagueModel.findAll({ where: { creatorId }, attributes: ['id'] });
+  const leagueIds = leagues.map((l) => l.id).filter((leagueId) => leagueId !== excludeLeagueId);
+  if (leagueIds.length === 0) return [];
+
+  const rows = await PlayerModel.findAll({
+    where: {
+      leagueId: { [Op.in]: leagueIds },
+      name: { [Op.iLike]: `%${query}%` },
+    },
+    order: [['createdAt', 'DESC']],
+    limit: limit * 4,
+  });
+
+  const seen = new Set<string>();
+  const deduped: PlayerModel[] = [];
+  for (const row of rows) {
+    const key = `${row.name.trim().toLowerCase()}|${row.contactNumber ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+    if (deduped.length >= limit) break;
+  }
+
+  return deduped.map(toPlayer);
+}
+
+/**
+ * Find-or-create a user account for a player being added by their league
+ * creator, so the player row links to its own account instead of the
+ * creator's. Never returns the creator's own id.
+ */
+export async function findOrCreateUserIdByEmail(email: string): Promise<string> {
+  const trimmed = email.trim();
+  const [user] = await UserModel.findOrCreate({ where: { email: trimmed }, defaults: { id: uuidv4(), email: trimmed } });
+  return user.id;
+}
+
+/**
+ * Resolves the userId to reuse when a creator picks an existing player from
+ * `searchPlayersByCreator` instead of typing a new one in — avoids creating a
+ * duplicate user for someone already in the system. Re-checks league
+ * ownership server-side (rather than trusting a client-supplied userId) so a
+ * creator can only reuse identities from their own players.
+ * Returns undefined if playerId doesn't resolve to one of this creator's own players.
+ */
+export async function getCreatorOwnedPlayerUserId(
+  creatorId: string,
+  playerId: string
+): Promise<string | null | undefined> {
+  const player = await PlayerModel.findByPk(playerId);
+  if (!player) return undefined;
+  const league = await LeagueModel.findByPk(player.leagueId);
+  if (!league || league.creatorId !== creatorId) return undefined;
+  return player.userId ?? null;
 }
 
 export async function createPlayer(data: Omit<Player, 'id' | 'createdAt'>): Promise<Player> {
