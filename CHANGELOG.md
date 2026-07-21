@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.6.0...v0.7.0) (2026-07-20)
+
+
+### Features
+
+* add confetti component for celebratory effects ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* add full-screen photo lightbox for player images ([c2d8566](https://github.com/Soul-Ajay4502/player-card-generator/commit/c2d8566d2616cf7b87f6e7bbea3c6ff60c7fd31d))
+* add league authorization logic for co-organizers ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* add utility functions for formatting and WhatsApp sharing ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* create LeagueCoOrganizer model for managing co-organizers ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* enhance HomeDashboard to support co-organizing leagues ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* enhance proxy to support link-preview crawlers and public image paths ([950953f](https://github.com/Soul-Ajay4502/player-card-generator/commit/950953f63be72d5f6f6b6509eaafba7f35dde7ee))
+* extend store functionality to handle co-organizer operations ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* implement PlayerSearchPicker for searching existing players ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* update PlayerForm to include player's email for account linking ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+* update types to include CoOrganizer interface ([33b70aa](https://github.com/Soul-Ajay4502/player-card-generator/commit/33b70aa2b455901fd25db2dd68ab81316155b9b2))
+
+
+### Bug Fixes
+
+* let link-preview crawlers read league OG metadata ([cb178c0](https://github.com/Soul-Ajay4502/player-card-generator/commit/cb178c06acdd79d470c371cd66df78d239963727))
+* update playerUserId assignment to use session user ID if available ([801596e](https://github.com/Soul-Ajay4502/player-card-generator/commit/801596e1d62ddcbeb3e6bc3b3e2138d5cb76530d))
+
 ## [0.6.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.5.0...v0.6.0) (2026-07-15)
 
 
