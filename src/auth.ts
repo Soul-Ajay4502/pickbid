@@ -9,6 +9,16 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+  // Route sign-in through our own page instead of the built-in Auth.js page.
+  // The built-in page's form POST needs the `__Host-authjs.csrf-token` cookie
+  // to already be set — which first-time visitors arriving via the proxy
+  // redirect don't reliably have, giving them `MissingCSRF`. Our /login page
+  // triggers `signIn('google')` client-side, which fetches a fresh CSRF token
+  // in the same cycle, so the cookie is always present. Auth.js also sends its
+  // error redirects (?error=…) here.
+  pages: {
+    signIn: '/login',
+  },
   callbacks: {
     // ── 1. Upsert user in DB on every Google sign-in ───────────────────────
     async signIn({ user, account, profile }) {

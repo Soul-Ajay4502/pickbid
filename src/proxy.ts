@@ -52,9 +52,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Not signed in → hand off to the Auth.js sign-in flow (Google is the only
-  // provider) and come back to the originally requested URL afterwards.
-  const signInUrl = new URL('/api/auth/signin', request.url);
+  // Not signed in → hand off to our /login page (Google is the only provider)
+  // and come back to the originally requested URL afterwards. We deliberately
+  // avoid the built-in `/api/auth/signin` page: its form POST fails with
+  // `MissingCSRF` for first-time visitors who arrive here without a CSRF
+  // cookie. /login calls `signIn('google')` client-side, which sets the cookie
+  // fresh right before the POST.
+  const signInUrl = new URL('/login', request.url);
   signInUrl.searchParams.set('callbackUrl', pathname + search);
   return NextResponse.redirect(signInUrl);
 }
