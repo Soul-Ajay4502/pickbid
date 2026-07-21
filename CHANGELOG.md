@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.7.0...v0.7.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* update release-please workflow to trigger on release branch instead of main ([7e1c4c4](https://github.com/Soul-Ajay4502/player-card-generator/commit/7e1c4c44c8853d15c5ea03769a8f0fe4ee7a39b5))
+
 ## [0.7.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.6.0...v0.7.0) (2026-07-20)
 
 
