@@ -3,9 +3,10 @@ import { cn } from '@/lib/utils';
 /**
  * Aceternity UI — Bento Grid
  * Responsive masonry-style grid. Items can span multiple columns via
- * className (e.g. `md:col-span-2`). Surfaces are deliberately quiet —
- * hairline border, flat card, no glow — to match the landing's art
- * direction.
+ * className (e.g. `md:col-span-2`). Tiles use the landing `.glass`
+ * surface — a frosted, translucent card with a hairline top highlight —
+ * to match the landing's art direction. Landing-scoped only (relies on
+ * the `.landing-scope` glass tokens + ambient aura behind it).
  */
 export function BentoGrid({
   className,
@@ -42,7 +43,7 @@ export function BentoGridItem({
   return (
     <div
       className={cn(
-        'group/bento relative flex h-full flex-col justify-between overflow-hidden rounded-3xl border border-border bg-card p-5 transition-colors duration-200 hover:border-foreground/20',
+        'group/bento glass relative flex h-full flex-col justify-between overflow-hidden rounded-3xl p-5',
         className,
       )}
     >

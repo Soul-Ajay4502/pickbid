@@ -47,7 +47,7 @@ function IconChip({
   return (
     <div
       className={cn(
-        'flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted/50 text-foreground/70',
+        'glass-chip flex h-10 w-10 items-center justify-center rounded-xl text-foreground/70',
         className,
       )}
     >
@@ -501,6 +501,11 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
     // with the CSS-side prefers-reduced-motion collapse in globals.css.
     <MotionConfig reducedMotion="user">
       <div className="landing-scope relative overflow-hidden">
+        {/* Page-wide ambient aura — the colour the frosted-glass surfaces
+            refract as they scroll over it. Sits behind all content but above
+            the scope background (see .landing-scope isolation in globals.css). */}
+        <div className="landing-ambient pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
+
         {/* ════════════════════════ HERO ════════════════════════ */}
         <section className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center">
           {/* A single faint aura, masked out toward the bottom — all the scene-setting */}
@@ -709,7 +714,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
                     </ul>
                   </div>
                   <div className={cn('flex justify-center', i % 2 === 1 && 'md:order-1')}>
-                    <div className="flex w-full max-w-sm items-center justify-center rounded-3xl border border-border bg-card/50 p-8">
+                    <div className="glass flex w-full max-w-sm items-center justify-center rounded-3xl p-8">
                       {p.visual}
                     </div>
                   </div>
@@ -726,7 +731,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
           <div className="grid gap-5 md:grid-cols-3">
             {STEPS.map((s, i) => (
               <BlurFade key={s.n} inView delay={i * 0.12}>
-                <div className="relative h-full rounded-2xl border border-border bg-card p-7">
+                <div className="glass relative h-full rounded-2xl p-7">
                   {/* connector line */}
                   {i < STEPS.length - 1 && (
                     <div className="absolute -right-2.5 top-1/2 z-10 hidden h-px w-5 bg-border md:block" aria-hidden="true" />
@@ -787,7 +792,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
         {/* ════════════════════════ FINAL CTA ════════════════════════ */}
         <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
           <BlurFade inView>
-            <div className="relative overflow-hidden rounded-3xl border border-border bg-card/50 px-6 py-20 text-center sm:py-24">
+            <div className="glass relative overflow-hidden rounded-3xl px-6 py-20 text-center sm:py-24">
               <BorderBeam
                 size={90}
                 duration={9}

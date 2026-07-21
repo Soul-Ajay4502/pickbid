@@ -97,7 +97,7 @@ export default function NavBar() {
           ) : (
             <button onClick={() => signIn('google')}
               className="btn-premium inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold">
-              Sign in with Google
+              Sign in
             </button>
           )}
         </div>
