@@ -1,22 +1,94 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Marquee } from '@/components/ui/marquee';
 import type { Sponsor } from '@/lib/types';
 
-function SponsorTile({ sponsor }: { sponsor: Sponsor }) {
+/** Tilt of the wall, in degrees — the coverage math below depends on these. */
+const TILT_X = 14;
+const TILT_Y = -6;
+const TILT_Z = 12;
+/** Weak perspective: a stronger one shrinks the far edge and re-opens corner gaps. */
+const PERSPECTIVE = 1600;
+/** Slack for the perspective foreshortening the flat rotation math ignores. */
+const OVERSCAN = 1.18;
+
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+type WallLayout = {
+  tileW: number;
+  tileH: number;
+  gap: number;
+  cols: number;
+  rows: number;
+  colHeight: number;
+};
+
+/**
+ * Sizes the wall so its clipped edges always land outside the viewport.
+ * A rotated rect covers the screen when its half-extents, measured in the
+ * wall's own axes, reach the screen's furthest corner — solve that for the
+ * tilt above, then fill it with whole tiles.
+ */
+function useWallLayout(): WallLayout | null {
+  const [layout, setLayout] = useState<WallLayout | null>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // Size off the diagonal, not the width — a portrait screen still needs a
+      // wide wall once it is tilted, and width-only sizing makes it tiny there.
+      const tileW = Math.round(Math.min(420, Math.max(170, Math.hypot(vw, vh) * 0.18)));
+      const tileH = Math.round(tileW * 0.56);
+      const gap = Math.round(tileW * 0.12);
+
+      const halfW =
+        ((vw / 2) * Math.cos(rad(TILT_Z)) + (vh / 2) * Math.sin(rad(TILT_Z))) /
+        Math.cos(rad(TILT_Y));
+      const halfH =
+        ((vw / 2) * Math.sin(rad(TILT_Z)) + (vh / 2) * Math.cos(rad(TILT_Z))) /
+        Math.cos(rad(TILT_X));
+
+      const cols = Math.min(10, Math.ceil((halfW * 2 * OVERSCAN) / (tileW + gap)));
+      const rows = Math.min(24, Math.ceil((halfH * 2 * OVERSCAN) / (tileH + gap)) + 1);
+
+      setLayout({ tileW, tileH, gap, cols, rows, colHeight: rows * (tileH + gap) });
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  return layout;
+}
+
+function SponsorTile({ sponsor, width, height }: { sponsor: Sponsor; width: number; height: number }) {
   const card = (
-    <div className="w-48 h-28 sm:w-60 sm:h-32 rounded-2xl bg-white dark:bg-white/95 border border-black/5 shadow-xl flex items-center justify-center p-5 transition-transform duration-300 hover:scale-105">
+    <div
+      className="flex items-center justify-center rounded-2xl border border-black/5 bg-white shadow-xl transition-transform duration-300 hover:scale-105"
+      style={{ width, height, padding: Math.round(height * 0.14) }}
+    >
       {sponsor.logoUrl ? (
         <img
           src={sponsor.logoUrl}
           alt={sponsor.name}
-          className="max-w-full max-h-full object-contain"
+          draggable={false}
+          className="max-h-full max-w-full object-contain"
         />
       ) : (
-        <div title={sponsor.name}>{sponsor.name}</div>
+        <div
+          className="line-clamp-2 text-center font-semibold leading-tight text-black/80"
+          style={{ fontSize: Math.round(height * 0.15) }}
+        >
+          {sponsor.name}
+        </div>
       )}
     </div>
   );
+
   return sponsor.website ? (
     <a href={sponsor.website} target="_blank" rel="noopener noreferrer" className="block" title={sponsor.name}>
       {card}
@@ -28,44 +100,65 @@ function SponsorTile({ sponsor }: { sponsor: Sponsor }) {
 
 /**
  * Full-viewport "3D wall" marquee — vertical columns of sponsor logos tilted
- * into perspective, built from magicui's Marquee primitive (composition
- * matches magicui's "Marquee 3D" demo, just fed with sponsor logos instead
- * of static cards).
+ * into perspective, built from magicui's Marquee primitive. Column count,
+ * tile size and tile count are derived from the viewport so the wall always
+ * overflows it; the edge gradients are then a pure vignette rather than a
+ * mask hiding the columns' hard clip line.
  */
 export default function SponsorsMarquee3D({ sponsors }: { sponsors: Sponsor[] }) {
-  const colCount = Math.min(4, sponsors.length) || 1;
-  const columns: Sponsor[][] = Array.from({ length: colCount }, () => []);
-  sponsors.forEach((s, i) => columns[i % colCount].push(s));
+  const layout = useWallLayout();
+
+  if (!layout || sponsors.length === 0) return <div className="h-full w-full bg-black" />;
+  const { tileW, tileH, gap, cols, rows, colHeight } = layout;
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black [perspective:900px]">
+    <div
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black"
+      style={{ perspective: `${PERSPECTIVE}px` }}
+    >
       <div
-        className="flex flex-row items-center gap-6 sm:gap-8"
+        className="flex flex-row items-center"
         style={{
-          transform:
-            'translateX(-60px) translateY(0px) translateZ(-100px) rotateX(20deg) rotateY(-10deg) rotateZ(20deg)',
+          gap,
+          transform: `rotateX(${TILT_X}deg) rotateY(${TILT_Y}deg) rotateZ(${TILT_Z}deg)`,
         }}
       >
-        {columns.map((col, i) => (
+        {Array.from({ length: cols }, (_, c) => (
           <Marquee
-            key={i}
+            key={c}
             vertical
-            reverse={i % 2 !== 0}
+            reverse={c % 2 !== 0}
             pauseOnHover
-            className="h-[75vh] [--duration:24s] [--gap:2rem]"
+            repeat={2}
+            className="p-0"
+            style={
+              {
+                height: colHeight,
+                '--gap': `${gap}px`,
+                '--duration': `${26 + (c % 3) * 7}s`,
+              } as React.CSSProperties
+            }
           >
-            {col.map((sponsor) => (
-              <SponsorTile key={sponsor.id} sponsor={sponsor} />
+            {/* Every column carries the full roster, offset by one so neighbours
+                never line up — that also keeps single-sponsor columns from
+                repeating one logo down the whole strip. */}
+            {Array.from({ length: rows }, (_, r) => (
+              <SponsorTile
+                key={`${c}-${r}`}
+                sponsor={sponsors[(r + c) % sponsors.length]}
+                width={tileW}
+                height={tileH}
+              />
             ))}
           </Marquee>
         ))}
       </div>
 
-      {/* Edge fades so the tilted grid dissolves into the background */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1/4 bg-linear-to-b from-black to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-linear-to-t from-black to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-1/4 bg-linear-to-r from-black to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/4 bg-linear-to-l from-black to-transparent" />
+      {/* Vignette — multi-stop so the wall dissolves instead of stepping to black */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[30%] bg-[linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-[linear-gradient(to_top,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[22%] bg-[linear-gradient(to_right,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[22%] bg-[linear-gradient(to_left,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
     </div>
   );
 }
