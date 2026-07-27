@@ -709,14 +709,24 @@ function LeaguePageInner() {
           )}
 
           {/* Share & Export menu */}
-          <div className="relative" ref={shareRef}>
+          {/* `static` on mobile is deliberate: it hands the menu's containing
+              block to the `relative z-30` header wrapper, so the panel spans the
+              header width instead of hanging off this button. The toolbar is
+              `flex-wrap`, so the button's own x-position depends on how the
+              pills happen to wrap — anchoring a fixed-width panel to it pushed
+              the panel off the left edge of the viewport on phones. From `sm`
+              up there's room, so it goes back to being button-anchored. */}
+          <div className="static sm:relative" ref={shareRef}>
             <button onClick={() => setShareOpen((v) => !v)} className="toolbar-btn" aria-expanded={shareOpen} aria-haspopup="menu">
               <Share2 className="w-3.5 h-3.5" />
               Share & Export
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${shareOpen ? 'rotate-180' : ''}`} />
             </button>
             {shareOpen && (
-              <div className="menu-panel absolute right-0 top-full mt-2 w-64 p-1.5 z-50" role="menu">
+              <div
+                className="menu-panel absolute top-full mt-2 right-0 left-0 w-auto sm:left-auto sm:w-64 max-h-[70vh] overflow-y-auto p-1.5 z-50"
+                role="menu"
+              >
                 <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Share</p>
                 <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}`, 'View link'); setShareOpen(false); }}>
                   <Link2 className="w-3.5 h-3.5 text-muted-foreground" />Copy View Link
