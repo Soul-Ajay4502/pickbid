@@ -503,8 +503,25 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
       <div className="landing-scope relative overflow-hidden">
         {/* Page-wide ambient aura — the colour the frosted-glass surfaces
             refract as they scroll over it. Sits behind all content but above
-            the scope background (see .landing-scope isolation in globals.css). */}
-        <div className="landing-ambient pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
+            the scope background (see .landing-scope isolation in globals.css).
+
+            Desktop only, and that's a memory fix rather than a style call.
+            Stacked into one column this page measures ~11,400px tall, so
+            `absolute inset-0` made this element 360×11311 — a composited layer
+            the full height of the document, and the largest thing on the page
+            after the root scrolling layer. That is enough to get the renderer
+            OOM-killed on a 3GB phone (Galaxy A04 and similar).
+
+            Viewport-sized `fixed` was the obvious alternative and measured
+            worse: a fixed-position child forces Blink to composite the
+            scrolling contents separately, trading an 11311px gradient layer
+            for a 9475px scrolling layer. Dropping the element below `sm`
+            instead leaves the root scrolling layer as the only large layer on
+            the page. Little is lost — these are 4 blobs at 0.06–0.16 alpha,
+            and the glass surfaces carry no backdrop blur under `sm`
+            (see globals.css), so there is no refraction for them to feed.
+            From `sm` up the blur is live and the aura works as designed. */}
+        <div className="landing-ambient pointer-events-none hidden sm:block sm:absolute inset-0 -z-10" aria-hidden="true" />
 
         {/* ════════════════════════ HERO ════════════════════════ */}
         <section className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center overflow-hidden px-4 py-20 text-center">

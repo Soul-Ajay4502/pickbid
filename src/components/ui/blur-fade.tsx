@@ -44,7 +44,7 @@ export function BlurFade({
   blur = "6px",
   ...props
 }: BlurFadeProps) {
-  const ref = useRef(null)
+  const ref = useRef<HTMLDivElement>(null)
   const inViewResult = useInView(ref, { once: true, margin: inViewMargin })
   const isInView = !inView || inViewResult
   const defaultVariants: Variants = {
@@ -70,6 +70,19 @@ export function BlurFade({
     visibleFilter != null &&
     hiddenFilter !== visibleFilter
 
+  // Release the filter once the element has landed. Motion animates to
+  // `blur(0px)`, which is still a filter, so without this every faded element
+  // keeps a promoted compositor layer for the life of the page — tens of MB of
+  // GPU memory on a long page, all to render a blur of zero pixels. Clearing
+  // the inline value drops the computed filter back to `none`. Safe because
+  // `useInView` is `once: true`, so a landed element never re-animates.
+  const handleAnimationComplete = (definition: unknown) => {
+    if (definition === "visible" && ref.current) {
+      ref.current.style.filter = ""
+    }
+    props.onAnimationComplete?.(definition as never)
+  }
+
   return (
     <AnimatePresence>
       <motion.div
@@ -86,6 +99,7 @@ export function BlurFade({
         }}
         className={className}
         {...props}
+        onAnimationComplete={handleAnimationComplete}
       >
         {children}
       </motion.div>
