@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.7.0...v0.8.0) (2026-07-21)
+
+
+### Features
+
+* implement custom login page and update sign-in flow to handle CSRF tokens ([dec8ba4](https://github.com/Soul-Ajay4502/player-card-generator/commit/dec8ba4718b93ed962fc9ca54a837334c1d16f5b))
+
+
+### Bug Fixes
+
+* update release-please workflow to trigger on main branch instead of release ([2b93909](https://github.com/Soul-Ajay4502/player-card-generator/commit/2b9390975574bb737ff0a19aa6cad6842551f755))
+* update release-please workflow to trigger on release branch instead of main ([7e1c4c4](https://github.com/Soul-Ajay4502/player-card-generator/commit/7e1c4c44c8853d15c5ea03769a8f0fe4ee7a39b5))
+
 ## [0.7.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.6.0...v0.7.0) (2026-07-20)
 
 
