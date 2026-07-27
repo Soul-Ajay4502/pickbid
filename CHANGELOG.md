@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.8.0...v0.8.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* adjust Share & Export menu positioning for better mobile compatibility ([89cca6d](https://github.com/Soul-Ajay4502/player-card-generator/commit/89cca6deba6a544a8d55a2e133f120e5430aff8a))
+* optimize backdrop-filter usage and adjust transparency for better performance ([2aef430](https://github.com/Soul-Ajay4502/player-card-generator/commit/2aef430fae4e256334f78c3abd541290a4dc5d10))
+* optimize memory usage in Landing and BlurFade components ([1c85e9e](https://github.com/Soul-Ajay4502/player-card-generator/commit/1c85e9e6970f05f3b72c92b1146541123d969960))
+
 ## [0.8.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.7.0...v0.8.0) (2026-07-21)
 
 
