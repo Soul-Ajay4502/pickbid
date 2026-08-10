@@ -121,6 +121,38 @@ export interface Sponsor {
   createdAt: string;
 }
 
+/**
+ * A league's optional income & expense sheet, written as markdown by the
+ * organizers (registration fees collected, sponsorship received, ground rent,
+ * trophies, …). Entirely opt-in: most leagues never create one, and one that
+ * exists stays a private draft until an organizer publishes it. Once published
+ * it's readable by that league's members only — never by the public, even for
+ * a public league.
+ */
+export interface LeagueLedger {
+  leagueId: string;
+  /** Markdown source. GFM tables are supported, raw HTML is not rendered. */
+  content: string;
+  published: boolean;
+  /**
+   * Name of the organizer who saved last. Shown to members too — for accounts,
+   * knowing who published the numbers is the point. Null if that account is gone.
+   */
+  updatedByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** GET /api/leagues/[id]/ledger — the ledger plus the requester's rights over it. */
+export interface LedgerResponse {
+  /** False when no organizer has started a ledger for this league yet */
+  exists: boolean;
+  /** May edit and publish/unpublish — creator or co-organizer */
+  canManage: boolean;
+  /** Null for a manager viewing a league with no ledger yet */
+  ledger: LeagueLedger | null;
+}
+
 export interface Match {
   id: string;
   leagueId: string;
@@ -172,6 +204,12 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   coOrganizers: CoOrganizer[];
   /** True when the requesting user has a card in this league (matched by userId) */
   hasJoined: boolean;
+  /**
+   * Whether this league has a *published* income & expense ledger. Drives the
+   * Ledger link for members — organizers always get the link (it's how they
+   * create one), so this is only consulted for everyone else.
+   */
+  ledgerPublished: boolean;
 }
 
 /**

@@ -18,7 +18,7 @@ import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
   UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
-  ShieldCheck,
+  ShieldCheck, ReceiptText,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -653,6 +653,12 @@ function LeaguePageInner() {
               <button onClick={() => router.push(`/leagues/${id}/sponsors/manage`)} className="toolbar-btn">
                 <Handshake className="w-3.5 h-3.5" />Sponsors
               </button>
+              {/* Always offered to organizers — the page is also where an
+                  unstarted ledger gets created. Optional feature: a league
+                  that never uses it just never publishes one. */}
+              <button onClick={() => router.push(`/leagues/${id}/ledger`)} className="toolbar-btn" title="Income & expenses — optional, and only shared once you publish it">
+                <ReceiptText className="w-3.5 h-3.5" />Ledger
+              </button>
               {/* Only the creator manages who co-organizes */}
               {data.isCreator && (
                 <button onClick={() => setCoOrgOpen(true)} className="toolbar-btn" title="Invite trusted people to help run this league">
@@ -697,6 +703,15 @@ function LeaguePageInner() {
                 <Handshake className="w-3.5 h-3.5" />Sponsors
               </button>
             </>
+          )}
+          {/* The ledger is for the league's own members, so it's gated on
+              hasJoined rather than isPublic — a private league's players get
+              the link, a stranger browsing a public league doesn't. Shown only
+              once the organizers have actually published something. */}
+          {!canManage && data.hasJoined && data.ledgerPublished && (
+            <button onClick={() => router.push(`/leagues/${id}/ledger`)} className="toolbar-btn">
+              <ReceiptText className="w-3.5 h-3.5" />Ledger
+            </button>
           )}
           {data.isPublic && data.joinCode && (
             <button

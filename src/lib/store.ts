@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer } from './types';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -380,6 +380,24 @@ export async function canManageLeague(userId: string | null | undefined, league:
   return isCoOrganizer(league.id, userId);
 }
 
+/**
+ * Membership — a weaker tier than management, for content that belongs to the
+ * league's participants rather than the public: the organizers plus anyone with
+ * a player card in this league. Deliberately independent of `league.isPublic`,
+ * so a public league's ledger still isn't world-readable.
+ */
+export async function isLeagueMember(userId: string | null | undefined, league: League): Promise<boolean> {
+  if (!userId) return false;
+  // The creator is free to check; the other two are one indexed lookup each, so
+  // run them together rather than short-circuiting through canManageLeague
+  if (userId === league.creatorId) return true;
+  const [player, coOrganizer] = await Promise.all([
+    PlayerModel.findOne({ where: { leagueId: league.id, userId }, attributes: ['id'] }),
+    isCoOrganizer(league.id, userId),
+  ]);
+  return !!player || coOrganizer;
+}
+
 export async function addCoOrganizer(league: League, userId: string, addedBy: string): Promise<CoOrganizer> {
   if (userId === league.creatorId) {
     throw new CoOrganizerError('The creator already manages this league');
@@ -571,6 +589,72 @@ export async function updateSponsor(
 
 export async function deleteSponsor(id: string): Promise<boolean> {
   const deleted = await SponsorModel.destroy({ where: { id } });
+  return deleted > 0;
+}
+
+// ── Ledger (income & expense) ─────────────────────────────────────────────────
+
+function toLedger(row: LeagueLedgerModel, updatedByName: string | null): LeagueLedger {
+  return {
+    leagueId:      row.leagueId!,
+    content:       row.content ?? '',
+    published:     row.published ?? false,
+    updatedByName,
+    createdAt:     row.createdAt?.toISOString() ?? new Date().toISOString(),
+    updatedAt:     row.updatedAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+export async function getLedger(leagueId: string): Promise<LeagueLedger | null> {
+  const row = await LeagueLedgerModel.findByPk(leagueId);
+  if (!row) return null;
+  const author = row.updatedBy ? await UserModel.findByPk(row.updatedBy, { attributes: ['name', 'email'] }) : null;
+  return toLedger(row, author ? author.name || author.email || null : null);
+}
+
+/**
+ * Cheap "is there something for members to read?" check, used by the league
+ * payload to decide whether to surface the Ledger link. Selects no content.
+ */
+export async function hasPublishedLedger(leagueId: string): Promise<boolean> {
+  const row = await LeagueLedgerModel.findOne({
+    where: { leagueId, published: true },
+    attributes: ['leagueId'],
+  });
+  return !!row;
+}
+
+/**
+ * Create-or-update the league's ledger. `content` and `published` are both
+ * optional so the editor can save a draft, publish an unchanged draft, or
+ * unpublish, all through one call. `updatedAt` is stamped here rather than by
+ * Sequelize because these models run with `timestamps: false`.
+ */
+export async function saveLedger(
+  leagueId: string,
+  data: { content?: string; published?: boolean; updatedBy: string }
+): Promise<LeagueLedger> {
+  const [row] = await LeagueLedgerModel.findOrCreate({
+    where:    { leagueId },
+    defaults: {
+      leagueId,
+      content:   data.content ?? '',
+      published: data.published ?? false,
+      updatedBy: data.updatedBy,
+    },
+  });
+  await row.update({
+    ...(data.content   !== undefined ? { content: data.content }     : {}),
+    ...(data.published !== undefined ? { published: data.published } : {}),
+    updatedBy: data.updatedBy,
+    updatedAt: new Date(),
+  });
+  const author = await UserModel.findByPk(data.updatedBy, { attributes: ['name', 'email'] });
+  return toLedger(row, author ? author.name || author.email || null : null);
+}
+
+export async function deleteLedger(leagueId: string): Promise<boolean> {
+  const deleted = await LeagueLedgerModel.destroy({ where: { leagueId } });
   return deleted > 0;
 }
 

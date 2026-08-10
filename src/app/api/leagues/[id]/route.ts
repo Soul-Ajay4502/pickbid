@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { auth } from '@/auth';
 
@@ -13,8 +13,8 @@ export async function GET(
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const [players, teams, officials, coOrganizers] = await Promise.all([
-      getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id),
+    const [players, teams, officials, coOrganizers, ledgerPublished] = await Promise.all([
+      getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id), hasPublishedLedger(id),
     ]);
     const userId = session?.user?.id;
     const isCreator = userId === league.creatorId;
@@ -42,7 +42,9 @@ export async function GET(
     const safeCoOrganizers = isCreator ? coOrganizers : coOrganizers.map((c) => ({ ...c, email: null }));
     // isCreator/canManage/hasJoined first, before the (potentially large) players
     // array, so they're easy to find in the response rather than buried after it
-    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
+    // Only whether a *published* ledger exists — the sheet itself, and the
+    // existence of any draft, stay behind /api/leagues/[id]/ledger
+    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });

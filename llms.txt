@@ -34,6 +34,7 @@ Key facts for working in this codebase:
 - `leagues/[id]/players`, `players/[playerId]`: player cards CRUD (anonymous via creatorToken).
 - `leagues/[id]/teams`, `officials`, `matches`: team, official and match management.
 - `leagues/[id]/auction/live`, `auction/reset`: live auction state broadcast/poll and reset.
+- `leagues/[id]/ledger`: optional markdown income & expense sheet. Organizers read/write incl. drafts; league members read only once published; non-members 403 regardless of `isPublic`.
 - `leagues/[id]/clone`: duplicate a league.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
 - `profile`: user profile. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.

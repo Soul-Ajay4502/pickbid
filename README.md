@@ -120,6 +120,11 @@ PostgreSQL tables (see [src/lib/models.ts](src/lib/models.ts)):
 - **team_officials** — non-playing members (coach, manager, owner).
 - **matches** — fixtures with scores and a winner.
 - **auction_live** — one ephemeral JSON blob per league holding live auction state, written by the creator and polled by spectators.
+- **league_ledgers** — optional markdown income & expense sheet, at most one per league. Organizers write it and publish it explicitly; see the visibility rule below.
+
+### Ledger visibility
+
+The ledger (`/leagues/[id]/ledger`) is the one feature gated on league **membership** rather than `isPublic`: organizers read and write it including unpublished drafts, players with a card in the league read it only once published, and everyone else gets a 403 — even on a public league, since a league's accounts aren't spectator material. `isLeagueMember` in [src/lib/store.ts](src/lib/store.ts) is that check. A league with no ledger is the normal case, so the API answers "nothing here" with `200 exists:false` rather than a 404, identically whether or not a draft exists.
 
 ### Auth model
 

@@ -615,6 +615,141 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* ─── Rendered markdown (league ledger) ──────────────────────────── */
+/* Typography for organizer-written markdown. Element selectors rather than
+   utility classes because the markup is generated — see components/Markdown.tsx.
+   Scoped under .md-body so it never leaks into the rest of the app. */
+.md-body {
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child  { margin-bottom: 0; }
+
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  margin: 1.75rem 0 0.75rem;
+}
+.md-body h1 { font-size: 1.5rem; }
+.md-body h2 {
+  font-size: 1.2rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.md-body h3 { font-size: 1.0625rem; }
+.md-body h4 { font-size: 0.9375rem; color: var(--muted-foreground); }
+
+.md-body p { margin: 0.75rem 0; }
+.md-body strong { font-weight: 700; }
+.md-body em { font-style: italic; }
+.md-body del { color: var(--muted-foreground); }
+
+.md-body ul, .md-body ol { margin: 0.75rem 0; padding-left: 1.35rem; }
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+.md-body li { margin: 0.3rem 0; }
+.md-body li::marker { color: oklch(0.62 0.19 150); }
+/* GFM task lists render a checkbox input — keep it inline and non-interactive */
+.md-body li input[type='checkbox'] {
+  margin-right: 0.45rem;
+  accent-color: oklch(0.62 0.19 150);
+  pointer-events: none;
+}
+.md-body li:has(> input[type='checkbox']) { list-style: none; margin-left: -1.1rem; }
+
+.md-body a {
+  color: oklch(0.55 0.19 150);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dark .md-body a { color: oklch(0.72 0.17 150); }
+.md-body a:hover { text-decoration-thickness: 2px; }
+
+.md-body blockquote {
+  margin: 1rem 0;
+  padding: 0.5rem 0 0.5rem 1rem;
+  border-left: 3px solid oklch(0.62 0.19 150 / 0.45);
+  background: var(--muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--muted-foreground);
+}
+.md-body blockquote > :first-child { margin-top: 0; }
+.md-body blockquote > :last-child  { margin-bottom: 0; }
+
+.md-body code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+.md-body pre {
+  margin: 1rem 0;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+.md-body pre code { padding: 0; border: none; background: none; font-size: 0.8125rem; }
+
+.md-body hr { margin: 1.75rem 0; border: none; border-top: 1px solid var(--border); }
+
+.md-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+/* Tables are how a ledger is really written, so they get the most attention.
+   The wrapper (not the page) scrolls when the table is wider than the screen. */
+.md-table-wrap {
+  margin: 1rem 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  /* border-radius: var(--radius-sm); */
+  background: var(--card);
+  -webkit-overflow-scrolling: touch;
+}
+.md-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  /* Keeps money columns from being squeezed into two-line wraps on phones */
+  min-width: 26rem;
+}
+.md-body thead { background: var(--muted); }
+.md-body th {
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.md-body td {
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+}
+.md-body tbody tr:last-child td { border-bottom: none; }
+.md-body tbody tr:hover { background: color-mix(in oklch, var(--muted) 55%, transparent); }
+/* Right-aligned columns (`| ---: |`) are almost always amounts — give them
+   tabular figures so the digits line up down the column. The alignment itself
+   comes from GFM as an inline style; these classes are mirrored onto the cells
+   in components/Markdown.tsx purely so this rule has something to match. */
+.md-body .md-align-right  { font-variant-numeric: tabular-nums; }
+.md-body .md-align-center { font-variant-numeric: tabular-nums; }
+
 /* ─── Claymorphism (scoped to .clay) ─────────────────────────────── */
 /* Soft, puffy "clay" surfaces: a dark drop shadow bottom-right, a light
    highlight top-left, plus inset highlights/shadows for the inflated look.

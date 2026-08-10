@@ -249,6 +249,33 @@ SponsorModel.init(
   { sequelize, tableName: 'sponsors', timestamps: false, underscored: true }
 );
 
+// ── League Ledger ─────────────────────────────────────────────────────────────
+// At most one per league: the optional markdown income/expense sheet. No row
+// means the organizers never started one, which is the normal case.
+export class LeagueLedgerModel extends Model<
+  InferAttributes<LeagueLedgerModel>,
+  InferCreationAttributes<LeagueLedgerModel, { omit: 'createdAt' | 'updatedAt' }>
+> {
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare content: CreationOptional<string>;
+  declare published: CreationOptional<boolean>;
+  declare updatedBy: CreationOptional<string | null>;
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
+}
+
+LeagueLedgerModel.init(
+  {
+    leagueId:  { type: DataTypes.STRING,  primaryKey: true },
+    content:   { type: DataTypes.TEXT,    allowNull: false, defaultValue: '' },
+    published: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    updatedBy: { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    createdAt: { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
+    updatedAt: { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'league_ledgers', timestamps: false, underscored: true }
+);
+
 // ── League Co-Organizer ───────────────────────────────────────────────────────
 // A user the creator has invited to help run a league: co-organizers get the
 // same management access as the creator except deleting the league or managing
@@ -323,6 +350,9 @@ SponsorModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
 
 LeagueModel.hasMany(LeagueCoOrganizerModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 LeagueCoOrganizerModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+LeagueModel.hasOne(LeagueLedgerModel,     { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+LeagueLedgerModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });
 
 // Deleting a user account removes their co-organizer roles with it
 UserModel.hasMany(LeagueCoOrganizerModel,   { foreignKey: 'userId', onDelete: 'CASCADE' });
