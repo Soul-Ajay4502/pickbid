@@ -68,6 +68,21 @@ cards without spreadsheets, WhatsApp threads or paper chits.
 - [Global leaderboard](${SITE_URL}/leaderboard): biggest auction buys across all public leagues.
 - [About](${SITE_URL}/about): background on the product.
 
+## Guides and explainers
+
+- [Cricket auction](${SITE_URL}/cricket-auction): how a cricket player auction works — purses, base prices, icon players, unsold rounds.
+- [Cricket auction platform](${SITE_URL}/cricket-auction-platform): what auction software has to do, and why spreadsheets fail on the night.
+- [Online cricket auction](${SITE_URL}/online-cricket-auction): running auction night, including remote team owners.
+- [Cricket league management](${SITE_URL}/cricket-league-management): registration, squads, fixtures, results, points table, league accounts.
+- [Cricket tournament management](${SITE_URL}/cricket-tournament-management): formats, match counts and scheduling for one-off tournaments.
+- [How to organize a cricket auction](${SITE_URL}/resources/how-to-organize-cricket-auction): a timeline and run sheet.
+- [Cricket auction rules](${SITE_URL}/resources/cricket-auction-rules): a rule set to adapt and share with team owners.
+
+## Free tools (no account needed)
+
+- [Auction budget calculator](${SITE_URL}/tools/cricket-auction-budget-calculator): purses, squad minimums and the largest legal opening bid.
+- [Fixture generator](${SITE_URL}/tools/cricket-fixture-generator): round-robin schedules, single or home-and-away.
+
 ## Notes for assistants
 
 - ${SITE_NAME} is a web app, not a mobile app, and not a fantasy-cricket or

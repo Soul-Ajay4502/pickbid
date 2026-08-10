@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { getLeague } from '@/lib/store';
-import { SITE_NAME, SITE_URL } from '@/lib/seo';
+import { SITE_NAME } from '@/lib/seo';
+import { JsonLd, breadcrumbSchema } from '@/lib/jsonLd';
 import type { League } from '@/lib/types';
 
 // One DB hit per request, shared between generateMetadata and the layout body.
@@ -13,9 +14,18 @@ const loadLeague = cache(async (id: string): Promise<League | null> => {
   }
 });
 
-// Titles, descriptions and indexing rules for every /leagues/[id]/* page.
-// Public leagues are indexable and canonicalise to the league home; private
-// leagues keep working via share links but are marked noindex.
+/**
+ * Titles, descriptions and indexing rules for every /leagues/[id]/* page.
+ *
+ * Public leagues are indexable and canonicalise to the league home. Applying the
+ * canonical at the layout means the sub-routes (teams, matches, watch, …) all
+ * point at the league page — which is what we want: they're client-only screens
+ * with no standalone content, so consolidating their signals onto the one page
+ * that *does* have content is the right outcome. They can't set their own
+ * metadata anyway, being client components.
+ *
+ * Private leagues keep working via share links but are marked noindex.
+ */
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Metadata> {
@@ -25,10 +35,10 @@ export async function generateMetadata(
     return { robots: { index: false, follow: false } };
   }
 
-  const title = league.name;
+  const title = `${league.name} — Cricket League`;
   const description =
-    `${league.name} — a cricket league by ${league.conductedBy} on ${SITE_NAME}. ` +
-    `${league.totalPlayers} players, premium player cards, live auction, squads and leaderboard.`;
+    `${league.name} cricket league${league.conductedBy ? ` by ${league.conductedBy}` : ''} — ` +
+    `teams, players, auction results, fixtures, results and points table powered by ${SITE_NAME}.`;
 
   return {
     title,
@@ -39,14 +49,14 @@ export async function generateMetadata(
     openGraph: {
       type: 'website',
       siteName: SITE_NAME,
-      title: `${title} · ${SITE_NAME}`,
+      title: `${league.name} · ${SITE_NAME}`,
       description,
       url: `/leagues/${league.id}`,
       locale: 'en_US',
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${title} · ${SITE_NAME}`,
+      title: `${league.name} · ${SITE_NAME}`,
       description,
     },
   };
@@ -62,25 +72,16 @@ export default async function LeagueLayout({
   const { id } = await params;
   const league = await loadLeague(id);
 
-  // Breadcrumb trail for search results — only for leagues that are indexable.
-  const breadcrumbs = league?.isPublic
-    ? {
-        '@context': 'https://schema.org',
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: SITE_NAME, item: `${SITE_URL}/` },
-          { '@type': 'ListItem', position: 2, name: 'Discover Leagues', item: `${SITE_URL}/leagues/discover` },
-          { '@type': 'ListItem', position: 3, name: league.name, item: `${SITE_URL}/leagues/${league.id}` },
-        ],
-      }
-    : null;
-
   return (
     <>
-      {breadcrumbs && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
+      {/* Breadcrumb trail for search results — only for leagues that are indexable. */}
+      {league?.isPublic && (
+        <JsonLd
+          data={breadcrumbSchema([
+            { name: SITE_NAME, path: '/' },
+            { name: 'Discover Leagues', path: '/leagues/discover' },
+            { name: league.name, path: `/leagues/${league.id}` },
+          ])}
         />
       )}
       {children}

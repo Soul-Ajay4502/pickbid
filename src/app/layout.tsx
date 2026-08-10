@@ -18,6 +18,12 @@ import {
   AUTHOR,
   BRAND,
 } from '@/lib/seo';
+import {
+  JsonLd,
+  websiteSchema,
+  organizationSchema,
+  softwareApplicationSchema,
+} from '@/lib/jsonLd';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -94,49 +100,26 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-/** Schema.org structured data so search engines understand the product. */
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'WebSite',
-      '@id': `${SITE_URL}/#website`,
-      url: SITE_URL,
-      name: SITE_NAME,
-      description: SITE_DESCRIPTION,
-      publisher: { '@id': `${SITE_URL}/#organization` },
-      inLanguage: 'en',
-    },
-    {
-      '@type': 'Organization',
-      '@id': `${SITE_URL}/#organization`,
-      name: SITE_NAME,
-      url: SITE_URL,
-      logo: { '@type': 'ImageObject', url: `${SITE_URL}/icon` },
-    },
-    {
-      '@type': 'SoftwareApplication',
-      '@id': `${SITE_URL}/#app`,
-      name: SITE_NAME,
-      url: SITE_URL,
-      description: SITE_DESCRIPTION,
-      applicationCategory: 'SportsApplication',
-      operatingSystem: 'Web',
-      browserRequirements: 'Requires JavaScript. Works in any modern browser.',
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-      featureList: [
-        'Premium cricket player cards',
-        'Real-time live auctions',
-        'Live leaderboards and squad analytics',
-        'Public watch mode for fans',
-        'Teams, budgets and officials management',
-        'One-tap PDF squad sheets and WhatsApp sharing',
-        'Auction Wrapped recap stories',
-        'Holographic pack-opening squad reveals',
-      ],
-    },
-  ],
-};
+/**
+ * Site-wide structured data. Every page inherits these three entities, and
+ * page-level schemas reference them by `@id` instead of redeclaring them.
+ */
+const siteJsonLd = [
+  websiteSchema(),
+  organizationSchema(),
+  softwareApplicationSchema([
+    'Cricket player auctions with team budgets',
+    'Premium cricket player cards',
+    'Real-time live auctions',
+    'Live leaderboards and squad analytics',
+    'Public watch mode for fans',
+    'Teams, budgets and officials management',
+    'Fixtures, results and points table',
+    'One-tap PDF squad sheets and WhatsApp sharing',
+    'Auction Wrapped recap stories',
+    'Holographic pack-opening squad reveals',
+  ]),
+];
 
 export default function RootLayout({
   children,
@@ -154,10 +137,7 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){}})()`,
           }}
         />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd data={siteJsonLd} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-green-500/25 selection:text-green-100">
         <Providers>

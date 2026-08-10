@@ -2,7 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger } from './types';
+import { calcStandings } from './standings';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,132 @@ export async function getPublicLeagues(limit = 50): Promise<League[]> {
     limit,
   });
   return rows.map(toLeague);
+}
+
+/**
+ * Assembles the server-rendered public view of a league, or null when the
+ * league doesn't exist or its organizer has not marked it public.
+ *
+ * This is the *only* path by which league content reaches an unauthenticated
+ * page, so it maps every field explicitly onto the narrow `Public*` types
+ * instead of spreading rows. `creatorToken`, `contactNumber`, `userId`,
+ * `creatorId` and `joinCode` are never read here, and the ledger is not
+ * fetched at all — it stays members-only even for a public league.
+ */
+export async function getPublicLeagueView(id: string): Promise<PublicLeagueView | null> {
+  const league = await getLeague(id);
+  if (!league || !league.isPublic) return null;
+
+  const [players, teams, officials, matches, sponsors] = await Promise.all([
+    getPlayers(id),
+    getTeams(id),
+    getOfficials(id),
+    getMatches(id),
+    getSponsors(id),
+  ]);
+
+  const toPublicPlayer = (p: Player): PublicPlayer => ({
+    id:             p.id,
+    name:           p.name,
+    photo:          p.photo,
+    role:           p.role,
+    battingType:    p.battingType,
+    bowlingType:    p.bowlingType,
+    isWicketKeeper: p.isWicketKeeper,
+    isIcon:         p.isIcon ?? false,
+    soldPrice:      p.soldPrice ?? null,
+    statsMatches:   p.statsMatches ?? null,
+    statsRuns:      p.statsRuns ?? null,
+    statsWickets:   p.statsWickets ?? null,
+    statsAverage:   p.statsAverage ?? null,
+    statsSR:        p.statsSR ?? null,
+  });
+
+  const officialsByTeam = new Map<string, PublicTeam['officials']>();
+  for (const o of officials) {
+    const list = officialsByTeam.get(o.teamId) ?? [];
+    list.push({ id: o.id, name: o.name, role: o.role, photo: o.photo });
+    officialsByTeam.set(o.teamId, list);
+  }
+
+  const publicTeams: PublicTeam[] = teams.map((team) => {
+    // Icon players carry a teamId without a sold price, so they belong to the
+    // squad but contribute nothing to spend.
+    const squad = players.filter((p) => p.teamId === team.id);
+    return {
+      id:         team.id,
+      name:       team.name,
+      colorHex:   team.colorHex,
+      budget:     team.budget,
+      maxPlayers: team.maxPlayers,
+      spent:      squad.reduce((sum, p) => sum + (p.soldPrice ?? 0), 0),
+      players:    squad
+        .slice()
+        .sort((a, b) => (b.soldPrice ?? 0) - (a.soldPrice ?? 0))
+        .map(toPublicPlayer),
+      officials:  officialsByTeam.get(team.id) ?? [],
+    };
+  });
+
+  const soldPlayers = players
+    .filter((p) => p.teamId && (p.soldPrice ?? 0) > 0)
+    .sort((a, b) => (b.soldPrice ?? 0) - (a.soldPrice ?? 0))
+    .map(toPublicPlayer);
+  const unsoldPlayers = players.filter((p) => p.isUnsold).map(toPublicPlayer);
+  const availablePlayers = players
+    .filter((p) => !p.teamId && !p.isUnsold)
+    .map(toPublicPlayer);
+
+  const teamNameById = new Map(teams.map((t) => [t.id, t.name]));
+  const publicMatches: PublicMatch[] = matches.map((m) => ({
+    id:             m.id,
+    team1Name:      teamNameById.get(m.team1Id) ?? 'Unknown team',
+    team2Name:      teamNameById.get(m.team2Id) ?? 'Unknown team',
+    team1Score:     m.team1Score,
+    team2Score:     m.team2Score,
+    winnerTeamName: m.winnerTeamId ? teamNameById.get(m.winnerTeamId) ?? null : null,
+    matchDate:      m.matchDate,
+    played:         !!(m.team1Score || m.team2Score || m.winnerTeamId),
+  }));
+
+  const standings: PublicStanding[] = calcStandings(teams, matches).map((s) => ({
+    teamId:   s.team.id,
+    teamName: s.team.name,
+    colorHex: s.team.colorHex,
+    played:   s.played,
+    won:      s.won,
+    lost:     s.lost,
+    tied:     s.tied,
+    points:   s.points,
+  }));
+
+  // "Complete" means the auction ran and left nobody waiting to be called.
+  const auctionStatus: PublicLeagueView['auctionStatus'] =
+    soldPlayers.length === 0 ? 'not-started'
+      : availablePlayers.length > 0 ? 'in-progress'
+      : 'complete';
+
+  return {
+    id:                 league.id,
+    name:               league.name,
+    conductedBy:        league.conductedBy,
+    logoUrl:            league.logoUrl,
+    totalPlayers:       league.totalPlayers,
+    registrationClosed: league.registrationClosed,
+    createdAt:          league.createdAt,
+    teams:              publicTeams,
+    soldPlayers,
+    unsoldPlayers,
+    availablePlayers,
+    matches:            publicMatches,
+    standings,
+    sponsors:           sponsors.map((s) => ({
+      id: s.id, name: s.name, logoUrl: s.logoUrl, website: s.website,
+    })),
+    auctionStatus,
+    registeredPlayers:  players.length,
+    totalSpend:         soldPlayers.reduce((sum, p) => sum + (p.soldPrice ?? 0), 0),
+  };
 }
 
 export async function getLeagueByJoinCode(joinCode: string): Promise<League | null> {

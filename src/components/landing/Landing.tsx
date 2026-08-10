@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import {
   BarChart3,
@@ -459,6 +460,50 @@ const FAQS = [
   },
 ];
 
+/* ── Internal links out of the home page ──────────────────────────────────── */
+const EXPLORE_LINKS: { href: string; label: string; body: string }[] = [
+  {
+    href: '/cricket-auction',
+    label: 'How a cricket auction works',
+    body: 'Team purses, base prices, icon players and unsold rounds — the format explained.',
+  },
+  {
+    href: '/online-cricket-auction',
+    label: 'Run your cricket auction online',
+    body: 'The two-screen setup for auction night, including remote team owners.',
+  },
+  {
+    href: '/cricket-league-management',
+    label: 'Cricket league management',
+    body: 'Registration, squads, fixtures, results and a points table that maintains itself.',
+  },
+  {
+    href: '/cricket-tournament-management',
+    label: 'Cricket tournament management',
+    body: 'Pick a format, fit the matches into the days you have, and publish results.',
+  },
+  {
+    href: '/tools/cricket-auction-budget-calculator',
+    label: 'Cricket auction budget calculator',
+    body: 'Check your purse, squad size and base price work together before you publish them.',
+  },
+  {
+    href: '/tools/cricket-fixture-generator',
+    label: 'Cricket fixture generator',
+    body: 'A round-robin schedule for your teams, with nobody playing twice in a row.',
+  },
+  {
+    href: '/resources/how-to-organize-cricket-auction',
+    label: 'How to organize a cricket auction',
+    body: 'A run sheet from opening registration to the final unsold round.',
+  },
+  {
+    href: '/leagues/discover',
+    label: 'Browse public cricket leagues',
+    body: 'Squads, auction results and tables from leagues already running on Pickbid.',
+  },
+];
+
 const FAQ_JSON_LD = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -804,6 +849,33 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
           />
+        </section>
+
+        {/* ════════════════════════ EXPLORE ════════════════════════ */}
+        {/* The home page's hub links. Every destination is described by its own
+            anchor text, so both visitors and crawlers can tell where each goes
+            without the surrounding sentence. */}
+        <section className="mx-auto max-w-5xl px-4 py-24 sm:px-6">
+          <SectionHeading title="Learn how it works" />
+          <nav aria-label="Cricket auction and league guides">
+            <ul className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
+              {EXPLORE_LINKS.map((link, i) => (
+                <BlurFade key={link.href} inView delay={i * 0.04}>
+                  <li>
+                    <Link
+                      href={link.href}
+                      className="text-[15px] font-medium text-foreground transition-colors hover:text-primary"
+                    >
+                      {link.label}
+                    </Link>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      {link.body}
+                    </p>
+                  </li>
+                </BlurFade>
+              ))}
+            </ul>
+          </nav>
         </section>
 
         {/* ════════════════════════ FINAL CTA ════════════════════════ */}

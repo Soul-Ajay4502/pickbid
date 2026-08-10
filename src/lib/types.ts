@@ -212,6 +212,103 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   ledgerPublished: boolean;
 }
 
+// ── Public (unauthenticated) league view ──────────────────────────────────────
+// These types back the server-rendered page a logged-out visitor or a search
+// crawler sees for a league its organizer marked public. They are defined as
+// *narrow* shapes rather than Omit<> of the internal types on purpose: a field
+// added to `Player` or `League` later cannot silently become public, because it
+// has to be added here and mapped explicitly in `getPublicLeagueView`.
+//
+// Deliberately absent, and must stay absent: creatorId, creatorToken, joinCode,
+// contactNumber, userId, co-organizer emails and the league ledger.
+
+/** A player as shown publicly — identity, role, and their auction result. */
+export interface PublicPlayer {
+  id: string;
+  name: string;
+  photo: string;
+  role: PlayerRole;
+  battingType: Player['battingType'];
+  bowlingType: Player['bowlingType'];
+  isWicketKeeper: boolean;
+  isIcon: boolean;
+  /** Winning bid, when this player was sold. */
+  soldPrice: number | null;
+  statsMatches: number | null;
+  statsRuns: number | null;
+  statsWickets: number | null;
+  statsAverage: number | null;
+  statsSR: number | null;
+}
+
+/** A team with its public squad. `spent` is derived from the sold prices. */
+export interface PublicTeam {
+  id: string;
+  name: string;
+  colorHex: string;
+  budget: number;
+  maxPlayers: number;
+  spent: number;
+  players: PublicPlayer[];
+  /** Non-playing staff: name and role only, never contact details. */
+  officials: { id: string; name: string; role: string; photo: string }[];
+}
+
+/** A fixture or result, with team names resolved for display. */
+export interface PublicMatch {
+  id: string;
+  team1Name: string;
+  team2Name: string;
+  team1Score: string | null;
+  team2Score: string | null;
+  winnerTeamName: string | null;
+  matchDate: string | null;
+  /** False while the match has no scores and no winner recorded. */
+  played: boolean;
+}
+
+/** A row of the public points table. */
+export interface PublicStanding {
+  teamId: string;
+  teamName: string;
+  colorHex: string;
+  played: number;
+  won: number;
+  lost: number;
+  tied: number;
+  points: number;
+}
+
+/**
+ * Everything the public league page renders. Assembled server-side by
+ * `getPublicLeagueView`, which returns null for a league that doesn't exist or
+ * that the organizer has not marked public.
+ */
+export interface PublicLeagueView {
+  id: string;
+  name: string;
+  conductedBy: string;
+  logoUrl: string;
+  /** Squad size the organizer declared when creating the league. */
+  totalPlayers: number;
+  registrationClosed: boolean;
+  createdAt: string;
+  teams: PublicTeam[];
+  /** Sold players, highest bid first — the auction result. */
+  soldPlayers: PublicPlayer[];
+  /** Players the auction passed over. */
+  unsoldPlayers: PublicPlayer[];
+  /** Registered players not yet sold, unsold or assigned to a team. */
+  availablePlayers: PublicPlayer[];
+  matches: PublicMatch[];
+  standings: PublicStanding[];
+  sponsors: { id: string; name: string; logoUrl: string; website: string | null }[];
+  /** Derived from whether any player has been sold and whether any remain. */
+  auctionStatus: 'not-started' | 'in-progress' | 'complete';
+  registeredPlayers: number;
+  totalSpend: number;
+}
+
 /**
  * One entry on the global (system-wide) bid leaderboard: the highest winning
  * bids across every league. Flattened with the league/team context the board

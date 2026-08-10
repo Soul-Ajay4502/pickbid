@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+// Anchor text is the label, so each one describes its destination on its own —
+// these are the site's primary internal links for both visitors and crawlers.
 const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }[] = [
   {
     heading: 'Product',
@@ -12,6 +14,24 @@ const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }
       { href: '/leagues/discover', label: 'Discover Leagues' },
       { href: '/leaderboard', label: 'Global Leaderboard' },
       { href: '/leagues/new', label: 'Create a League' },
+    ],
+  },
+  {
+    heading: 'Cricket',
+    links: [
+      { href: '/cricket-auction', label: 'Cricket Auction' },
+      { href: '/online-cricket-auction', label: 'Online Cricket Auction' },
+      { href: '/cricket-league-management', label: 'League Management' },
+      { href: '/cricket-tournament-management', label: 'Tournament Management' },
+    ],
+  },
+  {
+    heading: 'Resources',
+    links: [
+      { href: '/resources/how-to-organize-cricket-auction', label: 'Auction Guide' },
+      { href: '/resources/cricket-auction-rules', label: 'Auction Rules' },
+      { href: '/tools/cricket-auction-budget-calculator', label: 'Budget Calculator' },
+      { href: '/tools/cricket-fixture-generator', label: 'Fixture Generator' },
     ],
   },
   {
@@ -36,7 +56,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-border/60 bg-card/40 mt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="flex flex-col sm:flex-row gap-10 sm:gap-16">
+        <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
           {/* Brand */}
           <div className="max-w-xs space-y-2">
             <p className="font-black text-sm tracking-tight text-gradient-green">Pickbid</p>
@@ -46,8 +66,9 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* Link columns */}
-          <div className="flex gap-16">
+          {/* Link columns — a grid rather than a row, so four columns wrap on
+              narrow screens instead of scrolling the page sideways. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-10 lg:gap-14">
             {LINK_GROUPS.map((group) => (
               <div key={group.heading}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">

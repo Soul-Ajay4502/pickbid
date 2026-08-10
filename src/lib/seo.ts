@@ -23,26 +23,35 @@ export const SITE_URL = resolveSiteUrl();
 /** Display name used in title templates, OG site name and structured data. */
 export const SITE_NAME = 'Pickbid';
 
-/** Default <title> shown on the home page and as the template fallback. */
-export const SITE_TITLE = 'Pickbid — Run cricket leagues like a pro';
+/**
+ * Default <title> shown on the home page and as the template fallback.
+ * Leads with what the product *is* rather than the brand tagline — "cricket
+ * auction" and "league management" are the two phrases organizers actually
+ * search for, and the home page is the one that has to rank for them.
+ */
+export const SITE_TITLE = `${SITE_NAME} — Cricket Auction & League Management Platform`;
 
 /** Suffix appended to inner-page titles, e.g. "Discover · Pickbid". */
 export const TITLE_TEMPLATE = `%s · ${SITE_NAME}`;
 
 export const SITE_DESCRIPTION =
-  'Design premium cricket player cards, host real-time auctions, track live ' +
-  'leaderboards and share it all with a single link — beautifully, in one place. ' +
-  'Free to start, no app to install.';
+  `${SITE_NAME} is a cricket auction and league management platform for ` +
+  'organizing player auctions, teams, squads, fixtures, results and ' +
+  'tournaments. Free to start, no app to install.';
 
 /** Shorter description for OG/Twitter cards where space is tight. */
 export const SHORT_DESCRIPTION =
   'Premium player cards, live auctions and leaderboards for your cricket league — shared with one link.';
 
 export const SITE_KEYWORDS = [
+  'cricket auction',
+  'cricket auction platform',
+  'online cricket auction',
+  'cricket league management',
+  'cricket tournament management',
   'cricket league manager',
   'cricket player cards',
   'player card maker',
-  'cricket auction',
   'IPL style auction',
   'cricket auction software',
   'live cricket auction',
@@ -72,3 +81,46 @@ export const BRAND = {
 
 /** Bare host (no scheme) — handy for OG footers and verification copy. */
 export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, '');
+
+/**
+ * Builds the metadata block every indexable page needs, so a page only has to
+ * state its own title, description and path. Keeps the canonical URL, the OG
+ * `url` and the Twitter card in step — the three that silently drift when each
+ * page hand-rolls them.
+ *
+ * `path` must be a root-relative, canonical path with no query string and no
+ * trailing slash (e.g. `/cricket-auction`). Query parameters are deliberately
+ * dropped: filtered/paginated variants of a page all canonicalise to the clean
+ * URL, which is what keeps duplicates out of the index. Relative paths are
+ * resolved against `metadataBase` by Next, so they always come out absolute and
+ * pointing at production.
+ */
+export function buildPageMetadata({
+  title,
+  description,
+  path,
+}: {
+  title: string;
+  description: string;
+  path: string;
+}) {
+  const fullTitle = `${title} · ${SITE_NAME}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: {
+      type: 'website' as const,
+      siteName: SITE_NAME,
+      title: fullTitle,
+      description,
+      url: path,
+      locale: 'en_US',
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      title: fullTitle,
+      description,
+    },
+  };
+}

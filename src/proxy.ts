@@ -21,9 +21,25 @@ function isAuthenticated(request: NextRequest): boolean {
 // left out of the matcher, so they're always public; `/` *is* matched, but only
 // so signed-in visitors can be rewritten to their dashboard — it is handled
 // first in `proxy` below and never gated.
+/**
+ * Literal segments under `/leagues/` that are pages in their own right rather
+ * than league ids. `/leagues/[id]` is opened up to anonymous visitors below, and
+ * without this list that pattern would also match `/leagues/new` and hand the
+ * create-league form to someone with no session.
+ */
+const RESERVED_LEAGUE_SEGMENTS = new Set(['new', 'discover']);
+
 function isPublicPath(pathname: string): boolean {
   // Browse public leagues / join by code
   if (pathname === '/leagues/discover') return true;
+  // A league's own page decides what an anonymous visitor sees: a public league
+  // renders its server-rendered public view, a private one redirects to /login
+  // itself. That decision needs the league row, which this layer deliberately
+  // can't read (no Sequelize here), so the page handles it — see
+  // `app/leagues/[id]/page.tsx`. Only the league *root* is opened up; every
+  // management sub-route below it stays gated by the checks that follow.
+  const leagueRoot = pathname.match(/^\/leagues\/([^/]+)$/);
+  if (leagueRoot && !RESERVED_LEAGUE_SEGMENTS.has(leagueRoot[1])) return true;
   // The live spectator screen for a league is meant to be shared publicly
   if (/^\/leagues\/[^/]+\/watch$/.test(pathname)) return true;
   // The Auction Wrapped recap (and its poster image) is deliberately shareable,
