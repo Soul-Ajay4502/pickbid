@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Marquee } from '@/components/ui/marquee';
 import type { Sponsor } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 /** Tilt of the wall, in degrees — the coverage math below depends on these. */
 const TILT_X = 14;
@@ -66,17 +67,22 @@ function useWallLayout(): WallLayout | null {
 }
 
 function SponsorTile({ sponsor, width, height }: { sponsor: Sponsor; width: number; height: number }) {
+  const style = {
+    width,
+    height,
+    padding: Math.round(height * 0.14),
+  };
   const card = (
     <div
-      className="flex items-center justify-center rounded-2xl border border-black/5 bg-white shadow-xl transition-transform duration-300 hover:scale-105"
-      style={{ width, height, padding: Math.round(height * 0.14) }}
+      className={cn("flex items-center justify-center rounded-md border border-black/5  shadow-xl transition-transform duration-300 hover:scale-105", sponsor.logoUrl ? "bg-transparent" : "bg-white")}
+      style={sponsor.logoUrl ? {} : style}
     >
       {sponsor.logoUrl ? (
         <img
           src={sponsor.logoUrl}
           alt={sponsor.name}
           draggable={false}
-          className="max-h-full max-w-full object-contain"
+          className="max-h-full max-w-full object-contain border-2"
         />
       ) : (
         <div
@@ -155,10 +161,10 @@ export default function SponsorsMarquee3D({ sponsors }: { sponsors: Sponsor[] })
       </div>
 
       {/* Vignette — multi-stop so the wall dissolves instead of stepping to black */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[30%] bg-[linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-[linear-gradient(to_top,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-[22%] bg-[linear-gradient(to_right,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-[22%] bg-[linear-gradient(to_left,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[20%] bg-[linear-gradient(to_bottom,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[20%] bg-[linear-gradient(to_top,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[12%] bg-[linear-gradient(to_right,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[12%] bg-[linear-gradient(to_left,#000_0%,rgba(0,0,0,0.9)_28%,rgba(0,0,0,0.5)_60%,transparent_100%)]" />
     </div>
   );
 }
