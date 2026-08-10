@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.8.1...v0.9.0) (2026-08-10)
+
+
+### Features
+
+* add league ledger functionality with CRUD operations ([51d48ea](https://github.com/Soul-Ajay4502/player-card-generator/commit/51d48eae76672b5703f87208510b800f9d08d2cc))
+* enhance SponsorsMarquee3D with improved styling and layout adjustments ([6029fda](https://github.com/Soul-Ajay4502/player-card-generator/commit/6029fdae637f97f7126981ee84e9c8135e272b1f))
+* implement 3D wall marquee for sponsors with responsive layout and improved visuals ([046c96f](https://github.com/Soul-Ajay4502/player-card-generator/commit/046c96f308d94682390809b46df10ba8173fb4f6))
+
 ## [0.8.1](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.8.0...v0.8.1) (2026-07-27)
 
 
