@@ -11,6 +11,9 @@ export default function robots(): MetadataRoute.Robots {
       disallow: [
         '/api/',
         '/profile',
+        // The signed-in home screen. Crawlers never carry a session cookie, so
+        // they always get the static landing page at `/` instead.
+        '/dashboard',
         '/leagues/new',
         '/leagues/*/edit',
         '/leagues/*/players/new',

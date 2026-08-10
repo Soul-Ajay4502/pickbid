@@ -4,9 +4,12 @@ import { SITE_NAME, SITE_URL } from '@/lib/seo';
 import type { League } from '@/lib/types';
 import DiscoverClient from './DiscoverClient';
 
-// The league list comes from the database, which isn't reachable at build
-// time and should be fresh on every crawl — render per-request.
-export const dynamic = 'force-dynamic';
+// Prerendered and regenerated every 5 minutes rather than rendered per-request.
+// The list is identical for every visitor, and rendering it on demand meant each
+// visit paid a cold serverless start plus a database round-trip — measured at
+// ~4.4s from a cold edge. Five minutes is well inside how often a crawler or a
+// visitor needs the directory to be accurate.
+export const revalidate = 300;
 
 const PAGE_TITLE = 'Discover Leagues';
 const PAGE_DESCRIPTION =

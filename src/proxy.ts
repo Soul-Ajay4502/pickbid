@@ -17,8 +17,10 @@ function isAuthenticated(request: NextRequest): boolean {
 }
 
 // Pages that stay open to logged-out visitors. Everything else under the matched
-// paths requires a session. `/`, `/leaderboard` and other top-level routes are
-// simply left out of the matcher, so they're always public.
+// paths requires a session. `/leaderboard` and other top-level routes are simply
+// left out of the matcher, so they're always public; `/` *is* matched, but only
+// so signed-in visitors can be rewritten to their dashboard — it is handled
+// first in `proxy` below and never gated.
 function isPublicPath(pathname: string): boolean {
   // Browse public leagues / join by code
   if (pathname === '/leagues/discover') return true;
@@ -38,6 +40,19 @@ function isPublicPath(pathname: string): boolean {
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // `/` is a statically prerendered landing page served from the CDN to everyone
+  // without a session cookie — crawlers included. Signed-in visitors get their
+  // dashboard rewritten onto the same URL, so `/` itself never reads the session
+  // and never has to render dynamically. A rewrite rather than a redirect keeps
+  // the URL, bookmarks and shared links pointing at `/`, exactly as before.
+  // `/dashboard` re-checks the session for real, since a stale cookie also
+  // satisfies the check below.
+  if (pathname === '/') {
+    return isAuthenticated(request)
+      ? NextResponse.rewrite(new URL('/dashboard', request.url))
+      : NextResponse.next();
+  }
 
   if (isPublicPath(pathname) || isAuthenticated(request)) {
     return NextResponse.next();
@@ -66,6 +81,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Narrow the proxy to the areas that contain protected pages. `isPublicPath`
   // then carves out the public exceptions (discover, watch). Static assets, the
-  // Auth.js API, `/`, and `/leaderboard` are never matched, so they stay public.
-  matcher: ['/leagues/:path*', '/profile/:path*'],
+  // Auth.js API and `/leaderboard` are never matched, so they stay public.
+  // `/` is matched purely for the signed-in dashboard rewrite, never to gate it.
+  matcher: ['/', '/leagues/:path*', '/profile/:path*'],
 };

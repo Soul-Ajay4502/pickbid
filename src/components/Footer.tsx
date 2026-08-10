@@ -7,6 +7,8 @@ const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }
   {
     heading: 'Product',
     links: [
+      { href: '/features', label: 'Features' },
+      { href: '/pricing', label: 'Pricing' },
       { href: '/leagues/discover', label: 'Discover Leagues' },
       { href: '/leaderboard', label: 'Global Leaderboard' },
       { href: '/leagues/new', label: 'Create a League' },
