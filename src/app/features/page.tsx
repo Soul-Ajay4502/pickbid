@@ -1,32 +1,20 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { CreditCard, Gavel, Tv, Users, Share2 } from 'lucide-react';
-import { SITE_NAME } from '@/lib/seo';
+import { SITE_NAME, buildPageMetadata } from '@/lib/seo';
+import { JsonLd, webPageSchema, breadcrumbSchema } from '@/lib/jsonLd';
 
+const PAGE_PATH = '/features';
 const PAGE_TITLE = 'Features';
 const PAGE_DESCRIPTION =
-  'Everything Pickbid does: premium cricket player cards, real-time auctions, ' +
+  'Everything Player Hunt does: premium cricket player cards, real-time auctions, ' +
   'public watch mode, leaderboards, squad and match management, PDF squad ' +
   'sheets and one-link sharing — free, in any browser.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/features' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/features',
-    locale: 'en_US',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-  },
-};
+  path: PAGE_PATH,
+});
 
 type Section = {
   icon: React.ComponentType<{ className?: string }>;
@@ -181,6 +169,20 @@ const SECTIONS: Section[] = [
 export default function FeaturesPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 animate-fade-in-up">
+      <JsonLd
+        data={[
+          webPageSchema({
+            path: PAGE_PATH,
+            name: PAGE_TITLE,
+            description: PAGE_DESCRIPTION,
+          }),
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: PAGE_TITLE, path: PAGE_PATH },
+          ]),
+        ]}
+      />
+
       <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-3">
         Features
       </h1>

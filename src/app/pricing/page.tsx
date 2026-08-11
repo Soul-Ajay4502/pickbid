@@ -1,32 +1,25 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
-import { SITE_NAME, SITE_URL } from '@/lib/seo';
+import { SITE_NAME, buildPageMetadata } from '@/lib/seo';
+import {
+  JsonLd,
+  webPageSchema,
+  breadcrumbSchema,
+  faqSchema,
+} from '@/lib/jsonLd';
 
+const PAGE_PATH = '/pricing';
 const PAGE_TITLE = 'Pricing';
 const PAGE_DESCRIPTION =
-  'Pickbid is free. Run unlimited cricket leagues, player cards, live auctions ' +
+  'Player Hunt is free. Run unlimited cricket leagues, player cards, live auctions ' +
   'and leaderboards at no cost — no credit card, no trial period and no paid ' +
   'tier to upgrade to.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/pricing' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/pricing',
-    locale: 'en_US',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-  },
-};
+  path: PAGE_PATH,
+});
 
 // Everything the free plan covers. Kept in one list so the page and the
 // structured data below can never drift apart.
@@ -79,26 +72,26 @@ const FAQS = [
   },
 ];
 
-// FAQ structured data — the site-wide SoftwareApplication offer (price 0) is
-// already declared in the root layout, so this page only adds its own Q&As.
-const faqJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  '@id': `${SITE_URL}/pricing#faq`,
-  mainEntity: FAQS.map((faq) => ({
-    '@type': 'Question',
-    name: faq.q,
-    acceptedAnswer: { '@type': 'Answer', text: faq.a },
-  })),
-};
+// Page structured data. The site-wide SoftwareApplication offer (price 0) is
+// already declared in the root layout, so this page only adds its own Q&As —
+// each one rendered visibly in the FAQ section below.
+const schemas = [
+  webPageSchema({
+    path: PAGE_PATH,
+    name: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+  }),
+  breadcrumbSchema([
+    { name: 'Home', path: '/' },
+    { name: PAGE_TITLE, path: PAGE_PATH },
+  ]),
+  faqSchema(FAQS.map((faq) => ({ question: faq.q, answer: faq.a }))),
+];
 
 export default function PricingPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
-      />
+      <JsonLd data={schemas} />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 animate-fade-in-up">
         <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-3">

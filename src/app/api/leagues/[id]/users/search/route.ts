@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchUsersForCoOrganizer } from '@/lib/store';
 import { requireLeagueCreator } from '@/lib/leagueAuth';
 
-// Creator-only: powers the "add co-organizer" picker. Matches existing PickBid
+// Creator-only: powers the "add co-organizer" picker. Matches existing Player Hunt
 // accounts by name, email or phone; the creator and current co-organizers are
 // already filtered out. Emails are returned so the creator can tell two people
 // with the same name apart — which is also why this stays creator-only.

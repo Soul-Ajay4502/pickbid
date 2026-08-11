@@ -1,6 +1,6 @@
-import type { Metadata } from 'next';
 import { getTopBids } from '@/lib/store';
-import { SITE_NAME } from '@/lib/seo';
+import { buildPageMetadata } from '@/lib/seo';
+import { JsonLd, webPageSchema, breadcrumbSchema } from '@/lib/jsonLd';
 import type { TopBid } from '@/lib/types';
 import LeaderboardClient from './LeaderboardClient';
 
@@ -8,31 +8,17 @@ import LeaderboardClient from './LeaderboardClient';
 // at build time — render per-request.
 export const dynamic = 'force-dynamic';
 
+const PAGE_PATH = '/leaderboard';
 const PAGE_TITLE = 'Global Leaderboard';
 const PAGE_DESCRIPTION =
-  'The top 20 winning bids across every cricket league on Pickbid — the ' +
+  'The top 20 winning bids across every cricket league on Player Hunt — the ' +
   'biggest auction buys, their teams and their leagues, updated live.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: {
-    canonical: '/leaderboard',
-  },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/leaderboard',
-    locale: 'en_US',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-  },
-};
+  path: PAGE_PATH,
+});
 
 export default async function GlobalLeaderboardPage() {
   let bids: TopBid[] = [];
@@ -41,5 +27,22 @@ export default async function GlobalLeaderboardPage() {
   } catch {
     // Database hiccup — render the empty state rather than a 500.
   }
-  return <LeaderboardClient initialBids={bids} />;
+  return (
+    <>
+      <JsonLd
+        data={[
+          webPageSchema({
+            path: PAGE_PATH,
+            name: PAGE_TITLE,
+            description: PAGE_DESCRIPTION,
+          }),
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: PAGE_TITLE, path: PAGE_PATH },
+          ]),
+        ]}
+      />
+      <LeaderboardClient initialBids={bids} />
+    </>
+  );
 }

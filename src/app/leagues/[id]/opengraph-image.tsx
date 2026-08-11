@@ -3,7 +3,7 @@ import { getLeague, getPlayers } from '@/lib/store';
 import { SITE_HOST } from '@/lib/seo';
 
 export const runtime = 'nodejs';
-export const alt = 'Cricket league on Pickbid';
+export const alt = 'Cricket league on Player Hunt';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -94,7 +94,7 @@ const Brand = () => (
     >
       <div style={{ width: 0, height: 34, borderLeft: '3px dashed rgba(255,255,255,0.9)', transform: 'rotate(10deg)' }} />
     </div>
-    <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#ffffff' }}>Pickbid</span>
+    <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#ffffff' }}>Player Hunt</span>
   </div>
 );
 

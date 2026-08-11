@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { SITE_HOST, SHORT_DESCRIPTION } from '@/lib/seo';
 
 // Image metadata
-export const alt = 'Pickbid — Run cricket leagues like a pro';
+export const alt = 'Player Hunt — Run cricket leagues like a pro';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -100,7 +100,7 @@ export default function Image() {
               />
             </div>
             <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1, color: '#ffffff' }}>
-              Pickbid
+              Player Hunt
             </span>
           </div>
 

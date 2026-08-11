@@ -9,7 +9,7 @@
  * the three characters that matter before the payload reaches the DOM.
  *
  * Only schemas that describe content actually rendered on the page belong here.
- * There are deliberately no rating/review builders: Pickbid collects neither,
+ * There are deliberately no rating/review builders: Player Hunt collects neither,
  * and marking up ratings it doesn't have would be exactly the kind of false
  * structured data that earns a manual action.
  */
@@ -31,11 +31,17 @@ function safeSerialize(data: unknown): string {
  * Renders one JSON-LD block. Pass a single schema object or an array — an array
  * is emitted as a `@graph`, which is how you attach several linked entities to
  * one page without repeating the `@context`.
+ *
+ * `@context` is added in both cases. The builders below deliberately omit it so
+ * they compose into a `@graph`, which means a single-object call has to have it
+ * put back — without it the block is not JSON-LD at all and is ignored outright,
+ * which is what was quietly happening to the per-league `SportsEvent` and
+ * `BreadcrumbList`.
  */
 export function JsonLd({ data }: { data: object | object[] }) {
   const payload = Array.isArray(data)
     ? { '@context': 'https://schema.org', '@graph': data }
-    : data;
+    : { '@context': 'https://schema.org', ...data };
   return (
     <script
       type="application/ld+json"
@@ -143,6 +149,45 @@ export function faqSchema(faqs: { question: string; answer: string }[]) {
       '@type': 'Question',
       name: faq.question,
       acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+    })),
+  };
+}
+
+/**
+ * A procedure with ordered steps. Only for pages that genuinely walk a reader
+ * through a task — `/how-it-works` describes setting a league up and running
+ * the auction, which is a real sequence a visitor follows in the product.
+ *
+ * `totalTime` is deliberately optional and omitted unless the page states a
+ * duration in its visible copy: an invented ISO-8601 estimate is exactly the
+ * kind of unverifiable claim that shouldn't go into structured data.
+ */
+export function howToSchema({
+  name,
+  description,
+  path,
+  steps,
+  totalTime,
+}: {
+  name: string;
+  description: string;
+  path: string;
+  steps: { name: string; text: string }[];
+  totalTime?: string;
+}) {
+  const url = `${SITE_URL}${path}`;
+  return {
+    '@type': 'HowTo',
+    '@id': `${url}#howto`,
+    name,
+    description,
+    ...(totalTime ? { totalTime } : {}),
+    step: steps.map((step, i) => ({
+      '@type': 'HowToStep',
+      position: i + 1,
+      name: step.name,
+      text: step.text,
+      url: `${url}#step-${i + 1}`,
     })),
   };
 }

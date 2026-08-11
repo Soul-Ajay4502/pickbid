@@ -1,24 +1,15 @@
-import type { Metadata } from 'next';
-import { SITE_NAME } from '@/lib/seo';
+import { buildPageMetadata } from '@/lib/seo';
 
 const PAGE_TITLE = 'Terms of Use';
 const PAGE_DESCRIPTION =
-  'The terms for using Pickbid: your account, the content you upload, fair ' +
+  'The terms for using Player Hunt: your account, the content you upload, fair ' +
   'use of the platform, and our responsibilities to you.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/terms' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/terms',
-    locale: 'en_US',
-  },
-};
+  path: '/terms',
+});
 
 export default function TermsPage() {
   return (
@@ -28,8 +19,8 @@ export default function TermsPage() {
 
       <div className="space-y-5 text-sm text-muted-foreground leading-relaxed">
         <p>
-          By using Pickbid you agree to these terms. They are deliberately short —
-          Pickbid is a tool for running cricket leagues, and these terms exist to
+          By using Player Hunt you agree to these terms. They are deliberately short —
+          Player Hunt is a tool for running cricket leagues, and these terms exist to
           keep it fair and safe for everyone.
         </p>
 
@@ -63,13 +54,13 @@ export default function TermsPage() {
         <p>
           Don&apos;t attempt to disrupt the service, access other people&apos;s
           private leagues, or use automated tools to scrape or overload the
-          platform. Pickbid auctions use play budgets — no real-money gambling or
+          platform. Player Hunt auctions use play budgets — no real-money gambling or
           wagering is offered or permitted on the platform.
         </p>
 
         <h2 className="text-lg font-bold text-foreground pt-2">The service</h2>
         <p>
-          Pickbid is provided free of charge, as-is and as-available. We work hard
+          Player Hunt is provided free of charge, as-is and as-available. We work hard
           to keep it fast and reliable, but we can&apos;t guarantee uninterrupted
           availability and are not liable for lost data or indirect damages to the
           maximum extent permitted by law. We may update or discontinue features as

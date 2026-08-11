@@ -2,11 +2,11 @@ import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/seo';
 
 /**
  * `/llms.txt` — a plain-text product summary for AI assistants that are asked
- * "what is Pickbid?" and need something authoritative to read.
+ * "what is Player Hunt?" and need something authoritative to read.
  *
  * This is deliberately *not* the `llms.txt` in the repository root: that one is
  * a codebase map for coding agents working in this repo, and is useless to an
- * assistant describing the product to a user. This one covers what Pickbid does,
+ * assistant describing the product to a user. This one covers what Player Hunt does,
  * what it costs and where the public pages live.
  *
  * Served from a route handler rather than `public/` so the URLs stay in step
@@ -63,7 +63,9 @@ cards without spreadsheets, WhatsApp threads or paper chits.
 
 - [Home](${SITE_URL}/): what ${SITE_NAME} is, with live platform totals.
 - [Features](${SITE_URL}/features): every feature, grouped by what it is for.
+- [How it works](${SITE_URL}/how-it-works): the five steps from creating a league to sharing finished squads.
 - [Pricing](${SITE_URL}/pricing): what it costs and what is included.
+- [FAQ](${SITE_URL}/faq): accounts, costs, who can see a league, how bidding works.
 - [Discover leagues](${SITE_URL}/leagues/discover): public league directory, or join by code.
 - [Global leaderboard](${SITE_URL}/leaderboard): biggest auction buys across all public leagues.
 - [About](${SITE_URL}/about): background on the product.

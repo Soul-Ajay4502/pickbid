@@ -359,7 +359,7 @@ function CardBack({ team, logoUrl, width, height, radius }: { team: Team; logoUr
         <span style={{ fontSize: 56, position: 'relative' }} className="select-none">🏏</span>
       )}
       <div style={{ position: 'relative', textAlign: 'center' }}>
-        <p style={{ fontSize: 11, letterSpacing: 5, textTransform: 'uppercase', fontWeight: 800, color: 'rgba(255,255,255,.55)' }}>PickBid</p>
+        <p style={{ fontSize: 11, letterSpacing: 5, textTransform: 'uppercase', fontWeight: 800, color: 'rgba(255,255,255,.55)' }}>Player Hunt</p>
         <p style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 700, color: 'rgba(255,255,255,.3)', marginTop: 4 }}>Player Card</p>
       </div>
     </div>

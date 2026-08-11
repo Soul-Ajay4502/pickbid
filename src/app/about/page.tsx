@@ -1,41 +1,47 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
-import { SITE_NAME } from '@/lib/seo';
+import { buildPageMetadata } from '@/lib/seo';
+import { JsonLd, webPageSchema, breadcrumbSchema } from '@/lib/jsonLd';
 
+const PAGE_PATH = '/about';
 const PAGE_TITLE = 'About';
 const PAGE_DESCRIPTION =
-  'Pickbid is the all-in-one platform for local cricket leagues — premium ' +
+  'Player Hunt is the all-in-one platform for local cricket leagues — premium ' +
   'player cards, real-time auctions, live leaderboards and one-link sharing. ' +
   'Built for box cricket, tape ball and gully cricket communities.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/about' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/about',
-    locale: 'en_US',
-  },
-};
+  path: PAGE_PATH,
+});
 
 export default function AboutPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 animate-fade-in-up">
-      <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-6">About Pickbid</h1>
+      <JsonLd
+        data={[
+          webPageSchema({
+            path: PAGE_PATH,
+            name: PAGE_TITLE,
+            description: PAGE_DESCRIPTION,
+          }),
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: PAGE_TITLE, path: PAGE_PATH },
+          ]),
+        ]}
+      />
+      <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-6">About Player Hunt</h1>
 
       <div className="space-y-5 text-sm text-muted-foreground leading-relaxed">
         <p>
-          Pickbid brings the thrill of a professional cricket auction to local leagues.
+          Player Hunt brings the thrill of a professional cricket auction to local leagues.
           Whether you run a box cricket tournament, a tape ball league or a weekend
-          gully cricket series, Pickbid gives your league the same premium experience
+          gully cricket series, Player Hunt gives your league the same premium experience
           the big leagues get — without spreadsheets, WhatsApp chaos or paper chits.
         </p>
 
-        <h2 className="text-lg font-bold text-foreground pt-2">What you can do with Pickbid</h2>
+        <h2 className="text-lg font-bold text-foreground pt-2">What you can do with Player Hunt</h2>
         <ul className="list-disc pl-5 space-y-2">
           <li>
             <strong className="text-foreground">Premium player cards</strong> — design
@@ -64,7 +70,7 @@ export default function AboutPage() {
 
         <h2 className="text-lg font-bold text-foreground pt-2">Free to start</h2>
         <p>
-          Pickbid is free to use — create a league, add players and run your auction
+          Player Hunt is free to use — create a league, add players and run your auction
           in minutes from any modern browser. There is no app to install.
         </p>
 

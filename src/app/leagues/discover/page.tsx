@@ -1,7 +1,6 @@
-import type { Metadata } from 'next';
 import { getPublicLeagues } from '@/lib/store';
-import { SITE_NAME } from '@/lib/seo';
-import { JsonLd, webPageSchema, itemListSchema } from '@/lib/jsonLd';
+import { SITE_NAME, buildPageMetadata } from '@/lib/seo';
+import { JsonLd, webPageSchema, breadcrumbSchema, itemListSchema } from '@/lib/jsonLd';
 import type { League } from '@/lib/types';
 import DiscoverClient from './DiscoverClient';
 
@@ -12,31 +11,17 @@ import DiscoverClient from './DiscoverClient';
 // visitor needs the directory to be accurate.
 export const revalidate = 300;
 
+const PAGE_PATH = '/leagues/discover';
 const PAGE_TITLE = 'Discover Leagues';
 const PAGE_DESCRIPTION =
   'Browse public cricket leagues or join one with a code — premium player ' +
-  'cards, live auctions and leaderboards, all on Pickbid.';
+  'cards, live auctions and leaderboards, all on Player Hunt.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: {
-    canonical: '/leagues/discover',
-  },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/leagues/discover',
-    locale: 'en_US',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-  },
-};
+  path: PAGE_PATH,
+});
 
 export default async function DiscoverPage() {
   let leagues: League[] = [];
@@ -51,10 +36,14 @@ export default async function DiscoverPage() {
   // in `JsonLd` rather than a raw JSON.stringify.
   const schemas = [
     webPageSchema({
-      path: '/leagues/discover',
+      path: PAGE_PATH,
       name: PAGE_TITLE,
       description: PAGE_DESCRIPTION,
     }),
+    breadcrumbSchema([
+      { name: 'Home', path: '/' },
+      { name: PAGE_TITLE, path: PAGE_PATH },
+    ]),
     itemListSchema({
       name: `Public cricket leagues on ${SITE_NAME}`,
       items: leagues.map((league) => ({

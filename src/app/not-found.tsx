@@ -16,6 +16,11 @@ const DESTINATIONS: { href: string; label: string; body: string }[] = [
     body: 'Browse leagues other organizers have made public, or join one with a code.',
   },
   {
+    href: '/how-it-works',
+    label: 'How Player Hunt works',
+    body: 'The five steps from creating a league to sharing the finished squads.',
+  },
+  {
     href: '/cricket-auction',
     label: 'How a cricket auction works',
     body: 'Formats, budgets and the running order of a player auction.',

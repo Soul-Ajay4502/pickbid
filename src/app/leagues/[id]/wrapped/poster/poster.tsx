@@ -162,106 +162,106 @@ export async function renderWrappedPoster(league: League, stats: WrappedStats): 
         {/* Middle block — centred in the leftover space so the fixed canvas
             stays balanced however many rows the league produces */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
-        {/* Total spend */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            marginTop: 44,
-            paddingTop: 40,
-            borderTop: '2px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          <Label>Total Spend</Label>
-          <div style={{ display: 'flex', fontSize: 116, fontWeight: 900, color: GOLD, marginTop: 6, lineHeight: 1.05 }}>
-            {fmt(stats.totalSpend)}
-          </div>
-        </div>
-
-        {/* Record buy */}
-        {top && (
+          {/* Total spend */}
           <div
             style={{
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              gap: 32,
-              padding: '30px 36px',
-              borderRadius: 32,
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              border: '2px solid rgba(255,255,255,0.1)',
-              marginTop: 48,
+              marginTop: 44,
+              paddingTop: 40,
+              borderTop: '2px solid rgba(255,255,255,0.1)',
             }}
           >
-            {topPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={topPhoto}
-                width={124}
-                height={124}
-                style={{ width: 124, height: 124, borderRadius: 9999, objectFit: 'cover', border: `4px solid ${GOLD}` }}
-                alt=""
-              />
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 124,
-                  height: 124,
-                  borderRadius: 9999,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
-                  border: `4px solid ${GOLD}`,
-                  fontSize: 52,
-                  fontWeight: 900,
-                  color: 'rgba(255,255,255,0.75)',
-                }}
-              >
-                {(top.name.trim()[0] || '?').toUpperCase()}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Crown />
-                <Label color={GOLD}>Record Buy</Label>
-              </div>
-              <div style={{ display: 'flex', fontSize: 42, fontWeight: 800, marginTop: 8, lineHeight: 1.1 }}>
-                {top.name}
-              </div>
-              {topTeam && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-                  <div style={{ display: 'flex', width: 18, height: 18, borderRadius: 9999, backgroundColor: topTeam.colorHex }} />
-                  <div style={{ display: 'flex', fontSize: 26, color: 'rgba(255,255,255,0.55)' }}>{topTeam.name}</div>
+            <Label>Total Spend</Label>
+            <div style={{ display: 'flex', fontSize: 116, fontWeight: 900, color: GOLD, marginTop: 6, lineHeight: 1.05 }}>
+              {fmt(stats.totalSpend)}
+            </div>
+          </div>
+
+          {/* Record buy */}
+          {top && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 32,
+                padding: '30px 36px',
+                borderRadius: 32,
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                border: '2px solid rgba(255,255,255,0.1)',
+                marginTop: 48,
+              }}
+            >
+              {topPhoto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={topPhoto}
+                  width={124}
+                  height={124}
+                  style={{ width: 124, height: 124, borderRadius: 9999, objectFit: 'cover', border: `4px solid ${GOLD}` }}
+                  alt=""
+                />
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 124,
+                    height: 124,
+                    borderRadius: 9999,
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    border: `4px solid ${GOLD}`,
+                    fontSize: 52,
+                    fontWeight: 900,
+                    color: 'rgba(255,255,255,0.75)',
+                  }}
+                >
+                  {(top.name.trim()[0] || '?').toUpperCase()}
                 </div>
               )}
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Crown />
+                  <Label color={GOLD}>Record Buy</Label>
+                </div>
+                <div style={{ display: 'flex', fontSize: 42, fontWeight: 800, marginTop: 8, lineHeight: 1.1 }}>
+                  {top.name}
+                </div>
+                {topTeam && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                    <div style={{ display: 'flex', width: 18, height: 18, borderRadius: 9999, backgroundColor: topTeam.colorHex }} />
+                    <div style={{ display: 'flex', fontSize: 26, color: 'rgba(255,255,255,0.55)' }}>{topTeam.name}</div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', fontSize: 46, fontWeight: 900, color: GOLD }}>{fmt(top.soldPrice ?? 0)}</div>
             </div>
-            <div style={{ display: 'flex', fontSize: 46, fontWeight: 900, color: GOLD }}>{fmt(top.soldPrice ?? 0)}</div>
-          </div>
-        )}
+          )}
 
-        {/* Biggest spender */}
-        {spender && spender.spent > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 26,
-              padding: '26px 36px',
-              borderRadius: 32,
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              border: '2px solid rgba(255,255,255,0.1)',
-              marginTop: 24,
-            }}
-          >
-            <div style={{ display: 'flex', width: 26, height: 26, borderRadius: 9999, backgroundColor: spender.colorHex }} />
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-              <Label>Biggest Spender</Label>
-              <div style={{ display: 'flex', fontSize: 38, fontWeight: 800, marginTop: 6 }}>{spender.name}</div>
+          {/* Biggest spender */}
+          {spender && spender.spent > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 26,
+                padding: '26px 36px',
+                borderRadius: 32,
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                border: '2px solid rgba(255,255,255,0.1)',
+                marginTop: 24,
+              }}
+            >
+              <div style={{ display: 'flex', width: 26, height: 26, borderRadius: 9999, backgroundColor: spender.colorHex }} />
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                <Label>Biggest Spender</Label>
+                <div style={{ display: 'flex', fontSize: 38, fontWeight: 800, marginTop: 6 }}>{spender.name}</div>
+              </div>
+              <div style={{ display: 'flex', fontSize: 38, fontWeight: 900, color: '#4ade80' }}>{fmt(spender.spent)}</div>
             </div>
-            <div style={{ display: 'flex', fontSize: 38, fontWeight: 900, color: '#4ade80' }}>{fmt(spender.spent)}</div>
-          </div>
-        )}
+          )}
 
         </div>
 
@@ -314,7 +314,8 @@ export async function renderWrappedPoster(league: League, stats: WrappedStats): 
             Conducted by {league.conductedBy}
           </div>
           <div style={{ display: 'flex', fontSize: 24, fontWeight: 700, color: t.awardColor, letterSpacing: 3 }}>
-            pickbid.vercel.app
+            player-hunt.vercel.app
+
           </div>
         </div>
       </div>

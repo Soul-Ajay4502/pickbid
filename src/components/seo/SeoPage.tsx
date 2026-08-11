@@ -61,7 +61,19 @@ export function seoPageMetadata(content: SeoPageContent) {
   });
 }
 
-export default function SeoPage({ content }: { content: SeoPageContent }) {
+/**
+ * `extraSchemas` lets a page attach entities the shell can't infer — e.g. the
+ * `HowTo` on /how-it-works. They join the shell's own `@graph` rather than
+ * emitting a second <script>, so a page never ends up with two disconnected
+ * JSON-LD blocks describing the same URL.
+ */
+export default function SeoPage({
+  content,
+  extraSchemas = [],
+}: {
+  content: SeoPageContent;
+  extraSchemas?: object[];
+}) {
   const {
     path,
     title,
@@ -84,6 +96,7 @@ export default function SeoPage({ content }: { content: SeoPageContent }) {
     ]),
     // Only emitted when the page actually renders an FAQ section below.
     ...(faqs.length ? [faqSchema(faqs)] : []),
+    ...extraSchemas,
   ];
 
   return (

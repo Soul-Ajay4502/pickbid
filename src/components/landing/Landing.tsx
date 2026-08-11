@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { MotionConfig } from 'motion/react';
 import type { PlatformStats } from '@/lib/types';
+import { JsonLd, faqSchema } from '@/lib/jsonLd';
 import { cn } from '@/lib/utils';
 import { BentoGrid, BentoGridItem } from '@/components/ui/bento-grid';
 import { NumberTicker } from '@/components/ui/number-ticker';
@@ -427,7 +428,7 @@ const PERSONAS = [
 /* ── FAQ (also emitted as FAQPage JSON-LD for search engines) ──────────────── */
 const FAQS = [
   {
-    q: 'Is Pickbid free to use?',
+    q: 'Is Player Hunt free to use?',
     a: 'Yes — sign in with Google and start building your league for free. No credit card needed.',
   },
   {
@@ -439,8 +440,8 @@ const FAQS = [
     a: 'Yes. Every auction has a public watch link that mirrors bids, sales and standings live in any browser.',
   },
   {
-    q: 'Does Pickbid work on phones?',
-    a: 'Pickbid runs in any modern browser and can be installed to your home screen as an app for a fast, full-screen experience.',
+    q: 'Does Player Hunt work on phones?',
+    a: 'Player Hunt runs in any modern browser and can be installed to your home screen as an app for a fast, full-screen experience.',
   },
   {
     q: 'What do I need to start a league?',
@@ -462,6 +463,11 @@ const FAQS = [
 
 /* ── Internal links out of the home page ──────────────────────────────────── */
 const EXPLORE_LINKS: { href: string; label: string; body: string }[] = [
+  {
+    href: '/how-it-works',
+    label: 'How Player Hunt works, step by step',
+    body: 'The five steps from creating a league to sharing the finished squads.',
+  },
   {
     href: '/cricket-auction',
     label: 'How a cricket auction works',
@@ -500,19 +506,14 @@ const EXPLORE_LINKS: { href: string; label: string; body: string }[] = [
   {
     href: '/leagues/discover',
     label: 'Browse public cricket leagues',
-    body: 'Squads, auction results and tables from leagues already running on Pickbid.',
+    body: 'Squads, auction results and tables from leagues already running on Player Hunt.',
   },
 ];
 
-const FAQ_JSON_LD = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: FAQS.map((f) => ({
-    '@type': 'Question',
-    name: f.q,
-    acceptedAnswer: { '@type': 'Answer', text: f.a },
-  })),
-};
+// Derived from the same array the section renders, so the markup can never
+// describe a question a visitor cannot see. Goes through the shared builder and
+// escaping serializer in `jsonLd.tsx` rather than a raw JSON.stringify.
+const FAQ_JSON_LD = faqSchema(FAQS.map((f) => ({ question: f.q, answer: f.a })));
 
 /**
  * 1 → {1} · 47 → {40, "+"} · 1,160 → {1.1, "K+"} — modest rounding, never
@@ -652,7 +653,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
                 })}
               </div>
               <p className="mt-9 text-center text-xs text-muted-foreground/60">
-                Live totals from leagues running on Pickbid right now
+                Live totals from leagues running on Player Hunt right now
               </p>
             </div>
           </section>
@@ -743,7 +744,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
         <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div className="mb-16">
             <SectionHeading
-              title="Pickbid is for every cricket lover"
+              title="Player Hunt is for every cricket lover"
               sub="Whether you run the league, own a team, walk out to bat or cheer from the stands."
             />
           </div>
@@ -845,10 +846,20 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
               </BlurFade>
             ))}
           </div>
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
-          />
+          <BlurFade inView>
+            <p className="mt-8 px-4 text-sm text-muted-foreground">
+              More questions — accounts, sharing, who can see your league — are
+              answered on the{' '}
+              <Link
+                href="/faq"
+                className="font-medium text-foreground underline decoration-foreground/25 underline-offset-4 transition-colors hover:text-primary"
+              >
+                full FAQ
+              </Link>
+              .
+            </p>
+          </BlurFade>
+          <JsonLd data={FAQ_JSON_LD} />
         </section>
 
         {/* ════════════════════════ EXPLORE ════════════════════════ */}

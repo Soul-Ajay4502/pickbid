@@ -1,25 +1,16 @@
-import type { Metadata } from 'next';
-import { SITE_NAME } from '@/lib/seo';
+import { buildPageMetadata } from '@/lib/seo';
 
 const PAGE_TITLE = 'Privacy Policy';
 const PAGE_DESCRIPTION =
-  'How Pickbid handles your data: what we collect when you sign in with ' +
+  'How Player Hunt handles your data: what we collect when you sign in with ' +
   'Google, how league and player information is stored and shared, and the ' +
   'choices you have.';
 
-export const metadata: Metadata = {
+export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
   description: PAGE_DESCRIPTION,
-  alternates: { canonical: '/privacy' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    title: `${PAGE_TITLE} · ${SITE_NAME}`,
-    description: PAGE_DESCRIPTION,
-    url: '/privacy',
-    locale: 'en_US',
-  },
-};
+  path: '/privacy',
+});
 
 export default function PrivacyPage() {
   return (

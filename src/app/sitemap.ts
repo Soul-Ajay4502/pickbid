@@ -19,7 +19,10 @@ export const dynamic = 'force-dynamic';
  * for the auth checks in the API routes.
  */
 const STATIC_ENTRIES: MetadataRoute.Sitemap = [
-  { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },
+  // No trailing slash: Next resolves the home page's own canonical to the bare
+  // origin, and a sitemap URL that doesn't match the canonical it points at is a
+  // contradiction crawlers have to resolve for us.
+  { url: SITE_URL, changeFrequency: 'weekly', priority: 1 },
 
   // Search-intent landing pages.
   { url: `${SITE_URL}/cricket-auction`, changeFrequency: 'monthly', priority: 0.9 },
@@ -30,7 +33,9 @@ const STATIC_ENTRIES: MetadataRoute.Sitemap = [
 
   // Product pages.
   { url: `${SITE_URL}/features`, changeFrequency: 'monthly', priority: 0.8 },
+  { url: `${SITE_URL}/how-it-works`, changeFrequency: 'monthly', priority: 0.8 },
   { url: `${SITE_URL}/pricing`, changeFrequency: 'monthly', priority: 0.8 },
+  { url: `${SITE_URL}/faq`, changeFrequency: 'monthly', priority: 0.7 },
 
   // Free tools — the pages most likely to earn links from organizers.
   { url: `${SITE_URL}/tools/cricket-auction-budget-calculator`, changeFrequency: 'monthly', priority: 0.8 },

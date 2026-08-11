@@ -10,6 +10,7 @@ const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }
     heading: 'Product',
     links: [
       { href: '/features', label: 'Features' },
+      { href: '/how-it-works', label: 'How It Works' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/leagues/discover', label: 'Discover Leagues' },
       { href: '/leaderboard', label: 'Global Leaderboard' },
@@ -38,6 +39,7 @@ const LINK_GROUPS: { heading: string; links: { href: string; label: string }[] }
     heading: 'Company',
     links: [
       { href: '/about', label: 'About' },
+      { href: '/faq', label: 'FAQ' },
       { href: '/privacy', label: 'Privacy Policy' },
       { href: '/terms', label: 'Terms of Use' },
     ],
@@ -59,7 +61,7 @@ export default function Footer() {
         <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
           {/* Brand */}
           <div className="max-w-xs space-y-2">
-            <p className="font-black text-sm tracking-tight text-gradient-green">Pickbid</p>
+            <p className="font-black text-sm tracking-tight text-gradient-green">Player Hunt</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Premium cricket player cards, live auctions and leaderboards for
               your league — shared with one link. Free to start.
@@ -92,7 +94,7 @@ export default function Footer() {
         </div>
 
         <p className="mt-10 pt-6 border-t border-border/40 text-[11px] text-muted-foreground/60">
-          © {new Date().getFullYear()} Pickbid. Made for cricket lovers everywhere.
+          © {new Date().getFullYear()} Player Hunt. Made for cricket lovers everywhere.
         </p>
       </div>
     </footer>

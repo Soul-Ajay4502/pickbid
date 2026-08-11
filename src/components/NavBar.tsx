@@ -33,7 +33,7 @@ export default function NavBar() {
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group cursor-pointer rounded-lg bg-linear-to-b  px-4 py-2 font-medium text-white ring-1 ring-white/20 ring-offset-1 ring-offset-green-500 transition-transform duration-150 ring-inset active:scale-98"
 
           >
-            <span className=" sm:block font-black text-xs sm:text-[15px] tracking-tight text-gradient-green">Pickbid</span>
+            <span className=" sm:block font-black text-xs sm:text-[15px] tracking-tight text-gradient-green">Player Hunt</span>
           </Link>
         </MagneticButton>
 
