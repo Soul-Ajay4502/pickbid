@@ -314,7 +314,7 @@ export async function renderWrappedPoster(league: League, stats: WrappedStats): 
             Conducted by {league.conductedBy}
           </div>
           <div style={{ display: 'flex', fontSize: 24, fontWeight: 700, color: t.awardColor, letterSpacing: 3 }}>
-            player-hunt.vercel.app
+            pickbid.vercel.app
 
           </div>
         </div>

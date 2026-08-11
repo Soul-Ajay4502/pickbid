@@ -27,7 +27,7 @@ function Avatar({ name, email, photo }: { name: string; email: string | null; ph
 
 /**
  * Creator-only management of a league's co-organizers: search existing
- * Player Hunt accounts by name/email/phone, add them, and remove current ones.
+ * PickBid accounts by name/email/phone, add them, and remove current ones.
  * Removal takes effect on the removed user's very next request — every
  * management endpoint re-checks the co-organizer table per call.
  */
@@ -159,7 +159,7 @@ export default function CoOrganizersModal({ leagueId, onClose }: {
                 <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>
               ) : results.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-muted-foreground">
-                  No matching accounts — they need to sign in to Player Hunt once first.
+                  No matching accounts — they need to sign in to PickBid once first.
                 </p>
               ) : (
                 results.map((user) => (

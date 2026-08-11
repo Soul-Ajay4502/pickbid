@@ -6,7 +6,7 @@ import { JsonLd, webPageSchema, breadcrumbSchema } from '@/lib/jsonLd';
 const PAGE_PATH = '/features';
 const PAGE_TITLE = 'Features';
 const PAGE_DESCRIPTION =
-  'Everything Player Hunt does: premium cricket player cards, real-time auctions, ' +
+  'Everything Pickbid does: premium cricket player cards, real-time auctions, ' +
   'public watch mode, leaderboards, squad and match management, PDF squad ' +
   'sheets and one-link sharing — free, in any browser.';
 

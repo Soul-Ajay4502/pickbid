@@ -15,7 +15,7 @@ const PAGE_PATH = '/leagues/discover';
 const PAGE_TITLE = 'Discover Leagues';
 const PAGE_DESCRIPTION =
   'Browse public cricket leagues or join one with a code — premium player ' +
-  'cards, live auctions and leaderboards, all on Player Hunt.';
+  'cards, live auctions and leaderboards, all on Pickbid.';
 
 export const metadata = buildPageMetadata({
   title: PAGE_TITLE,

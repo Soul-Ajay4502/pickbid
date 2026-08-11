@@ -17,7 +17,7 @@ const DESTINATIONS: { href: string; label: string; body: string }[] = [
   },
   {
     href: '/how-it-works',
-    label: 'How Player Hunt works',
+    label: 'How Pickbid works',
     body: 'The five steps from creating a league to sharing the finished squads.',
   },
   {

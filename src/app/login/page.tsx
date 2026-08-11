@@ -63,7 +63,7 @@ function LoginInner() {
           <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center mb-4">
             <Trophy className="w-6 h-6 text-green-500 dark:text-green-400" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-gradient-green">Sign in to Player Hunt</h1>
+          <h1 className="text-2xl font-black tracking-tight text-gradient-green">Sign in to Pickbid</h1>
           <p className="text-muted-foreground text-sm mt-1.5">
             Continue with your Google account to create and manage leagues.
           </p>

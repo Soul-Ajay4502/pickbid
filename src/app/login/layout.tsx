@@ -10,7 +10,7 @@ import { NOINDEX_METADATA } from '@/lib/seo';
 export const metadata: Metadata = {
   ...NOINDEX_METADATA,
   title: 'Sign In',
-  description: 'Sign in to Player Hunt with your Google account to create and manage cricket leagues.',
+  description: 'Sign in to Pickbid with your Google account to create and manage cricket leagues.',
 };
 
 export default function LoginLayout({

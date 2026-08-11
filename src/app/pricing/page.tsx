@@ -11,7 +11,7 @@ import {
 const PAGE_PATH = '/pricing';
 const PAGE_TITLE = 'Pricing';
 const PAGE_DESCRIPTION =
-  'Player Hunt is free. Run unlimited cricket leagues, player cards, live auctions ' +
+  'Pickbid is free. Run unlimited cricket leagues, player cards, live auctions ' +
   'and leaderboards at no cost — no credit card, no trial period and no paid ' +
   'tier to upgrade to.';
 

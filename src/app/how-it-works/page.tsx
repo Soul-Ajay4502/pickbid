@@ -4,7 +4,7 @@ import { SITE_NAME } from '@/lib/seo';
 
 /**
  * Angle: the *product* walkthrough — what an organizer actually does inside
- * Player Hunt, in order, from creating a league to sharing the recap.
+ * Pickbid, in order, from creating a league to sharing the recap.
  *
  * Deliberately distinct from the neighbouring pages so none of them reads as a
  * near-duplicate: /cricket-auction explains the auction *format*,
@@ -56,14 +56,14 @@ const STEPS: { name: string; text: string }[] = [
 
 const CONTENT: SeoPageContent = {
   path: '/how-it-works',
-  title: 'How Player Hunt Works',
+  title: 'How Pickbid Works',
   metaDescription:
     `How ${SITE_NAME} works, step by step: create a cricket league, add players ` +
     'and build their cards, set team purses, run a live auction spectators can ' +
     'watch, then track fixtures, results and leaderboards.',
   breadcrumb: 'How It Works',
   kicker: 'Step by step',
-  h1: 'How Player Hunt works',
+  h1: 'How Pickbid works',
   intro: [
     `${SITE_NAME} takes a cricket league from a list of names to a finished ` +
       'season in five steps. You create the league, players build their cards, ' +
@@ -174,7 +174,7 @@ const CONTENT: SeoPageContent = {
     },
     {
       href: '/features',
-      label: 'Everything Player Hunt includes',
+      label: 'Everything Pickbid includes',
       description: 'The full feature list, grouped by what each part is for.',
     },
     {

@@ -18,7 +18,7 @@ export default function Icon() {
           borderRadius: 96,
         }}
       >
-        {/* Auction gavel — Player Hunt puts players under the hammer */}
+        {/* Auction gavel — Pickbid puts players under the hammer */}
         <svg
           width={300}
           height={300}

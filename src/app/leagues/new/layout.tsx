@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   ...NOINDEX_METADATA,
   title: 'Create a League',
   description:
-    'Set up a new cricket league on Player Hunt — name it, set the team budget and squad rules.',
+    'Set up a new cricket league on Pickbid — name it, set the team budget and squad rules.',
 };
 
 export default function NewLeagueLayout({

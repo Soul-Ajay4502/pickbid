@@ -2,11 +2,11 @@ import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from '@/lib/seo';
 
 /**
  * `/llms.txt` — a plain-text product summary for AI assistants that are asked
- * "what is Player Hunt?" and need something authoritative to read.
+ * "what is Pickbid?" and need something authoritative to read.
  *
  * This is deliberately *not* the `llms.txt` in the repository root: that one is
  * a codebase map for coding agents working in this repo, and is useless to an
- * assistant describing the product to a user. This one covers what Player Hunt does,
+ * assistant describing the product to a user. This one covers what Pickbid does,
  * what it costs and where the public pages live.
  *
  * Served from a route handler rather than `public/` so the URLs stay in step

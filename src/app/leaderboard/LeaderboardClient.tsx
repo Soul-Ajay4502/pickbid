@@ -170,7 +170,7 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
         <h1 className="text-2xl sm:text-3xl font-black text-gradient-green tracking-tight flex items-center gap-2.5">
           <Trophy className="w-6 h-6 text-amber-500 animate-trophy" />Global Leaderboard
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">The top 20 winning bids across every league on Player Hunt.</p>
+        <p className="text-muted-foreground text-sm mt-1">The top 20 winning bids across every league on Pickbid.</p>
       </div>
 
       {initialBids.length === 0 ? (

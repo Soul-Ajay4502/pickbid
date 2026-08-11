@@ -5,7 +5,7 @@ import { JsonLd, webPageSchema, breadcrumbSchema } from '@/lib/jsonLd';
 const PAGE_PATH = '/about';
 const PAGE_TITLE = 'About';
 const PAGE_DESCRIPTION =
-  'Player Hunt is the all-in-one platform for local cricket leagues — premium ' +
+  'Pickbid is the all-in-one platform for local cricket leagues — premium ' +
   'player cards, real-time auctions, live leaderboards and one-link sharing. ' +
   'Built for box cricket, tape ball and gully cricket communities.';
 
@@ -31,17 +31,17 @@ export default function AboutPage() {
           ]),
         ]}
       />
-      <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-6">About Player Hunt</h1>
+      <h1 className="text-3xl font-black tracking-tight text-gradient-green mb-6">About Pickbid</h1>
 
       <div className="space-y-5 text-sm text-muted-foreground leading-relaxed">
         <p>
-          Player Hunt brings the thrill of a professional cricket auction to local leagues.
+          Pickbid brings the thrill of a professional cricket auction to local leagues.
           Whether you run a box cricket tournament, a tape ball league or a weekend
-          gully cricket series, Player Hunt gives your league the same premium experience
+          gully cricket series, Pickbid gives your league the same premium experience
           the big leagues get — without spreadsheets, WhatsApp chaos or paper chits.
         </p>
 
-        <h2 className="text-lg font-bold text-foreground pt-2">What you can do with Player Hunt</h2>
+        <h2 className="text-lg font-bold text-foreground pt-2">What you can do with Pickbid</h2>
         <ul className="list-disc pl-5 space-y-2">
           <li>
             <strong className="text-foreground">Premium player cards</strong> — design
@@ -70,7 +70,7 @@ export default function AboutPage() {
 
         <h2 className="text-lg font-bold text-foreground pt-2">Free to start</h2>
         <p>
-          Player Hunt is free to use — create a league, add players and run your auction
+          Pickbid is free to use — create a league, add players and run your auction
           in minutes from any modern browser. There is no app to install.
         </p>
 

@@ -17,13 +17,13 @@ function resolveSiteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
 
-  return 'https://player-hunt.vercel.app';
+  return 'https://pickbid.vercel.app';
 }
 
 export const SITE_URL = resolveSiteUrl();
 
 /** Display name used in title templates, OG site name and structured data. */
-export const SITE_NAME = 'Player Hunt';
+export const SITE_NAME = 'Pickbid';
 
 /**
  * Default <title> shown on the home page and as the template fallback.
@@ -33,7 +33,7 @@ export const SITE_NAME = 'Player Hunt';
  */
 export const SITE_TITLE = `${SITE_NAME} — Cricket Auction & League Management Platform`;
 
-/** Suffix appended to inner-page titles, e.g. "Discover · Player Hunt". */
+/** Suffix appended to inner-page titles, e.g. "Discover · Pickbid". */
 export const TITLE_TEMPLATE = `%s · ${SITE_NAME}`;
 
 export const SITE_DESCRIPTION =
@@ -68,7 +68,7 @@ export const SITE_KEYWORDS = [
   'cricket squad poster',
 ];
 
-export const AUTHOR = { name: 'Player Hunt', url: SITE_URL };
+export const AUTHOR = { name: 'Pickbid', url: SITE_URL };
 
 /** Brand colours, reused by OG images, icons, the manifest and the theme tag. */
 export const BRAND = {

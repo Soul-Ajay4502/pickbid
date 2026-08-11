@@ -9,7 +9,7 @@
  * the three characters that matter before the payload reaches the DOM.
  *
  * Only schemas that describe content actually rendered on the page belong here.
- * There are deliberately no rating/review builders: Player Hunt collects neither,
+ * There are deliberately no rating/review builders: Pickbid collects neither,
  * and marking up ratings it doesn't have would be exactly the kind of false
  * structured data that earns a manual action.
  */

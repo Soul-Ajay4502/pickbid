@@ -428,7 +428,7 @@ const PERSONAS = [
 /* ── FAQ (also emitted as FAQPage JSON-LD for search engines) ──────────────── */
 const FAQS = [
   {
-    q: 'Is Player Hunt free to use?',
+    q: 'Is Pickbid free to use?',
     a: 'Yes — sign in with Google and start building your league for free. No credit card needed.',
   },
   {
@@ -440,8 +440,8 @@ const FAQS = [
     a: 'Yes. Every auction has a public watch link that mirrors bids, sales and standings live in any browser.',
   },
   {
-    q: 'Does Player Hunt work on phones?',
-    a: 'Player Hunt runs in any modern browser and can be installed to your home screen as an app for a fast, full-screen experience.',
+    q: 'Does Pickbid work on phones?',
+    a: 'Pickbid runs in any modern browser and can be installed to your home screen as an app for a fast, full-screen experience.',
   },
   {
     q: 'What do I need to start a league?',
@@ -465,7 +465,7 @@ const FAQS = [
 const EXPLORE_LINKS: { href: string; label: string; body: string }[] = [
   {
     href: '/how-it-works',
-    label: 'How Player Hunt works, step by step',
+    label: 'How Pickbid works, step by step',
     body: 'The five steps from creating a league to sharing the finished squads.',
   },
   {
@@ -506,7 +506,7 @@ const EXPLORE_LINKS: { href: string; label: string; body: string }[] = [
   {
     href: '/leagues/discover',
     label: 'Browse public cricket leagues',
-    body: 'Squads, auction results and tables from leagues already running on Player Hunt.',
+    body: 'Squads, auction results and tables from leagues already running on Pickbid.',
   },
 ];
 
@@ -653,7 +653,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
                 })}
               </div>
               <p className="mt-9 text-center text-xs text-muted-foreground/60">
-                Live totals from leagues running on Player Hunt right now
+                Live totals from leagues running on Pickbid right now
               </p>
             </div>
           </section>
@@ -744,7 +744,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
         <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div className="mb-16">
             <SectionHeading
-              title="Player Hunt is for every cricket lover"
+              title="Pickbid is for every cricket lover"
               sub="Whether you run the league, own a team, walk out to bat or cheer from the stands."
             />
           </div>

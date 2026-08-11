@@ -2,7 +2,7 @@ import { buildPageMetadata } from '@/lib/seo';
 
 const PAGE_TITLE = 'Privacy Policy';
 const PAGE_DESCRIPTION =
-  'How Player Hunt handles your data: what we collect when you sign in with ' +
+  'How Pickbid handles your data: what we collect when you sign in with ' +
   'Google, how league and player information is stored and shared, and the ' +
   'choices you have.';
 

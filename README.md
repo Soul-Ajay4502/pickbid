@@ -1,10 +1,10 @@
-# 🏏 Player Hunt — Cricket Auction & League Management Platform
+# 🏏 Pickbid — Cricket Auction & League Management Platform
 
-**Run cricket leagues like a pro.** Player Hunt is a cricket auction and league management platform for organizing player auctions, teams, squads, fixtures, results and tournaments.
+**Run cricket leagues like a pro.** Pickbid is a cricket auction and league management platform for organizing player auctions, teams, squads, fixtures, results and tournaments.
 
-Player Hunt is a full-stack [Next.js](https://nextjs.org) app for organisers of local and amateur cricket leagues. Create a league, build broadcast-quality player cards, run a live auction that spectators can follow from any browser, record match results, and export squad sheets — all without anyone needing to install an app.
+Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of local and amateur cricket leagues. Create a league, build broadcast-quality player cards, run a live auction that spectators can follow from any browser, record match results, and export squad sheets — all without anyone needing to install an app.
 
-> **Website:** https://player-hunt.vercel.app
+> **Website:** https://pickbid.vercel.app
 
 ---
 

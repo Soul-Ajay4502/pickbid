@@ -172,13 +172,13 @@ const CONTENT: SeoPageContent = {
   related: [
     {
       href: '/how-it-works',
-      label: 'How Player Hunt works, step by step',
+      label: 'How Pickbid works, step by step',
       description:
         'The five steps from creating a league to sharing the finished squads.',
     },
     {
       href: '/features',
-      label: 'Everything Player Hunt includes',
+      label: 'Everything Pickbid includes',
       description: 'The full feature list, grouped by what each part is for.',
     },
     {

@@ -3,7 +3,7 @@ import { SITE_NAME, SITE_DESCRIPTION, BRAND } from '@/lib/seo';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Player Hunt — cricket league manager',
+    name: 'Pickbid — cricket league manager',
     short_name: SITE_NAME,
     description: SITE_DESCRIPTION,
     start_url: '/',
