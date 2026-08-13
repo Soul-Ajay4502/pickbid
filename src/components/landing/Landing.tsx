@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import {
+  Award,
   BarChart3,
   Check,
   ChevronDown,
@@ -18,6 +19,7 @@ import {
   MoonStar,
   Package,
   Radio,
+  ReceiptText,
   Share2,
   Sparkles,
   Trophy,
@@ -210,6 +212,28 @@ function SponsorWallVisual() {
         ))}
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-black to-transparent" />
+    </div>
+  );
+}
+
+/* Deliberately light: the real certificate is paper-coloured in both themes,
+   because it's made to be printed and framed. */
+function CertificateVisual() {
+  return (
+    <div className="relative mb-2 flex flex-1 items-center justify-center overflow-hidden rounded-xl bg-foreground/5 p-3">
+      <div className="w-full max-w-52 rounded-md border-2 border-amber-500/70 bg-[#fdfdfa] p-1">
+        <div className="flex flex-col items-center rounded-xs border border-amber-500/40 px-3 py-2.5">
+          <div className="h-4 w-4 rounded-full border border-amber-500/60 bg-amber-500/10" />
+          <p className="mt-1.5 text-[7px] font-bold tracking-[0.2em] text-neutral-800">CERTIFICATE</p>
+          <p className="mt-0.5 text-[5px] font-semibold tracking-[0.18em] text-neutral-500">
+            OF PARTICIPATION
+          </p>
+          <div className="mt-1.5 h-px w-10 bg-amber-500/50" />
+          <p className="mt-1.5 text-[10px] font-bold text-neutral-900">Ravi Kumar</p>
+          <div className="mt-1 h-px w-20 bg-amber-500/30" />
+          <p className="mt-1 text-[6px] font-semibold text-amber-600">Sunday Premier League</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -735,6 +759,19 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
                 icon={<IconChip icon={ListOrdered} />}
                 title="Custom pick order"
                 description="Set a role order — bowlers first, then batters — so the auction draws players in exactly the sequence you want."
+              />
+
+              <BentoGridItem
+                className="md:col-span-2"
+                header={<CertificateVisual />}
+                icon={<IconChip icon={Award} />}
+                title="Participation certificates"
+                description="Release certificates for the league in one click and every player downloads their own — a print-ready PDF or a PNG built to share, straight from their profile."
+              />
+              <BentoGridItem
+                icon={<IconChip icon={ReceiptText} />}
+                title="League ledger"
+                description="Keep entry fees, sponsorship and ground costs in one sheet. Stays a private draft until you publish it to the league."
               />
             </BentoGrid>
           </BlurFade>
