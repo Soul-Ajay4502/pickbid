@@ -47,6 +47,9 @@ shared with a single link. It runs in any modern browser with no app install.
   and export a PDF squad sheet to share on WhatsApp in one tap.
 - **Matches and results** — record fixtures, scores and winners for the league.
 - **League ledger** — an optional income and expense sheet for organizers.
+- **Participation certificates** — organizers release certificates for a league
+  in one click, and every player downloads their own as a print-ready PNG or PDF
+  from their profile.
 - **Auction Wrapped** — a shareable end-of-auction recap, plus holographic
   pack-opening squad reveals and a sponsor marquee display board.
 - **One-link sharing** — every league gets a link; make it public to list it in

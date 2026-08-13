@@ -20,6 +20,14 @@ interface PlayerFullViewProps {
   team?: { name: string; colorHex: string } | null;
   leagueName?: string;
   conductedBy?: string;
+  /**
+   * Optional actions rendered above the league footer — used by the league
+   * workspace to give organizers this player's certificate download. Kept as a
+   * slot so this view stays presentational and never fetches anything itself.
+   */
+  actions?: React.ReactNode;
+  /** Label shown beside `actions`. */
+  actionsLabel?: string;
 }
 
 /**
@@ -27,7 +35,7 @@ interface PlayerFullViewProps {
  * complements the cinematic trading-card (PlayerCard). The full, uncropped
  * photo sits on one side and the details on the other.
  */
-export default function PlayerFullView({ player, team, leagueName, conductedBy }: PlayerFullViewProps) {
+export default function PlayerFullView({ player, team, leagueName, conductedBy, actions, actionsLabel }: PlayerFullViewProps) {
   const accent = team?.colorHex ?? '#22c55e';
   const phone = formatIndianPhone(localPhoneDigits(player.contactNumber));
 
@@ -130,6 +138,16 @@ export default function PlayerFullView({ player, team, leagueName, conductedBy }
             className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <Phone className="h-4 w-4 opacity-60" />{phone}
           </a>
+        )}
+
+        {/* Organizer actions (certificate download) */}
+        {actions && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/40 p-3">
+            {actionsLabel && (
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{actionsLabel}</p>
+            )}
+            {actions}
+          </div>
         )}
 
         {/* League footer */}

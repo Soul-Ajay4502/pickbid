@@ -30,6 +30,7 @@ when features change.
 - [Auth config](src/auth.ts): NextAuth Google setup; token.sub mapped to the DB user id.
 - [Database connection](src/lib/db.ts): Sequelize + pg, SSL required, pooled across hot reloads.
 - [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
+- [Certificate renderer](src/app/leagues/[id]/certificate/[playerId]/certificate.tsx): server-rendered participation certificate (satori), gated on the league's `certificatesReleasedAt`.
 - [SEO config](src/lib/seo.ts): single source of truth for metadata, OG images, sitemap, robots.
 
 ## API routes (src/app/api)
@@ -42,6 +43,7 @@ when features change.
 - `leagues/[id]/auction/live`, `auction/reset`: live auction state broadcast/poll and reset.
 - `leagues/[id]/ledger`: optional markdown income & expense sheet. Organizers read/write incl. drafts; league members read only once published; non-members 403 regardless of `isPublic`.
 - `leagues/[id]/clone`: duplicate a league.
+- `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
 - `profile`: user profile. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
 

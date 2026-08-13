@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, updateLeague, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { auth } from '@/auth';
 
@@ -63,7 +63,12 @@ export async function PATCH(
     const body = await request.json();
     const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
-    const updated = await updateLeague(id, patch);
+    let updated = await updateLeague(id, patch);
+    // Certificates aren't a plain column write: the client sends a boolean and
+    // the store stamps (or clears) the issue date printed on every certificate
+    if (typeof body.certificatesReleased === 'boolean') {
+      updated = await setCertificatesReleased(id, body.certificatesReleased);
+    }
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error updating league:', error);

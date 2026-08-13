@@ -59,6 +59,7 @@ export class LeagueModel extends Model<
   declare joinCode: CreationOptional<string | null>;
   declare registrationClosed: CreationOptional<boolean>;
   declare pickPreference: CreationOptional<string[] | null>;
+  declare certificatesReleasedAt: CreationOptional<Date | null>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -75,6 +76,7 @@ LeagueModel.init(
     joinCode:           { type: DataTypes.STRING(8), allowNull: true, defaultValue: null },
     registrationClosed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     pickPreference:     { type: DataTypes.JSONB,   allowNull: true,  defaultValue: null },
+    certificatesReleasedAt: { type: DataTypes.DATE, allowNull: true, defaultValue: null },
     createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }

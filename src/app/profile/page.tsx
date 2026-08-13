@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PlayerForm, { type PlayerFormData } from '@/components/PlayerForm';
+import MyCertificates from '@/components/MyCertificates';
 import { uploadFile } from '@/lib/utils';
 import type { UserProfile } from '@/lib/types';
 import { toast } from 'sonner';
@@ -178,6 +179,11 @@ function ProfilePageInner() {
           />
         </div>
       </div>
+
+      {/* Participation certificates released by the leagues this user played in.
+          Hidden during first-time setup — there can't be any certificates yet,
+          and the page is a focused "finish this to join" step at that point. */}
+      {!isSetup && !redirectTo && <MyCertificates />}
     </div>
   );
 }

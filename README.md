@@ -122,6 +122,12 @@ PostgreSQL tables (see [src/lib/models.ts](src/lib/models.ts)):
 - **auction_live** — one ephemeral JSON blob per league holding live auction state, written by the creator and polled by spectators.
 - **league_ledgers** — optional markdown income & expense sheet, at most one per league. Organizers write it and publish it explicitly; see the visibility rule below.
 
+Participation certificates need no table of their own: `leagues.certificates_released_at` is null until an organizer releases them, and the certificate itself is rendered on demand from the player's card.
+
+### Certificate release
+
+Players download a participation certificate from **their own profile**, but only after an organizer clicks **Release Certificates** on the league. That sets `certificates_released_at`, which doubles as the issue date printed on every certificate for that league; withdrawing clears it and the downloads disappear again. The PNG at `/leagues/[id]/certificate/[playerId]` is served only to the player whose card it is or to an organizer of that league — everyone else, and any unreleased league, gets a 404.
+
 ### Ledger visibility
 
 The ledger (`/leagues/[id]/ledger`) is the one feature gated on league **membership** rather than `isPublic`: organizers read and write it including unpublished drafts, players with a card in the league read it only once published, and everyone else gets a 403 — even on a public league, since a league's accounts aren't spectator material. `isLeagueMember` in [src/lib/store.ts](src/lib/store.ts) is that check. A league with no ledger is the normal case, so the API answers "nothing here" with `200 exists:false` rather than a 404, identically whether or not a draft exists.

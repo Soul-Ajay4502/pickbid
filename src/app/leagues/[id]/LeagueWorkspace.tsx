@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import PlayerCard from '@/components/PlayerCard';
 import PlayerFullView from '@/components/PlayerFullView';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
+import CertificateDownloadButtons from '@/components/CertificateDownloadButtons';
 import TemplateSelector from '@/components/TemplateSelector';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
@@ -18,7 +19,7 @@ import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
   UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
-  ShieldCheck, ReceiptText,
+  ShieldCheck, ReceiptText, Award,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -39,6 +40,7 @@ function LeaguePageInner() {
   const [joining, setJoining] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [togglingRegistration, setTogglingRegistration] = useState(false);
+  const [togglingCertificates, setTogglingCertificates] = useState(false);
   const [resettingAuction, setResettingAuction] = useState(false);
   // Player shown in the full-view modal (null = closed)
   const [viewPlayer, setViewPlayer] = useState<Player | null>(null);
@@ -379,6 +381,33 @@ function LeaguePageInner() {
     finally { setTogglingRegistration(false); }
   }
 
+  /**
+   * Release participation certificates to every player in the league, or
+   * withdraw them again. Releasing is what makes the certificate appear in each
+   * player's own profile — nothing is generated up front, so this is just the
+   * gate. Withdrawing takes them away again, hence the confirm.
+   */
+  async function handleToggleCertificates() {
+    if (!data) return;
+    const next = !data.certificatesReleasedAt;
+    if (!next && !confirm('Withdraw certificates? Players lose the download from their profile until you release again.')) return;
+    setTogglingCertificates(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ certificatesReleased: next }),
+      });
+      if (!res.ok) throw new Error();
+      const updated = await res.json();
+      setData(prev => prev ? { ...prev, certificatesReleasedAt: updated.certificatesReleasedAt } : prev);
+      toast.success(next
+        ? 'Certificates released — players can download theirs from their profile'
+        : 'Certificates withdrawn');
+    } catch { toast.error('Failed to update certificates'); }
+    finally { setTogglingCertificates(false); }
+  }
+
   // ── Squad poster ───────────────────────────────────────────────────────────
   async function handleSquadPoster() {
     if (!data || data.players.length === 0) return;
@@ -474,6 +503,8 @@ function LeaguePageInner() {
     : data.players;
 
   const registrationClosed = data.registrationClosed ?? false;
+  // Organizers have released participation certificates to this league's players
+  const certificatesReleased = !!data.certificatesReleasedAt;
   // Creator or co-organizer — either can manage this league
   const canManage = data.canManage;
   // Non-organizers can only join via a register link while registration is open
@@ -658,6 +689,24 @@ function LeaguePageInner() {
                   that never uses it just never publishes one. */}
               <button onClick={() => router.push(`/leagues/${id}/ledger`)} className="toolbar-btn" title="Income & expenses — optional, and only shared once you publish it">
                 <ReceiptText className="w-3.5 h-3.5" />Ledger
+              </button>
+              {/* End-of-league action: until an organizer clicks this, no player
+                  can download a participation certificate. Highlighted once
+                  released so the state is obvious at a glance. */}
+              <button
+                onClick={handleToggleCertificates}
+                disabled={togglingCertificates || data.players.length === 0}
+                className={`toolbar-btn ${certificatesReleased ? 'text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
+                title={data.players.length === 0
+                  ? 'Add players before releasing certificates'
+                  : certificatesReleased
+                    ? `Released ${new Date(data.certificatesReleasedAt!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — click to withdraw`
+                    : 'Let every player download a participation certificate from their profile'}
+              >
+                {togglingCertificates
+                  ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                  : <Award className="w-3.5 h-3.5" />}
+                {certificatesReleased ? 'Certificates Released' : 'Release Certificates'}
               </button>
               {/* Only the creator manages who co-organizes */}
               {data.isCreator && (
@@ -995,6 +1044,8 @@ function LeaguePageInner() {
         <DialogContent className="sm:max-w-2xl p-0 max-h-[92vh] overflow-y-auto bg-transparent ring-0 shadow-none">
           <DialogTitle className="sr-only">{viewPlayer?.name ?? 'Player'} details</DialogTitle>
           {viewPlayer && (() => {
+            // Organizers only, and only once certificates are released
+            const canDownloadCertificate = canManage && certificatesReleased;
             const team = viewPlayer.teamId ? data.teams.find((t) => t.id === viewPlayer.teamId) : null;
             const teamMeta = team
               ? { name: team.name, colorHex: team.colorHex }
@@ -1007,6 +1058,18 @@ function LeaguePageInner() {
                 team={teamMeta}
                 leagueName={data.name}
                 conductedBy={data.conductedBy}
+                // Organizers can hand a player their certificate directly —
+                // useful when someone can't get to it from their own profile
+                // (no account on the card, lost the link, wants it printed).
+                actionsLabel={canDownloadCertificate ? 'Certificate' : undefined}
+                actions={canDownloadCertificate ? (
+                  <CertificateDownloadButtons
+                    leagueId={id}
+                    playerId={viewPlayer.id}
+                    leagueName={data.name}
+                    playerName={viewPlayer.name}
+                  />
+                ) : undefined}
               />
             );
           })()}

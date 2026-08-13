@@ -38,6 +38,12 @@ export interface League {
    * drawn last, together, at random. Null/empty means a pure random draw.
    */
   pickPreference: PlayerRole[] | null;
+  /**
+   * When the organizers released participation certificates, or null while they
+   * haven't. Doubles as the issue date printed on the certificate — players can
+   * only download one once this is set. See `LeagueCertificate`.
+   */
+  certificatesReleasedAt: string | null;
   createdAt: string;
 }
 
@@ -177,6 +183,31 @@ export interface CoOrganizer {
   email: string | null;
   photo: string;
   addedAt: string;
+}
+
+/**
+ * One downloadable participation certificate, as listed in the player's own
+ * profile. Assembled by `getCertificatesForUser` from the player's card plus
+ * the league that released it — a league only appears here once its organizers
+ * have set `certificatesReleasedAt`.
+ *
+ * Deliberately narrow: it carries only what the certificate prints and what the
+ * profile list shows. No `creatorToken`, no `contactNumber`.
+ */
+export interface LeagueCertificate {
+  leagueId: string;
+  leagueName: string;
+  conductedBy: string;
+  logoUrl: string;
+  templateId: string;
+  playerId: string;
+  playerName: string;
+  role: PlayerRole;
+  /** Team the player ended up with, when the auction placed them. */
+  teamName: string | null;
+  teamColorHex: string | null;
+  /** Issue date shown on the certificate — the moment the organizers released. */
+  releasedAt: string;
 }
 
 export interface UserProfile {

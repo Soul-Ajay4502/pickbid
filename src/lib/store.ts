@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding } from './types';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ function toLeague(row: LeagueModel): League {
     joinCode:     row.joinCode ?? null,
     registrationClosed: row.registrationClosed ?? false,
     pickPreference: (row.pickPreference as League['pickPreference']) ?? null,
+    certificatesReleasedAt: row.certificatesReleasedAt?.toISOString() ?? null,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -294,9 +295,14 @@ export async function createLeague(data: {
   return toLeague(row);
 }
 
+/**
+ * Generic league-settings update. `certificatesReleasedAt` is deliberately not
+ * updatable here — it's a timestamp the app stamps rather than a value callers
+ * supply, so it goes through `setCertificatesReleased` instead.
+ */
 export async function updateLeague(
   id: string,
-  data: Partial<Omit<League, 'id' | 'creatorId' | 'createdAt'>>
+  data: Partial<Omit<League, 'id' | 'creatorId' | 'createdAt' | 'certificatesReleasedAt'>>
 ): Promise<League | null> {
   const row = await LeagueModel.findByPk(id);
   if (!row) return null;
@@ -374,6 +380,8 @@ export async function cloneLeague(
         isPublic:     false,
         joinCode:     null,
         registrationClosed: false,
+        // A clone is a fresh season, so its players start with no certificate
+        certificatesReleasedAt: null,
         // Pick preference carries over from the source league by default
         pickPreference: overrides.pickPreference !== undefined ? overrides.pickPreference : (source.pickPreference as League['pickPreference']),
       },
@@ -418,7 +426,7 @@ export async function cloneLeague(
             leagueId:       newLeague.id,
             // The clone's players aren't "joined" by the original owners, and
             // a fresh token means only the new organiser controls these cards
-            userId:         null,
+            userId:         p.userId,
             creatorToken:   uuidv4(),
             name:           p.name,
             photo:          p.photo,
@@ -783,6 +791,112 @@ export async function saveLedger(
 export async function deleteLedger(leagueId: string): Promise<boolean> {
   const deleted = await LeagueLedgerModel.destroy({ where: { leagueId } });
   return deleted > 0;
+}
+
+// ── Participation certificates ────────────────────────────────────────────────
+//
+// Certificates are gated on one league-level timestamp rather than a per-player
+// row: an organizer "releases" the whole league at once, and every player who
+// holds a card in it can then download theirs. Nothing is generated or stored
+// up front — the certificate is rendered on demand from the card and the league.
+
+function toCertificate(
+  league: LeagueModel,
+  player: PlayerModel,
+  team: TeamModel | null
+): LeagueCertificate {
+  return {
+    leagueId:     league.id,
+    leagueName:   league.name,
+    conductedBy:  league.conductedBy,
+    logoUrl:      league.logoUrl ?? '',
+    templateId:   league.templateId ?? 'classic-green',
+    playerId:     player.id,
+    playerName:   player.name,
+    role:         player.role as LeagueCertificate['role'],
+    teamName:     team?.name ?? null,
+    teamColorHex: team?.colorHex ?? null,
+    // Callers only reach this mapper for a released league, so the timestamp is set
+    releasedAt:   league.certificatesReleasedAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+/**
+ * Release certificates for a league, or withdraw them again. Releasing stamps
+ * the current time — that stamp is the issue date printed on every certificate,
+ * so re-releasing after a withdrawal deliberately re-dates them.
+ */
+export async function setCertificatesReleased(
+  leagueId: string,
+  released: boolean
+): Promise<League | null> {
+  const row = await LeagueModel.findByPk(leagueId);
+  if (!row) return null;
+  await row.update({ certificatesReleasedAt: released ? new Date() : null });
+  return toLeague(row);
+}
+
+/**
+ * Every certificate this user can download, newest league first. Matches on the
+ * `userId` stamped on a player card at join time, so it follows the account
+ * rather than the device, and skips leagues whose organizers haven't released.
+ */
+export async function getCertificatesForUser(userId: string): Promise<LeagueCertificate[]> {
+  const user = await UserModel.findByPk(userId);
+  if (!user) return [];
+  const players = await PlayerModel.findAll({ where: { userId } });
+ if (players.length === 0) return [];
+
+  const leagues = await LeagueModel.findAll({
+    where: {
+      id: { [Op.in]: players.map((p) => p.leagueId!) },
+      certificatesReleasedAt: { [Op.ne]: null },
+    },
+    order: [['certificatesReleasedAt', 'DESC']],
+  });
+  if (leagues.length === 0) return [];
+
+  const teamIds = players.map((p) => p.teamId).filter((t): t is string => !!t);
+  const teams = teamIds.length
+    ? await TeamModel.findAll({ where: { id: { [Op.in]: teamIds } } })
+    : [];
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const playersByLeague = new Map<string, PlayerModel>();
+  for (const p of players) {
+    // One card per league per user in practice; keep the first if that ever breaks
+    if (!playersByLeague.has(p.leagueId!)) playersByLeague.set(p.leagueId!, p);
+  }
+
+  return leagues.flatMap((league) => {
+    const player = playersByLeague.get(league.id);
+    if (!player) return [];
+    return [toCertificate(league, player, player.teamId ? teamById.get(player.teamId) ?? null : null)];
+  });
+}
+
+/**
+ * One certificate, for the route that renders the PNG. Returns null when the
+ * league hasn't released certificates or the player isn't in it, so an
+ * unreleased certificate is a 404 rather than a rendered image.
+ *
+ * `playerUserId` comes back alongside so the caller can check ownership without
+ * a second query — the route only serves the player themselves or an organizer.
+ */
+export async function getCertificateForPlayer(
+  leagueId: string,
+  playerId: string
+): Promise<{ certificate: LeagueCertificate; playerUserId: string | null } | null> {
+  const [league, player] = await Promise.all([
+    LeagueModel.findByPk(leagueId),
+    PlayerModel.findByPk(playerId),
+  ]);
+  if (!league || !league.certificatesReleasedAt) return null;
+  if (!player || player.leagueId !== leagueId) return null;
+  const team = player.teamId ? await TeamModel.findByPk(player.teamId) : null;
+  return {
+    certificate: toCertificate(league, player, team),
+    playerUserId: player.userId ?? null,
+  };
 }
 
 // ── Players ───────────────────────────────────────────────────────────────────
