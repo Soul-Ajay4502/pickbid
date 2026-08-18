@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.9.0...v0.10.0) (2026-08-13)
+
+
+### Features
+
+* add CertificateVisual component and participation certificates feature ([af3906d](https://github.com/Soul-Ajay4502/player-card-generator/commit/af3906d6a19938cc5885a630b78dd9ffe1aa201a))
+* add features and pricing pages, implement dashboard routing, and enhance llms.txt for AI assistants ([1f51b5d](https://github.com/Soul-Ajay4502/player-card-generator/commit/1f51b5dd0d9d8974495f41cf047a21f062c6a2c9))
+* add participation certificates feature ([97c3e66](https://github.com/Soul-Ajay4502/player-card-generator/commit/97c3e662b99d70b07e1a1d0aa52b2c438e28f65b))
+* add SeoPage component for keyword landing pages and resource articles ([7cae7d2](https://github.com/Soul-Ajay4502/player-card-generator/commit/7cae7d212f420afe9a2ddcee2c9b995abf3492e2))
+
+
+### Code Refactoring
+
+* rename Pickbid to Player Hunt across the application ([b432eab](https://github.com/Soul-Ajay4502/player-card-generator/commit/b432eabb1095ab7c6ff10acd66c8b70f0ada609e))
+* rename Player Hunt to Pickbid throughout the application ([a7a8004](https://github.com/Soul-Ajay4502/player-card-generator/commit/a7a800406e7796fd19ac35d3e5e4581338e1f859))
+
 ## [0.9.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.8.1...v0.9.0) (2026-08-10)
 
 
