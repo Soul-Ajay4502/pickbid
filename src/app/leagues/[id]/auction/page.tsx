@@ -889,7 +889,10 @@ function ShareLiveModal({ open, onClose, url }: { open: boolean; onClose: () => 
             <Copy className="w-3.5 h-3.5" />Copy
           </button>
         </div>
-        <a href={url} target="_blank" rel="noreferrer" className="block text-center text-sm text-green-600 dark:text-green-400 hover:underline underline-offset-2">Open big-screen view →</a>
+        {/* Projector mode is off by default so phone viewers keep the compact
+            layout — open the big screen straight into it instead. */}
+        <a href={`${url}?projector=1`} target="_blank" rel="noreferrer" className="block text-center text-sm font-semibold text-green-600 dark:text-green-400 hover:underline underline-offset-2">Open projector view →</a>
+        <p className="text-foreground/40 text-xs text-center">Projector view uses larger, higher-contrast text. Press <kbd className="px-1 py-0.5 rounded border border-foreground/20 font-sans">P</kbd> on the big screen to toggle it.</p>
       </div>
     </div>
   );

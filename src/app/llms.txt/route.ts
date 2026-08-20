@@ -40,7 +40,8 @@ shared with a single link. It runs in any modern browser with no app install.
 - **Live auctions** — run a real-time auction with team budgets, icon players
   and bidding, mirrored to a public spectator screen as it happens.
 - **Watch mode** — a full-screen public screen fans can follow during the
-  auction, shareable without an account.
+  auction, shareable without an account, with a projector mode for large-format
+  display in the hall.
 - **Leaderboards** — biggest auction buys per league and a global leaderboard
   across every public league on the platform.
 - **Teams, squads and officials** — manage rosters, budgets and team officials,
