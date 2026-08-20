@@ -176,9 +176,8 @@ export default function CloneLeaguePage() {
       key: 'players' as const,
       icon: UserPlus,
       label: 'Players',
-      hint: `${playerCount} player${playerCount === 1 ? '' : 's'} · ${
-        include.teams && preserveAuctionResults ? 'auction results kept' : 'auction results reset'
-      }`,
+      hint: `${playerCount} player${playerCount === 1 ? '' : 's'} · ${include.teams && preserveAuctionResults ? 'auction results kept' : 'auction results reset'
+        }`,
       disabled: playerCount === 0,
     },
     {
@@ -267,7 +266,7 @@ export default function CloneLeaguePage() {
                 </Label>
                 <Input
                   id="totalPlayers" name="totalPlayers"
-                  type="number" min={1} max={100}
+                  type="number" min={1} max={500}
                   placeholder="e.g. 20"
                   value={form.totalPlayers} onChange={handleChange}
                   disabled={loading} required className="h-10"
@@ -327,11 +326,10 @@ export default function CloneLeaguePage() {
                 {includeOptions.map(({ key, icon: Icon, label, hint, disabled }) => (
                   <label
                     key={key}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
-                      disabled
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${disabled
                         ? 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
                         : 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
-                    }`}
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -358,11 +356,10 @@ export default function CloneLeaguePage() {
                   </label>
                 ))}
                 <label
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
-                    include.teams && include.players
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${include.teams && include.players
                       ? 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
                       : 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
-                  }`}
+                    }`}
                 >
                   <input
                     type="checkbox"

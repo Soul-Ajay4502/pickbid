@@ -190,7 +190,7 @@ export default function NewLeaguePage() {
                 </Label>
                 <Input
                   id="totalPlayers" name="totalPlayers"
-                  type="number" min={1} max={100}
+                  type="number" min={1} max={500}
                   placeholder="e.g. 20"
                   value={form.totalPlayers} onChange={handleChange}
                   disabled={loading} required className="h-10"
