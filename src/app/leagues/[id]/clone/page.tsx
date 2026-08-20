@@ -110,8 +110,8 @@ export default function CloneLeaguePage() {
       return;
     }
     const total = parseInt(form.totalPlayers, 10);
-    if (isNaN(total) || total < 1 || total > 100) {
-      toast.error('Total players must be between 1 and 100');
+    if (isNaN(total) || total < 1 || total > 500) {
+      toast.error('Total players must be between 1 and 500');
       return;
     }
 
@@ -327,8 +327,8 @@ export default function CloneLeaguePage() {
                   <label
                     key={key}
                     className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${disabled
-                        ? 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
-                        : 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
+                      ? 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
+                      : 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
                       }`}
                   >
                     <input
@@ -357,8 +357,8 @@ export default function CloneLeaguePage() {
                 ))}
                 <label
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${include.teams && include.players
-                      ? 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
-                      : 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
+                    ? 'border-border cursor-pointer hover:border-primary/40 hover:bg-muted/40'
+                    : 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
                     }`}
                 >
                   <input

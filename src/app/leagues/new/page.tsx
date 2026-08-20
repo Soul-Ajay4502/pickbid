@@ -71,8 +71,8 @@ export default function NewLeaguePage() {
       return;
     }
     const total = parseInt(form.totalPlayers, 10);
-    if (isNaN(total) || total < 1 || total > 100) {
-      toast.error('Total players must be between 1 and 100');
+    if (isNaN(total) || total < 1 || total > 500) {
+      toast.error('Total players must be between 1 and 500');
       return;
     }
 
