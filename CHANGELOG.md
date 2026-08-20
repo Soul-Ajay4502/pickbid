@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-08-20)
+
+
+### Features
+
+* add projector mode for large-format display in watch mode ([6501fd4](https://github.com/Soul-Ajay4502/pickbid/commit/6501fd48202873f61caf32e3b9c5c8053de7d833))
+* increase maximum players limit from 100 to 500 in league creation ([0ba3f8f](https://github.com/Soul-Ajay4502/pickbid/commit/0ba3f8f9418ce8109c349a942699a3b5067f73ab))
+* update player limit validation to allow up to 500 players in league creation ([fcc5d83](https://github.com/Soul-Ajay4502/pickbid/commit/fcc5d834ae91b7c2e2983494936d5c5262187980))
+
 ## [0.10.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.9.0...v0.10.0) (2026-08-13)
 
 
