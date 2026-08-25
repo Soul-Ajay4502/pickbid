@@ -1,5 +1,6 @@
 import { NextResponse, userAgent } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { ADMIN_COOKIE } from '@/lib/adminCookie';
 
 // Next.js 16 renamed the `middleware` file convention to `proxy` (same feature,
 // runs before a route renders). This gate is defence-in-depth for *navigation*
@@ -70,7 +71,27 @@ export function proxy(request: NextRequest) {
       : NextResponse.next();
   }
 
-  if (isPublicPath(pathname) || isAuthenticated(request)) {
+  // The super-admin area is a separate world from the Auth.js session: a normal
+  // signed-in user must never satisfy it, so it's handled before the ordinary
+  // check below and looks only at the admin cookie. As with the rest of this
+  // file the real enforcement is in the handlers — `requireAdmin` verifies the
+  // cookie's signature and expiry, which this layer deliberately can't do.
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    if (pathname === '/admin/login') return NextResponse.next();
+    if (request.cookies.get(ADMIN_COOKIE)?.value) return NextResponse.next();
+    return NextResponse.redirect(new URL('/admin/login', request.url));
+  }
+
+  // A signed-in owner-console session also opens every league screen, so the
+  // owner can jump straight from `/admin` into any league's detail pages. It
+  // carries no Auth.js cookie, so `isAuthenticated` would otherwise bounce it
+  // to /login. As everywhere else here, the API handlers do the real check.
+  // Scoped to league screens on purpose: the owner has no user profile, so
+  // letting an admin cookie through to /profile would only render an empty one.
+  const adminViewingLeague =
+    pathname.startsWith('/leagues/') && Boolean(request.cookies.get(ADMIN_COOKIE)?.value);
+
+  if (isPublicPath(pathname) || isAuthenticated(request) || adminViewingLeague) {
     return NextResponse.next();
   }
 
@@ -99,5 +120,5 @@ export const config = {
   // then carves out the public exceptions (discover, watch). Static assets, the
   // Auth.js API and `/leaderboard` are never matched, so they stay public.
   // `/` is matched purely for the signed-in dashboard rewrite, never to gate it.
-  matcher: ['/', '/leagues/:path*', '/profile/:path*'],
+  matcher: ['/', '/leagues/:path*', '/profile/:path*', '/admin', '/admin/:path*'],
 };

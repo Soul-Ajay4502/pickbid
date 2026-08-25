@@ -28,6 +28,7 @@ when features change.
 - [Sequelize models & associations](src/lib/models.ts): users, leagues, teams, players, team_officials, matches, auction_live.
 - [Shared types](src/lib/types.ts): League, Player, Team, TeamOfficial, Match, LiveAuctionState, LivePurse.
 - [Auth config](src/auth.ts): NextAuth Google setup; token.sub mapped to the DB user id.
+- [Owner console auth](src/lib/adminAuth.ts): super-admin credentials read from `ADMIN_EMAIL`/`ADMIN_PASSWORD` env plus a signed HMAC session cookie. Deliberately separate from Auth.js — no admin row, flag, migration or seed, and a normal Google session never grants admin. The cookie name lives in [adminCookie.ts](src/lib/adminCookie.ts) so `proxy.ts` can read it without importing `next/headers`.
 - [Database connection](src/lib/db.ts): Sequelize + pg, SSL required, pooled across hot reloads.
 - [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
 - [Certificate renderer](src/app/leagues/[id]/certificate/[playerId]/certificate.tsx): server-rendered participation certificate (satori), gated on the league's `certificatesReleasedAt`.
@@ -46,6 +47,8 @@ when features change.
 - `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
 - `profile`: user profile. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
+- `admin/login`, `admin/logout`: owner console sign-in (env credentials, IP-throttled) and sign-out.
+- `admin/overview`: whole-platform analytics, every league and every user in one payload. `admin/leagues/[id]`: owner overrides on any league — publish, open/close registration, release certificates, reset auction, clear the live broadcast, delete. Both gated by `requireAdmin`. An owner session additionally satisfies `requireLeagueManager` (but never `requireLeagueCreator`), so the owner can open any league's detail pages in full.
 
 ## Optional
 

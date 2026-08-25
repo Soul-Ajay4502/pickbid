@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
+import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
 
 export async function GET(
@@ -9,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const [session, league] = await Promise.all([auth(), getLeague(id)]);
+    const [session, league, platformAdmin] = await Promise.all([auth(), getLeague(id), isAdmin()]);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
@@ -18,8 +19,11 @@ export async function GET(
     ]);
     const userId = session?.user?.id;
     const isCreator = userId === league.creatorId;
-    // Creator or co-organizer — either can manage the league and run its auction
-    const canManage = isCreator || (!!userId && coOrganizers.some((c) => c.userId === userId));
+    // Creator or co-organizer — either can manage the league and run its
+    // auction. The owner console is folded in here so the owner opening a
+    // league from `/admin` gets the full organizer view of it; `isCreator`
+    // stays strictly true-creator, so the creator-only actions don't move.
+    const canManage = isCreator || platformAdmin || (!!userId && coOrganizers.some((c) => c.userId === userId));
     // Whether the requester has joined: matched by userId stamped at join time,
     // so it stays consistent across devices (unlike the old localStorage check)
     const hasJoined = !!userId && players.some((p) => p.userId === userId);
@@ -39,7 +43,9 @@ export async function GET(
     const safeOfficials = canManage ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
     // Co-organizer names/photos are public (they're shown as badges), but their
     // emails are only the creator's business — they power the manage list
-    const safeCoOrganizers = isCreator ? coOrganizers : coOrganizers.map((c) => ({ ...c, email: null }));
+    const safeCoOrganizers = (isCreator || platformAdmin)
+      ? coOrganizers
+      : coOrganizers.map((c) => ({ ...c, email: null }));
     // isCreator/canManage/hasJoined first, before the (potentially large) players
     // array, so they're easy to find in the response rather than buried after it
     // Only whether a *published* ledger exists — the sheet itself, and the

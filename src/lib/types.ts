@@ -398,3 +398,83 @@ export interface LiveAuctionState {
   progress: { sold: number; total: number; unsold: number; left: number; round: number };
   purses: LivePurse[];
 }
+
+// ── Super-admin dashboard ─────────────────────────────────────────────────────
+// Platform-wide views served only to the env-configured owner account. These
+// intentionally expose cross-league data (creator emails, private leagues) that
+// no organizer-facing endpoint may return.
+
+/** One league as the owner sees it: league row plus its live rollups. */
+export interface AdminLeagueRow {
+  id: string;
+  name: string;
+  conductedBy: string;
+  logoUrl: string;
+  creatorId: string;
+  creatorEmail: string;
+  creatorName: string;
+  /** The organizer's declared target */
+  totalPlayers: number;
+  /** Cards actually registered */
+  playerCount: number;
+  teamCount: number;
+  soldCount: number;
+  /** Sum of every sold price in this league */
+  auctionValue: number;
+  isPublic: boolean;
+  registrationClosed: boolean;
+  certificatesReleasedAt: string | null;
+  /** A live-auction blob exists, i.e. the auction has been broadcast at least once */
+  hasLiveAuction: boolean;
+  createdAt: string;
+}
+
+/** One registered account as the owner sees it. */
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  photo: string;
+  leaguesCreated: number;
+  playerCards: number;
+  profileCompleted: boolean;
+  updatedAt: string | null;
+}
+
+/** A single day's registration counts, for the growth chart. */
+export interface AdminTrendPoint {
+  date: string;
+  leagues: number;
+  players: number;
+}
+
+/** Everything the admin dashboard's analytics view needs, in one payload. */
+export interface AdminOverview {
+  totals: {
+    leagues: number;
+    users: number;
+    players: number;
+    teams: number;
+    matches: number;
+    sponsors: number;
+    publicLeagues: number;
+    playersSold: number;
+    /** Money moved across every auction on the platform */
+    auctionValue: number;
+    /** Leagues that have at least one sold player */
+    auctionsRun: number;
+  };
+  /** New rows in the trailing 7- and 30-day windows */
+  recent: {
+    leagues7d: number;
+    leagues30d: number;
+    players7d: number;
+    players30d: number;
+  };
+  /** Daily counts for the last 30 days, oldest first */
+  trend: AdminTrendPoint[];
+  /** Player-role distribution across the whole platform */
+  roleSplit: { role: string; count: number }[];
+  /** Biggest sales anywhere on the platform */
+  topBids: TopBid[];
+}

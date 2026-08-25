@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { getLeague, canManageLeague, isLeagueMember, getLedger, saveLedger, deleteLedger } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
+import { isAdmin } from '@/lib/adminAuth';
 import type { LedgerResponse } from '@/lib/types';
 
 /** Guard against someone pasting a novel into the editor; a ledger is a page, not a book. */
@@ -29,14 +30,15 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const [session, league] = await Promise.all([auth(), getLeague(id)]);
+    const [session, league, platformAdmin] = await Promise.all([auth(), getLeague(id), isAdmin()]);
     // Session before existence, matching `leagueAuth.resolve` — so a caller with
-    // no session can't probe which league ids are real
+    // no session can't probe which league ids are real. The owner console has no
+    // Auth.js session, so it clears this gate on its own.
     const userId = session?.user?.id;
-    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+    if (!userId && !platformAdmin) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
     if (!league) return NextResponse.json({ error: 'League not found' }, { status: 404 });
 
-    if (await canManageLeague(userId, league)) {
+    if (platformAdmin || (userId && await canManageLeague(userId, league))) {
       const ledger = await getLedger(id);
       return NextResponse.json<LedgerResponse>({ exists: !!ledger, canManage: true, ledger });
     }

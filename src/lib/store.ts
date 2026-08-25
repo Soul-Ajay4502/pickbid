@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding } from './types';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1258,4 +1258,210 @@ export async function cleanupImages(urls: Array<string | null | undefined>): Pro
       }
     })
   );
+}
+
+// ── Super-admin analytics ─────────────────────────────────────────────────────
+// Platform-wide reads for the owner dashboard. Every function here crosses
+// league boundaries and returns data (creator emails, private leagues) that no
+// organizer-facing endpoint may expose, so all of them are gated by
+// `requireAdmin` in their route handlers — nothing below authorizes itself.
+
+/** A player counts as "sold" only when a team paid for them — icons aren't sales. */
+const SOLD_WHERE = { teamId: { [Op.ne]: null }, soldPrice: { [Op.gt]: 0 } };
+const SOLD_SQL = 'team_id IS NOT NULL AND sold_price > 0';
+
+function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+/** YYYY-MM-DD in UTC, so a day bucket means the same thing for every viewer. */
+function dayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Buckets timestamps into one entry per day across the trailing `days` window,
+ * emitting the empty days too so the growth chart has no gaps.
+ */
+function bucketByDay(days: number, leagueDates: Date[], playerDates: Date[]): AdminTrendPoint[] {
+  const leagues = new Map<string, number>();
+  const players = new Map<string, number>();
+  for (const d of leagueDates) {
+    const k = dayKey(d);
+    leagues.set(k, (leagues.get(k) ?? 0) + 1);
+  }
+  for (const d of playerDates) {
+    const k = dayKey(d);
+    players.set(k, (players.get(k) ?? 0) + 1);
+  }
+
+  const out: AdminTrendPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const key = dayKey(daysAgo(i));
+    out.push({ date: key, leagues: leagues.get(key) ?? 0, players: players.get(key) ?? 0 });
+  }
+  return out;
+}
+
+/** Headline numbers, growth windows, the 30-day trend and the biggest sales. */
+export async function getAdminOverview(): Promise<AdminOverview> {
+  const since30 = daysAgo(30);
+  const since7 = daysAgo(7);
+
+  const [
+    leagues, users, players, teams, matches, sponsors, publicLeagues,
+    playersSold, auctionValue, auctionsRun,
+    leagues7d, leagues30d, players7d, players30d,
+    leagueDateRows, playerDateRows, roleRows, topBids,
+  ] = await Promise.all([
+    LeagueModel.count(),
+    UserModel.count(),
+    PlayerModel.count(),
+    TeamModel.count(),
+    MatchModel.count(),
+    SponsorModel.count(),
+    LeagueModel.count({ where: { isPublic: true } }),
+    PlayerModel.count({ where: SOLD_WHERE }),
+    PlayerModel.sum('soldPrice', { where: SOLD_WHERE }),
+    PlayerModel.count({ where: SOLD_WHERE, distinct: true, col: 'leagueId' }),
+    LeagueModel.count({ where: { createdAt: { [Op.gte]: since7 } } }),
+    LeagueModel.count({ where: { createdAt: { [Op.gte]: since30 } } }),
+    PlayerModel.count({ where: { createdAt: { [Op.gte]: since7 } } }),
+    PlayerModel.count({ where: { createdAt: { [Op.gte]: since30 } } }),
+    LeagueModel.findAll({ where: { createdAt: { [Op.gte]: since30 } }, attributes: ['createdAt'], raw: true }),
+    PlayerModel.findAll({ where: { createdAt: { [Op.gte]: since30 } }, attributes: ['createdAt'], raw: true }),
+    PlayerModel.findAll({
+      attributes: ['role', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['role'],
+      raw: true,
+    }),
+    getTopBids(10),
+  ]);
+
+  const toDates = (rows: unknown[]) =>
+    (rows as { createdAt: string | Date }[]).map((r) => new Date(r.createdAt));
+
+  return {
+    totals: {
+      leagues, users, players, teams, matches, sponsors, publicLeagues, playersSold,
+      // `sum` answers null on an empty set rather than 0
+      auctionValue: Number(auctionValue ?? 0),
+      auctionsRun,
+    },
+    recent: { leagues7d, leagues30d, players7d, players30d },
+    trend: bucketByDay(30, toDates(leagueDateRows), toDates(playerDateRows)),
+    roleSplit: (roleRows as unknown as { role: string; count: string | number }[])
+      .map((r) => ({ role: r.role, count: Number(r.count) }))
+      .sort((a, b) => b.count - a.count),
+    topBids,
+  };
+}
+
+/**
+ * Every league on the platform with its rollups, newest first. Player and team
+ * counts come from grouped aggregates rather than a query per league, so this
+ * stays a fixed number of round trips however many leagues exist.
+ */
+export async function getAdminLeagues(): Promise<AdminLeagueRow[]> {
+  const leagueRows = await LeagueModel.findAll({ order: [['createdAt', 'DESC']] });
+  if (leagueRows.length === 0) return [];
+
+  const leagueIds = leagueRows.map((l) => l.id);
+  const creatorIds = [...new Set(leagueRows.map((l) => l.creatorId!))];
+
+  const [playerAgg, teamAgg, creators, liveRows] = await Promise.all([
+    PlayerModel.findAll({
+      where: { leagueId: { [Op.in]: leagueIds } },
+      attributes: [
+        'leagueId',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'playerCount'],
+        [sequelize.literal('SUM(CASE WHEN ' + SOLD_SQL + ' THEN 1 ELSE 0 END)'), 'soldCount'],
+        [sequelize.literal('COALESCE(SUM(CASE WHEN ' + SOLD_SQL + ' THEN sold_price ELSE 0 END), 0)'), 'auctionValue'],
+      ],
+      group: ['leagueId'],
+      raw: true,
+    }),
+    TeamModel.findAll({
+      where: { leagueId: { [Op.in]: leagueIds } },
+      attributes: ['leagueId', [sequelize.fn('COUNT', sequelize.col('id')), 'teamCount']],
+      group: ['leagueId'],
+      raw: true,
+    }),
+    UserModel.findAll({ where: { id: { [Op.in]: creatorIds } }, attributes: ['id', 'email', 'name'], raw: true }),
+    AuctionLiveModel.findAll({ where: { leagueId: { [Op.in]: leagueIds } }, attributes: ['leagueId'], raw: true }),
+  ]);
+
+  type PlayerAgg = { leagueId: string; playerCount: string; soldCount: string | null; auctionValue: string };
+  const playersBy = new Map((playerAgg as unknown as PlayerAgg[]).map((r) => [r.leagueId, r]));
+  const teamsBy = new Map(
+    (teamAgg as unknown as { leagueId: string; teamCount: string }[]).map((r) => [r.leagueId, Number(r.teamCount)])
+  );
+  const creatorBy = new Map(
+    (creators as unknown as { id: string; email: string; name: string }[]).map((u) => [u.id, u])
+  );
+  const liveIds = new Set((liveRows as unknown as { leagueId: string }[]).map((r) => r.leagueId));
+
+  return leagueRows.map((row) => {
+    const agg = playersBy.get(row.id);
+    const creator = creatorBy.get(row.creatorId!);
+    return {
+      id:           row.id,
+      name:         row.name,
+      conductedBy:  row.conductedBy,
+      logoUrl:      row.logoUrl ?? '',
+      creatorId:    row.creatorId!,
+      creatorEmail: creator?.email ?? '—',
+      creatorName:  creator?.name || creator?.email || '—',
+      totalPlayers: row.totalPlayers,
+      playerCount:  Number(agg?.playerCount ?? 0),
+      teamCount:    teamsBy.get(row.id) ?? 0,
+      soldCount:    Number(agg?.soldCount ?? 0),
+      auctionValue: Number(agg?.auctionValue ?? 0),
+      isPublic:     row.isPublic ?? false,
+      registrationClosed: row.registrationClosed ?? false,
+      certificatesReleasedAt: row.certificatesReleasedAt?.toISOString() ?? null,
+      hasLiveAuction: liveIds.has(row.id),
+      createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
+    };
+  });
+}
+
+/** Every registered account, with how much of the platform each one has used. */
+export async function getAdminUsers(): Promise<AdminUserRow[]> {
+  const userRows = await UserModel.findAll({ order: [['updatedAt', 'DESC']] });
+  if (userRows.length === 0) return [];
+
+  const userIds = userRows.map((u) => u.id);
+  const [leagueAgg, playerAgg] = await Promise.all([
+    LeagueModel.findAll({
+      where: { creatorId: { [Op.in]: userIds } },
+      attributes: ['creatorId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['creatorId'],
+      raw: true,
+    }),
+    PlayerModel.findAll({
+      where: { userId: { [Op.in]: userIds } },
+      attributes: ['userId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['userId'],
+      raw: true,
+    }),
+  ]);
+
+  const leaguesBy = new Map(
+    (leagueAgg as unknown as { creatorId: string; count: string }[]).map((r) => [r.creatorId, Number(r.count)])
+  );
+  const cardsBy = new Map(
+    (playerAgg as unknown as { userId: string; count: string }[]).map((r) => [r.userId, Number(r.count)])
+  );
+
+  return userRows.map((u) => ({
+    id:               u.id,
+    email:            u.email,
+    name:             u.name ?? '',
+    photo:            u.photo ?? '',
+    leaguesCreated:   leaguesBy.get(u.id) ?? 0,
+    playerCards:      cardsBy.get(u.id) ?? 0,
+    profileCompleted: u.profileCompleted ?? false,
+    updatedAt:        u.updatedAt?.toISOString() ?? null,
+  }));
 }

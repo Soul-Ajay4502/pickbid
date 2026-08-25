@@ -69,6 +69,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `WHATSAPPAPIKEY` / `WHATSAPPAPIURL` / `FROM_NUMBER` | – | WhatsApp Cloud API broadcasts. |
 | `WHATSAPP_TEMPLATE_NAME` / `WHATSAPP_TEMPLATE_LANG` | – | WhatsApp message template config. |
 | `GOOGLE_SITE_VERIFICATION` | – | Google Search Console verification tag. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | – | Credentials for the owner console at `/admin`. The account exists only in env — there is no admin row, flag or migration — so leaving these unset simply disables the console. Use a long random password: it is the only thing guarding platform-wide controls. |
 | `MIGRATE_ADMIN_EMAIL` | – | Gate for the one-off Redis→Postgres import endpoint. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | – | Source for the legacy Redis import only. |
 

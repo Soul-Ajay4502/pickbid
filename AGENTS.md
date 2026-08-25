@@ -59,6 +59,29 @@ never leak raw Sequelize rows.
 Manager status is re-checked on *every* request so revoking a co-organizer takes
 effect immediately.
 
+**The platform owner is a fourth tier that sits above the other three.**
+`requireAdmin` ([adminAuth.ts](src/lib/adminAuth.ts)) gates `/admin` and
+`api/admin/*`, and it has nothing to do with Auth.js: the owner is not a row in
+`users`, there is no admin flag, migration or seed, and a normal Google session
+never satisfies it. The single credential pair lives in `ADMIN_EMAIL` /
+`ADMIN_PASSWORD`, and a successful login mints a signed HMAC cookie that is the
+only thing the admin APIs trust.
+
+The owner session also satisfies `requireLeagueManager`, so the owner can open
+any league's management pages and see them in full — `resolve()` in
+`leagueAuth.ts` reports `userId` as that league's `creatorId` plus
+`isPlatformAdmin: true`. It deliberately does **not** satisfy
+`requireLeagueCreator`: deleting a league or reassigning co-organizers stays with
+the real creator, and the console has its own delete at
+`api/admin/leagues/[id]`. When you add a management endpoint, gate it on
+`requireLeagueManager` and the owner is handled for free; when you add a *read*
+path that checks `canManageLeague` inline, `await isAdmin()` alongside it (see
+the league and ledger GETs) or the owner sees the stranger's view.
+
+Never reuse an admin store function (`getAdminOverview`, `getAdminLeagues`,
+`getAdminUsers`) in a user-facing route: they cross every league boundary and
+return creator emails and private leagues platform-wide.
+
 **Player and upload APIs are deliberately anonymous.** Players create cards with
 a per-card `creatorToken`, so anyone holding a join link can add a card without
 signing in. Do not add session gating to
@@ -66,8 +89,9 @@ signing in. Do not add session gating to
 [api/upload](src/app/api/upload/route.ts).
 
 **`contactNumber` is organizer-only.** The players GET handler strips it for
-everyone who can't manage the league. Any new endpoint returning players must do
-the same.
+everyone who can't manage the league — the platform owner included in "can
+manage", since the owner console is an organizer-grade view. Any new endpoint
+returning players must do the same.
 
 **Ledger visibility is membership-based, not `isPublic`-based.** Organizers read
 and write drafts, league members read once published, everyone else gets 403 —
