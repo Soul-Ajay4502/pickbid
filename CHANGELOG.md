@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-08-28)
+
+
+### Features
+
+* add home link to exit projector mode and improve navigation ([d9ecbb8](https://github.com/Soul-Ajay4502/pickbid/commit/d9ecbb8e7a26043ff222f47cb326bd8bd03d468c))
+* add live auction functionality and UI components ([3c9663f](https://github.com/Soul-Ajay4502/pickbid/commit/3c9663ff96e1ec7e89774237d3c6eebc67248a9c))
+* add projector mode for large-format display in watch mode ([6501fd4](https://github.com/Soul-Ajay4502/pickbid/commit/6501fd48202873f61caf32e3b9c5c8053de7d833))
+* **admin:** implement admin login, dashboard, and league management APIs ([d2c02d4](https://github.com/Soul-Ajay4502/pickbid/commit/d2c02d43ca7f64b6e50f1f3a2bd917270315be28))
+* enhance live auction functionality with improved caching and management checks ([d48632f](https://github.com/Soul-Ajay4502/pickbid/commit/d48632f02b3f52ddc86e3bdaf63401b778bb2c73))
+* implement ConfirmDialog component for enhanced delete confirmations ([61b0d84](https://github.com/Soul-Ajay4502/pickbid/commit/61b0d84b73da796bc7433dde5ac13ed1896f8cae))
+* increase maximum players limit from 100 to 500 in league creation ([0ba3f8f](https://github.com/Soul-Ajay4502/pickbid/commit/0ba3f8f9418ce8109c349a942699a3b5067f73ab))
+* update player limit validation to allow up to 500 players in league creation ([fcc5d83](https://github.com/Soul-Ajay4502/pickbid/commit/fcc5d834ae91b7c2e2983494936d5c5262187980))
+
 ## [0.10.0](https://github.com/Soul-Ajay4502/player-card-generator/compare/v0.9.0...v0.10.0) (2026-08-13)
 
 
