@@ -278,9 +278,11 @@ export default function WatchPage() {
   const [canManage, setCanManage] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/leagues/${id}`)
+    // Just the boolean. This used to read the whole league — every player card,
+    // ~100 KB — once per spectator, for one flag.
+    fetch(`/api/leagues/${id}/can-manage`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((league) => setCanManage(league?.canManage === true))
+      .then((d) => setCanManage(d?.canManage === true))
       .catch(() => { /* stay a spectator */ });
   }, [id]);
 
@@ -328,21 +330,41 @@ export default function WatchPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleBig]);
 
-  // Poll the live state — best-effort, every 1.5s
+  // Poll the live board — best-effort. The beat follows the phase: `lobby` and
+  // `done` are the long static tails either side of an auction, where most of a
+  // night's requests would otherwise go and where nothing changes. Every other
+  // phase — including the idle beat between picks — stays fast, so the slot-
+  // machine reveal never lands late.
+  const pollMs = live?.phase === 'lobby' ? 5000 : live?.phase === 'done' ? 10000 : 1500;
   useEffect(() => {
     let active = true;
     const tick = async () => {
+      // A backgrounded tab has nobody watching it. A phone in a pocket
+      // shouldn't spend a request every 1.5s for three hours.
+      if (document.visibilityState === 'hidden') return;
       try {
-        const res = await fetch(`/api/leagues/${id}/auction/live`, { cache: 'no-store' });
+        // Deliberately the default cache mode rather than `no-store`: that mode
+        // makes the browser attach `Cache-Control: no-cache` to the request,
+        // which can punch straight through the 1s edge cache this endpoint
+        // leans on. The response's own `max-age=0, must-revalidate` is what
+        // keeps the browser from reusing a stale board.
+        const res = await fetch(`/api/leagues/${id}/auction/live`);
         if (!res.ok || !active) return;
         const { state } = await res.json();
         if (active) { setLive(state ?? null); setLoaded(true); }
       } catch { /* keep last known state */ }
     };
     tick();
-    const iv = setInterval(tick, 1500);
-    return () => { active = false; clearInterval(iv); };
-  }, [id]);
+    const iv = setInterval(tick, pollMs);
+    // Catch up the instant the tab comes back, rather than waiting out the beat
+    const onVisibility = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [id, pollMs]);
 
   const phase = live?.phase;
   const purses = live?.purses ?? [];

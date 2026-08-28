@@ -13,6 +13,10 @@ function createSequelize() {
     dialectOptions: {
       ssl: { require: true, rejectUnauthorized: true },
     },
+    // Per warm serverless instance. `DATABASE_URL` should be Neon's *pooled*
+    // endpoint (the `-pooler` host) — direct endpoints cap out near 110
+    // connections, which a busy auction's fan-out can reach; PgBouncer in front
+    // of them does not. Migrations use `DATABASE_URL_UNPOOLED` instead.
     pool: { max: 3, min: 0, idle: 20000, acquire: 30000 },
     logging: false,
   });

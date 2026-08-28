@@ -15,7 +15,14 @@ export async function GET(
   try {
     const { id } = await params;
     const live = await getAuctionLiveSummary(id);
-    return NextResponse.json({ live }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ live }, {
+      headers: {
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        // Same trick as the board itself, with a longer beat: a LIVE banner
+        // that lags five seconds costs nobody anything.
+        'CDN-Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10',
+      },
+    });
   } catch (error) {
     console.error('Error reading live auction summary:', error);
     return NextResponse.json({ error: 'Failed to read live summary' }, { status: 500 });

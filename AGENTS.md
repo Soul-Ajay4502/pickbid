@@ -107,6 +107,24 @@ write it). The certificate PNG is **not** public like `/wrapped/poster` — it
 names an individual, so serve it only to that player or a league manager, and
 404 anything unreleased.
 
+**The live auction board is edge-cached on purpose.** Every spectator on
+`/watch` polls `api/leagues/[id]/auction/live` on a 1.5s beat, so origin load
+would otherwise scale linearly with the crowd — one function invocation and one
+Neon query per viewer per poll. The GET therefore answers with
+`CDN-Cache-Control: s-maxage=1` while telling browsers `max-age=0,
+must-revalidate`; the edge collapses a whole hall into roughly one origin read
+per second. Don't put `no-store` back on it, and don't add `cache: 'no-store'`
+to the client fetch — that mode makes the browser send `Cache-Control:
+no-cache`, which can bypass the very cache this depends on. Anything genuinely
+per-caller (`can-manage`) stays `private, no-store`.
+
+**`DATABASE_URL` is Neon's *pooled* endpoint; migrations use
+`DATABASE_URL_UNPOOLED`.** Direct endpoints cap out near 110 connections and
+every warm serverless instance holds up to `pool.max` of them
+([db.ts](src/lib/db.ts)), which a busy auction can reach. `config/database.js`
+deliberately prefers the direct URL, because sequelize-cli runs DDL in
+transactions that transaction-mode pooling handles badly.
+
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
 `/sponsors` and the OG image routes are public today. The proxy is

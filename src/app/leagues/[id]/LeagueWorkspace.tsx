@@ -78,7 +78,7 @@ function LeaguePageInner() {
   // payload this page otherwise loads once.
   useEffect(() => {
     const iv = setInterval(() => {
-      fetch(`/api/leagues/${id}/auction/live/summary`, { cache: 'no-store' })
+      fetch(`/api/leagues/${id}/auction/live/summary`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => setLiveAuction(d?.live ?? null))
         .catch(() => { /* keep the last known state */ });

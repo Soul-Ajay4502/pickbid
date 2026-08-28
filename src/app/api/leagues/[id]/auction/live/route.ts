@@ -3,7 +3,11 @@ import { getAuctionLive, setAuctionLive } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
 import type { LiveAuctionState, Player, PlayerRole } from '@/lib/types';
 
-// Spectators poll this often — never cache, always read the latest blob.
+// Spectators poll this every 1.5s, so the handler itself must never be
+// statically rendered — but the *response* is deliberately cacheable at the CDN
+// for one second (see the GET's headers). Without that, a hall of 500
+// spectators is 500 function invocations and 500 Neon queries every 1.5s;
+// with it, the edge answers them all from a single origin read per second.
 export const dynamic = 'force-dynamic';
 
 function stripContact<T extends Player | null>(p: T): T {
@@ -18,7 +22,17 @@ export async function GET(
   try {
     const { id } = await params;
     const state = await getAuctionLive(id);
-    return NextResponse.json({ state }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ state }, {
+      headers: {
+        // The browser must ask every time — polling is the whole point, and a
+        // frozen frame on a spectator screen is worse than a request.
+        'Cache-Control': 'public, max-age=0, must-revalidate',
+        // …but the edge answers a second's worth of those asks from one origin
+        // read, so viewer count stops driving origin load. Spectators already
+        // run up to 1.5s behind the auctioneer; this adds at most 1s to that.
+        'CDN-Cache-Control': 'public, s-maxage=1, stale-while-revalidate=2',
+      },
+    });
   } catch (error) {
     console.error('Error reading live auction state:', error);
     return NextResponse.json({ error: 'Failed to read live state' }, { status: 500 });

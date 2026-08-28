@@ -43,6 +43,7 @@ when features change.
 - `leagues/[id]/teams`, `officials`, `matches`: team, official and match management.
 - `leagues/[id]/auction/live`, `auction/live/summary`, `auction/reset`: live auction state broadcast/poll, the cheap "is an auction running right now" summary behind the LIVE banner, and reset.
 - `leagues/[id]/ledger`: optional markdown income & expense sheet. Organizers read/write incl. drafts; league members read only once published; non-members 403 regardless of `isPublic`.
+- `leagues/[id]/can-manage`: just the caller's manage flag — the watch screen's cheap substitute for reading a whole league.
 - `leagues/[id]/clone`: duplicate a league.
 - `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
