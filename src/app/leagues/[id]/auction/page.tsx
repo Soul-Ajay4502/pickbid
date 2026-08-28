@@ -13,13 +13,12 @@ import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, Pan
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
-// A sold/unsold call sits here for GRACE_MS before it's actually persisted —
-// gives the auctioneer a window to undo a mis-click before it locks in.
-type PendingAction =
+// The most recent sold/unsold call. It is persisted the moment it's made —
+// this record exists only so the auctioneer can roll it back with Undo at any
+// point, right up until the next call replaces it.
+type LastAction =
   | { type: 'sold'; player: Player; teamId: string; teamName: string; teamColor: string; price: number }
   | { type: 'unsold'; player: Player };
-
-const GRACE_MS = 5000;
 
 const fmt = formatINR;
 
@@ -74,10 +73,9 @@ export default function AuctionPage() {
   const [spentByTeam, setSpentByTeam] = useState<Record<string, number>>({});
   const [soldTeamId, setSoldTeamId] = useState('');
   const [soldPrice, setSoldPrice] = useState('');
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [graceSecondsLeft, setGraceSecondsLeft] = useState(0);
-  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const graceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [lastAction, setLastAction] = useState<LastAction | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [viewTeam, setViewTeam] = useState<Team | null>(null);
@@ -140,12 +138,8 @@ export default function AuctionPage() {
     }
     upd(); window.addEventListener('resize', upd); return () => window.removeEventListener('resize', upd);
   }, [league, purseOpen]);
-  // Note: the grace *timeout* itself is intentionally left running on unmount
-  // (e.g. the auctioneer navigates away) so a pending sold/unsold call still
-  // commits and persists — only its countdown-display interval is cleared.
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
     if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
   }, []);
 
@@ -187,6 +181,12 @@ export default function AuctionPage() {
       lastSold: opts.lastSold ?? null,
       progress: { sold: opts.roster.length, total: lg.players.length, unsold: opts.unsold.length, left: opts.pool.length + opts.unsold.length, round: opts.round },
       purses,
+      // Names and roles only — the spectator board lists who's still to come,
+      // and nothing here should carry a photo, a phone number or a stat line.
+      remaining: [
+        ...opts.pool.map(p => ({ name: p.name, role: p.role, isUnsold: false })),
+        ...opts.unsold.map(p => ({ name: p.name, role: p.role, isUnsold: true })),
+      ],
     };
   }, [league, basePrice]);
 
@@ -196,7 +196,7 @@ export default function AuctionPage() {
     const u = league.players.filter(x => !!x.isUnsold);
     const s = league.players.filter(x => !!x.teamId);
     setPool(p); setUnsoldQueue(u); setSoldPlayers(s);
-    setCurrent(null); setRound(1); setPhase('idle');
+    setCurrent(null); setRound(1); setPhase('idle'); setLastAction(null);
     postLive(buildLive({ phase: 'idle', roster: s, pool: p, unsold: u, round: 1 }));
   }
 
@@ -249,76 +249,118 @@ export default function AuctionPage() {
     });
   }
 
-  // Commits a sold/unsold call once its grace window has fully elapsed —
-  // this is the only place either result is actually persisted or broadcast.
-  async function commitAction(action: PendingAction) {
-    setPendingAction(null);
+  /**
+   * Records a sold/unsold call.
+   *
+   * The board, the celebration and the spectator broadcast all move *first*,
+   * and the write is reconciled behind them. Waiting on the round trip left the
+   * sold player's card sitting on screen for a beat after the modal closed,
+   * which on auction night reads as a missed click. If the write does fail
+   * nothing was saved, so the rollback below restores the board exactly and
+   * hands the player back to the auctioneer.
+   */
+  async function commitAction(action: LastAction) {
+    const player = action.player;
+    // Captured before anything optimistic happens — the board to restore if the
+    // write fails. `pool` is untouched either way, so it needs no snapshot.
+    const prevSold = soldPlayers, prevUnsold = unsoldQueue, prevSpent = spentByTeam;
+    let toastId: string | number | undefined;
+    let body: Record<string, unknown>;
+
     if (action.type === 'sold') {
-      const { player, teamId, teamName, teamColor, price } = action;
-      try {
-        const res = await fetch(`/api/leagues/${id}/players/${player.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId, soldPrice: price, isUnsold: false }) });
-        if (!res.ok) throw new Error();
-        const soldP: Player = { ...player, teamId, soldPrice: price };
-        const ns = [...soldPlayers, soldP];
-        const doneNow = ns.length === league!.players.length;
-        setSpentByTeam(prev => ({ ...prev, [teamId]: (prev[teamId] ?? 0) + price }));
-        setSoldPlayers(ns); setCurrent(null);
-        setPhase(doneNow ? 'done' : 'idle');
-        // Keep the "SOLD" celebration live for spectators until the next pick
-        postLive(buildLive({
-          phase: doneNow ? 'done' : 'sold',
-          current: soldP,
-          lastSold: { player: soldP, teamName, teamColor, price },
-          roster: ns, pool, unsold: unsoldQueue, round,
-        }));
-        // Celebrate on the control screen too, same as spectators see
-        setConfettiBurst(k => k + 1);
-        if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
-        confettiTimerRef.current = setTimeout(() => setConfettiBurst(0), 4500);
-        // Announce the sale to the league's WhatsApp group straight from the
-        // confirmation toast; the squad modal offers a resend later.
-        const shareMessage = buildPlayerSoldMessage({ playerName: player.name, soldPrice: price, teamName });
-        toast.success('Player sold!', {
-          duration: 12000,
-          action: {
-            label: 'Share to WhatsApp',
-            onClick: () => window.open(whatsappShareLink(shareMessage), '_blank', 'noopener'),
-          },
-        });
-      } catch { toast.error('Failed to record sale'); }
+      const { teamId, teamName, teamColor, price } = action;
+      const soldP: Player = { ...player, teamId, soldPrice: price };
+      const ns = [...soldPlayers, soldP];
+      const doneNow = ns.length === league!.players.length;
+      setSpentByTeam(prev => ({ ...prev, [teamId]: (prev[teamId] ?? 0) + price }));
+      setSoldPlayers(ns); setCurrent(null); setLastAction(action);
+      setPhase(doneNow ? 'done' : 'idle');
+      // Keep the "SOLD" celebration live for spectators until the next pick
+      postLive(buildLive({
+        phase: doneNow ? 'done' : 'sold',
+        current: soldP,
+        lastSold: { player: soldP, teamName, teamColor, price },
+        roster: ns, pool, unsold: unsoldQueue, round,
+      }));
+      // Celebrate on the control screen too, same as spectators see
+      setConfettiBurst(k => k + 1);
+      if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
+      confettiTimerRef.current = setTimeout(() => setConfettiBurst(0), 4500);
+      // Announce the sale to the league's WhatsApp group straight from the
+      // confirmation toast; the squad modal offers a resend later.
+      const shareMessage = buildPlayerSoldMessage({ playerName: player.name, soldPrice: price, teamName });
+      toastId = toast.success('Player sold!', {
+        duration: 12000,
+        action: {
+          label: 'Share to WhatsApp',
+          onClick: () => window.open(whatsappShareLink(shareMessage), '_blank', 'noopener'),
+        },
+      });
+      body = { teamId, soldPrice: price, isUnsold: false };
     } else {
-      const player = action.player;
-      await fetch(`/api/leagues/${id}/players/${player.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isUnsold: true, teamId: null, soldPrice: null }) });
       const nu = [...unsoldQueue, player];
-      setUnsoldQueue(nu); setCurrent(null); setPhase('idle');
+      setUnsoldQueue(nu); setCurrent(null); setPhase('idle'); setLastAction(action);
       // Keep the "UNSOLD" moment live for spectators until the next pick
       postLive(buildLive({ phase: 'unsold', current: player, roster: soldPlayers, pool, unsold: nu, round }));
-      toast.info(`${player.name} went unsold`);
+      toastId = toast.info(`${player.name} went unsold`);
+      body = { isUnsold: true, teamId: null, soldPrice: null };
+    }
+
+    try {
+      const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Nothing was saved — take back the celebration and put the player back
+      // on the block rather than leaving a result on the board that isn't real.
+      if (toastId !== undefined) toast.dismiss(toastId);
+      if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
+      setConfettiBurst(0);
+      setSpentByTeam(prevSpent); setSoldPlayers(prevSold); setUnsoldQueue(prevUnsold);
+      setLastAction(null); setCurrent(player); setPhase('showing');
+      postLive(buildLive({ phase: 'showing', current: player, roster: prevSold, pool, unsold: prevUnsold, round }));
+      toast.error(`Couldn't save ${player.name} — back on the block, try again`);
     }
   }
 
-  // Starts the 5s panic-button window: nothing is written to the server or
-  // broadcast to spectators until it elapses — an Undo click within the
-  // window cancels commitAction entirely, with zero side effects.
-  function startGrace(action: PendingAction) {
-    setPendingAction(action);
-    setGraceSecondsLeft(Math.round(GRACE_MS / 1000));
-    graceIntervalRef.current = setInterval(() => setGraceSecondsLeft(s => Math.max(0, s - 1)), 1000);
-    graceTimerRef.current = setTimeout(() => {
-      if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
-      commitAction(action);
-    }, GRACE_MS);
-  }
-
-  function undoGrace() {
-    if (graceTimerRef.current) clearTimeout(graceTimerRef.current);
-    if (graceIntervalRef.current) clearInterval(graceIntervalRef.current);
-    setPendingAction(null);
-    toast.info('Undone — back to the block');
+  // Rolls back the last sold/unsold call. Available for as long as it is the
+  // last call — no countdown. The player's auction fields are cleared on the
+  // server and they go straight back on the block; anyone who happens to be on
+  // the block at that moment returns to the front of the pool.
+  async function undoLast() {
+    if (!lastAction || undoing || committing || phase === 'picking') return;
+    const action = lastAction;
+    setUndoing(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}/players/${action.player.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: null, soldPrice: null, isUnsold: false }),
+      });
+      if (!res.ok) throw new Error();
+      const restored: Player = { ...action.player, teamId: null, soldPrice: null, isUnsold: false };
+      const onBlock = current && current.id !== restored.id ? current : null;
+      const ns = soldPlayers.filter(p => p.id !== restored.id);
+      const nu = unsoldQueue.filter(p => p.id !== restored.id);
+      const np = [...(onBlock ? [onBlock] : []), ...pool.filter(p => p.id !== restored.id)];
+      if (action.type === 'sold') {
+        setSpentByTeam(prev => ({ ...prev, [action.teamId]: Math.max(0, (prev[action.teamId] ?? 0) - action.price) }));
+      }
+      setSoldPlayers(ns); setUnsoldQueue(nu); setPool(np);
+      setCurrent(restored); setPhase('showing'); setPhotoOpen(false);
+      setSoldTeamId(''); setSoldPrice('');
+      setLastAction(null);
+      // Kill any celebration still running for the sale being undone
+      if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
+      setConfettiBurst(0);
+      postLive(buildLive({ phase: 'showing', current: restored, roster: ns, pool: np, unsold: nu, round }));
+      toast.info(`Undone — ${restored.name} is back on the block`);
+    } catch { toast.error('Failed to undo — try again'); }
+    finally { setUndoing(false); }
   }
 
   function confirmSold() {
-    if (!current || !soldTeamId) return;
+    if (!current || !soldTeamId || committing) return;
     const price = parseInt(soldPrice) || 0;
     // Enforce squad-size and max-bid rules when real teams exist
     const team = (league?.teams ?? []).find(t => t.id === soldTeamId);
@@ -327,15 +369,17 @@ export default function AuctionPage() {
       if (st.slotsLeft === 0) { toast.error(`${team.name} squad is already full (${st.maxPlayers} players)`); return; }
       if (price > st.maxBid) { toast.error(`Exceeds ${team.name}'s max bid of ${fmt(st.maxBid)}`); return; }
     }
-    const action: PendingAction = { type: 'sold', player: current, teamId: soldTeamId, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price };
+    const action: LastAction = { type: 'sold', player: current, teamId: soldTeamId, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price };
     setSoldTeamId(''); setSoldPrice('');
     setPhase('showing');
-    startGrace(action);
+    setCommitting(true);
+    commitAction(action).finally(() => setCommitting(false));
   }
 
   function markUnsold() {
-    if (!current) return;
-    startGrace({ type: 'unsold', player: current });
+    if (!current || committing) return;
+    setCommitting(true);
+    commitAction({ type: 'unsold', player: current }).finally(() => setCommitting(false));
   }
 
   if (loading || !league) return (
@@ -481,6 +525,7 @@ export default function AuctionPage() {
             Reset Auction
           </Button>
           <Button onClick={() => router.push(`/leagues/${id}`)} className="bg-green-600 hover:bg-green-500 text-white btn-glow-green">Back to League</Button>
+          {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} />}
         </div>
       </div>
     </div>
@@ -496,7 +541,6 @@ export default function AuctionPage() {
         @keyframes cardDropIn{from{opacity:0;transform:scale(.82) translateY(-24px);filter:blur(10px)}to{opacity:1;transform:scale(1) translateY(0);filter:blur(0)}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         @keyframes lobbyCta{0%,100%{box-shadow:0 0 28px 4px rgba(22,163,74,.5),0 10px 36px rgba(22,163,74,.3)}50%{box-shadow:0 0 52px 10px rgba(22,163,74,.7),0 10px 52px rgba(22,163,74,.45)}}
-        @keyframes graceShrink{from{width:100%}to{width:0%}}
       `}</style>
       <div className="h-screen flex flex-col bg-background text-foreground">
         {confettiBurst > 0 && <Confetti key={confettiBurst} fixed />}
@@ -541,6 +585,7 @@ export default function AuctionPage() {
                   <Shuffle size={30} />Pick Next Player
                 </button>
                 <p style={{ color: 'var(--muted-foreground)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' }}>{pool.length + unsoldQueue.length} in pool</p>
+                {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} />}
               </div>
             )}
             {phase === 'picking' && (
@@ -568,26 +613,18 @@ export default function AuctionPage() {
                   )}
                 </div>
                 {photoOpen && current.photo && <PlayerPhotoModal src={current.photo} name={current.name} onClose={() => setPhotoOpen(false)} />}
-                {phase === 'showing' && (pendingAction ? (
-                  <div className="flex flex-col items-center gap-3 shrink-0" style={{ animation: 'fadeInUp .3s cubic-bezier(.22,1,.36,1) both' }}>
-                    <p className={`text-xl font-bold ${pendingAction.type === 'sold' ? 'text-green-500' : 'text-amber-500'}`}>
-                      {pendingAction.type === 'sold' ? `Sold to ${pendingAction.teamName} for ${fmt(pendingAction.price)}` : `${pendingAction.player.name} marked Unsold`}
-                    </p>
-                    <button onClick={undoGrace}
-                      className="relative overflow-hidden flex items-center gap-2 px-10 py-5 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-lg font-bold shadow-xl shadow-red-500/25 transition-transform">
-                      <span key={pendingAction.player.id} className="absolute inset-y-0 left-0 bg-white/20 pointer-events-none" style={{ animation: `graceShrink ${GRACE_MS}ms linear forwards` }} />
-                      <RotateCcw className="w-5 h-5 relative" /><span className="relative">Undo ({graceSecondsLeft}s)</span>
-                    </button>
+                {phase === 'showing' && (
+                  <div className="flex flex-col items-center gap-3.5 shrink-0" style={{ animation: 'fadeInUp .45s .3s cubic-bezier(.22,1,.36,1) both' }}>
+                    <div className="flex gap-5">
+                      <Button size="lg" disabled={committing} onClick={markUnsold} className="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-amber-500/20 disabled:opacity-60">Unsold</Button>
+                      <Button size="lg" disabled={committing} onClick={() => setPhase('sold-modal')} className="bg-green-600 hover:bg-green-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-green-500/20 disabled:opacity-60">Sold ✓</Button>
+                    </div>
+                    {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} note="whoever is on the block now goes back to the pool" />}
                   </div>
-                ) : (
-                  <div className="flex gap-5 shrink-0" style={{ animation: 'fadeInUp .45s .3s cubic-bezier(.22,1,.36,1) both' }}>
-                    <Button size="lg" onClick={markUnsold} className="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-amber-500/20">Unsold</Button>
-                    <Button size="lg" onClick={() => setPhase('sold-modal')} className="bg-green-600 hover:bg-green-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-green-500/20">Sold ✓</Button>
-                  </div>
-                ))}
+                )}
                 {phase === 'sold-modal' && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-popover border border-foreground/12 rounded-2xl p-6 w-full max-w-sm space-y-5 animate-scale-in shadow-2xl">
+                    <div className="bg-popover border border-foreground/12 rounded-2xl p-6 w-full max-w-sm md:max-w-lg lg:max-w-screen-lg space-y-5 animate-scale-in shadow-2xl">
                       <div className="flex items-center justify-between">
                         <h3 className="font-bold text-lg text-foreground">Record Sale — {current.name}</h3>
                         <button onClick={() => setPhase('showing')} className="text-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -655,6 +692,29 @@ export default function AuctionPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Undo for the last sold/unsold call — a plain button that stays live until
+ * the next call replaces it, not a countdown. It spells out what it would roll
+ * back so the auctioneer can tell at a glance it's the call they meant to fix.
+ */
+function UndoLastButton({ action, busy, onClick, note }: {
+  action: LastAction; busy: boolean; onClick: () => void; note?: string;
+}) {
+  const detail = action.type === 'sold'
+    ? `${action.player.name} → ${action.teamName} · ${fmt(action.price)}`
+    : `${action.player.name} · unsold`;
+  return (
+    <button onClick={onClick} disabled={busy} title={`Undo ${detail}${note ? ` — ${note}` : ''}`}
+      className="inline-flex items-center gap-2 max-w-full px-4 py-2 rounded-xl border border-foreground/15 bg-foreground/5 text-sm font-medium text-foreground/55 hover:text-foreground hover:bg-red-500/10 hover:border-red-500/40 disabled:opacity-50 transition-colors">
+      {busy
+        ? <span className="w-3.5 h-3.5 shrink-0 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+        : <RotateCcw className="w-3.5 h-3.5 shrink-0" />}
+      <span className="shrink-0">Undo last</span>
+      <span className="text-foreground/35 truncate">{detail}</span>
+    </button>
   );
 }
 

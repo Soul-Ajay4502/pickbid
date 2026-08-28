@@ -241,6 +241,14 @@ export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
    * create one), so this is only consulted for everyone else.
    */
   ledgerPublished: boolean;
+  /**
+   * Set only while an auction is actually being run right now. It drives the
+   * LIVE banner and its resume/watch links — without it the running auction is
+   * unreachable from the app, since the watch link lives inside the auction
+   * console's share modal. Null when nothing has been broadcast, when the
+   * auction finished, or when the last push went stale.
+   */
+  liveAuction: LiveAuctionSummary | null;
 }
 
 // ── Public (unauthenticated) league view ──────────────────────────────────────
@@ -336,6 +344,12 @@ export interface PublicLeagueView {
   sponsors: { id: string; name: string; logoUrl: string; website: string | null }[];
   /** Derived from whether any player has been sold and whether any remain. */
   auctionStatus: 'not-started' | 'in-progress' | 'complete';
+  /**
+   * Set while an auction is being run right now, so the page can point at the
+   * public watch screen. Distinct from `auctionStatus`, which describes the
+   * results on record rather than whether anyone is bidding this minute.
+   */
+  liveAuction: LiveAuctionSummary | null;
   registeredPlayers: number;
   totalSpend: number;
 }
@@ -397,6 +411,39 @@ export interface LiveAuctionState {
   lastSold: { player: Player; teamName: string; teamColor: string; price: number } | null;
   progress: { sold: number; total: number; unsold: number; left: number; round: number };
   purses: LivePurse[];
+  /**
+   * Everyone still to be called — the pool first, then the unsold queue waiting
+   * on the next round. Names and roles only: enough for the watch screen's
+   * "Left" list without dragging photos or stats through a blob that every
+   * spectator polls every 1.5s. Who is sold is already implicit in `purses`.
+   *
+   * Optional because boards broadcast before this field existed don't carry it
+   * — read it as `?? []` and say "not sent yet" rather than "nobody left".
+   */
+  remaining?: { name: string; role: PlayerRole; isUnsold: boolean }[];
+}
+
+/**
+ * How long a broadcast keeps counting as live without a fresh push. The auction
+ * page only posts on transitions, so a slow bidding round can sit quiet for a
+ * while — but a board nobody has touched in half an hour is a tab someone left
+ * open, not an auction in progress.
+ */
+export const LIVE_AUCTION_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * "An auction is running right now" — the compact form of `LiveAuctionState`
+ * that drives the LIVE banner and its links. It carries no players, purses or
+ * contact numbers, so it is safe for anyone who can see the league at all, and
+ * cheap enough to poll.
+ */
+export interface LiveAuctionSummary {
+  phase: LiveAuctionState['phase'];
+  round: number;
+  sold: number;
+  total: number;
+  /** Server clock, not the auctioneer's device — ISO 8601. */
+  updatedAt: string;
 }
 
 // ── Super-admin dashboard ─────────────────────────────────────────────────────

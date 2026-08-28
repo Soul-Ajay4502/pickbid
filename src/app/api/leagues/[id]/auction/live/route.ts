@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuctionLive, setAuctionLive } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
-import type { LiveAuctionState, Player } from '@/lib/types';
+import type { LiveAuctionState, Player, PlayerRole } from '@/lib/types';
 
 // Spectators poll this often — never cache, always read the latest blob.
 export const dynamic = 'force-dynamic';
@@ -54,6 +54,13 @@ export async function POST(
         : null,
       progress: body.progress ?? { sold: 0, total: 0, unsold: 0, left: 0, round: 1 },
       purses: body.purses ?? [],
+      // Mapped field by field for the same reason as `stripContact` above: a
+      // fatter player object must not ride onto the public board through here.
+      remaining: (Array.isArray(body.remaining) ? body.remaining : []).map((p) => ({
+        name: String(p?.name ?? ''),
+        role: p?.role as PlayerRole,
+        isUnsold: !!p?.isUnsold,
+      })),
     };
 
     await setAuctionLive(id, state);

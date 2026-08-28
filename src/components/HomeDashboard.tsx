@@ -28,7 +28,20 @@ function palette(name: string) {
   return AVATAR_PALETTES[idx];
 }
 
-function LeagueCard({ league, index }: { league: League; index: number }) {
+/** Red pulse marking a league whose auction is being run right this minute. */
+function LivePill() {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-500/12 text-red-600 dark:text-red-400 border border-red-500/25">
+      <span className="relative flex w-1.5 h-1.5" aria-hidden="true">
+        <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
+        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-red-500" />
+      </span>
+      Live
+    </span>
+  );
+}
+
+function LeagueCard({ league, index, live = false }: { league: League; index: number; live?: boolean }) {
   const router = useRouter();
   const pal = palette(league.name);
 
@@ -57,10 +70,13 @@ function LeagueCard({ league, index }: { league: League; index: number }) {
               by {league.conductedBy}
             </p>
           </div>
-          <span className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-linear-to-br ${pal.bg} ${pal.text} border ${pal.border}`}>
-            <Users className="w-3 h-3" />
-            {league.totalPlayers}
-          </span>
+          <div className="shrink-0 flex flex-col items-end gap-1.5">
+            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-linear-to-br ${pal.bg} ${pal.text} border ${pal.border}`}>
+              <Users className="w-3 h-3" />
+              {league.totalPlayers}
+            </span>
+            {live && <LivePill />}
+          </div>
         </div>
 
         {/* Footer */}
@@ -117,17 +133,23 @@ function SectionHeader({ label, count, accent = 'green' }: { label: string; coun
 /** Signed-in dashboard — the server page only renders this when a session exists. */
 export default function HomeDashboard() {
   const [sections, setSections] = useState<LeagueSections>(EMPTY_SECTIONS);
+  // Leagues with an auction running right now — the badge is this screen's only
+  // hint that there's something live to jump back into.
+  const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     fetch('/api/leagues')
       .then((r) => (r.ok ? r.json() : EMPTY_SECTIONS))
-      .then((data) => setSections({
-        created: Array.isArray(data.created) ? data.created : [],
-        coOrganizing: Array.isArray(data.coOrganizing) ? data.coOrganizing : [],
-        joined: Array.isArray(data.joined) ? data.joined : [],
-      }))
+      .then((data) => {
+        setSections({
+          created: Array.isArray(data.created) ? data.created : [],
+          coOrganizing: Array.isArray(data.coOrganizing) ? data.coOrganizing : [],
+          joined: Array.isArray(data.joined) ? data.joined : [],
+        });
+        setLiveIds(new Set<string>(Array.isArray(data.liveLeagueIds) ? data.liveLeagueIds : []));
+      })
       .catch(() => setSections(EMPTY_SECTIONS))
       .finally(() => setLoading(false));
   }, []);
@@ -192,7 +214,7 @@ export default function HomeDashboard() {
           <SectionHeader label="Created by you" count={sections.created.length} accent="green" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {sections.created.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} />
+              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
             ))}
           </div>
         </section>
@@ -204,7 +226,7 @@ export default function HomeDashboard() {
           <SectionHeader label="Co-organizing" count={sections.coOrganizing.length} accent="violet" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {sections.coOrganizing.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} />
+              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
             ))}
           </div>
         </section>
@@ -216,7 +238,7 @@ export default function HomeDashboard() {
           <SectionHeader label="Joined" count={sections.joined.length} accent="blue" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {sections.joined.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} />
+              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
             ))}
           </div>
         </section>

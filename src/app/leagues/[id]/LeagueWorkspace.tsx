@@ -11,7 +11,8 @@ import CertificateDownloadButtons from '@/components/CertificateDownloadButtons'
 import TemplateSelector from '@/components/TemplateSelector';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
-import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
+import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
+import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { toast } from 'sonner';
@@ -48,6 +49,9 @@ function LeaguePageInner() {
   const [showPlayers, setShowPlayers] = useState(false);
   // Creator-only co-organizer management modal
   const [coOrgOpen, setCoOrgOpen] = useState(false);
+  // Non-null only while an auction is being run right now. Kept separate from
+  // `data` because it's polled on its own — see the interval below.
+  const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(null);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -58,6 +62,7 @@ function LeaguePageInner() {
       }
       const json: LeagueWithPlayers = await res.json();
       setData(json);
+      setLiveAuction(json.liveAuction ?? null);
       setActiveTemplateId(json.templateId);
     } catch {
       toast.error('Failed to load league');
@@ -67,6 +72,19 @@ function LeaguePageInner() {
   }, [id, router]);
 
   useEffect(() => { fetchLeague(); }, [fetchLeague]);
+
+  // An auction can start — or finish — while this page sits open, so re-check
+  // the live summary on a timer. It's a single row read, unlike the full league
+  // payload this page otherwise loads once.
+  useEffect(() => {
+    const iv = setInterval(() => {
+      fetch(`/api/leagues/${id}/auction/live/summary`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setLiveAuction(d?.live ?? null))
+        .catch(() => { /* keep the last known state */ });
+    }, 30_000);
+    return () => clearInterval(iv);
+  }, [id]);
 
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return;
@@ -538,6 +556,12 @@ function LeaguePageInner() {
           All Leagues
         </button>
 
+        {/* The only route back into a running auction from inside the app —
+            organizers get the console, everyone else the public watch screen. */}
+        {liveAuction && (
+          <LiveAuctionBanner leagueId={id} live={liveAuction} canManage={canManage} />
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
           {/* Title + capacity */}
           <div className="min-w-0">
@@ -656,7 +680,7 @@ function LeaguePageInner() {
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-linear-to-br from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:via-violet-500 hover:to-indigo-500 transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)] hover:shadow-[0_0_36px_rgba(124,58,237,0.45)] hover:-translate-y-0.5 active:translate-y-0"
               >
                 <Gavel className="w-4 h-4" />
-                Start Auction
+                {liveAuction ? 'Resume Auction' : 'Start Auction'}
               </button>
             )}
           </div>

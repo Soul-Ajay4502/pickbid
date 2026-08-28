@@ -3,7 +3,8 @@ import { Op } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import { LIVE_AUCTION_TTL_MS } from './types';
+import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,12 +151,13 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
   const league = await getLeague(id);
   if (!league || !league.isPublic) return null;
 
-  const [players, teams, officials, matches, sponsors] = await Promise.all([
+  const [players, teams, officials, matches, sponsors, liveAuction] = await Promise.all([
     getPlayers(id),
     getTeams(id),
     getOfficials(id),
     getMatches(id),
     getSponsors(id),
+    getAuctionLiveSummary(id),
   ]);
 
   const toPublicPlayer = (p: Player): PublicPlayer => ({
@@ -257,6 +259,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
       id: s.id, name: s.name, logoUrl: s.logoUrl, website: s.website,
     })),
     auctionStatus,
+    liveAuction,
     registeredPlayers:  players.length,
     totalSpend:         soldPlayers.reduce((sum, p) => sum + (p.soldPrice ?? 0), 0),
   };
@@ -1150,6 +1153,52 @@ export async function setAuctionLive(leagueId: string, state: LiveAuctionState):
 
 export async function clearAuctionLive(leagueId: string): Promise<void> {
   await AuctionLiveModel.destroy({ where: { leagueId } });
+}
+
+/**
+ * Row → "is an auction being run right now" summary, or null.
+ *
+ * The row's own `updatedAt` is stamped server-side on every broadcast, so it —
+ * not the auctioneer's clock inside the blob — decides staleness. A finished
+ * auction doesn't count as live either: `done` sits on the board until someone
+ * resets the auction or clears the broadcast.
+ */
+function toLiveSummary(
+  state: unknown,
+  updatedAt: Date | string | null | undefined
+): LiveAuctionSummary | null {
+  const live = (state ?? null) as LiveAuctionState | null;
+  if (!live || live.phase === 'done' || live.phase === 'lobby') return null;
+  const stamp = updatedAt ? new Date(updatedAt) : null;
+  if (!stamp || Number.isNaN(stamp.getTime())) return null;
+  if (Date.now() - stamp.getTime() > LIVE_AUCTION_TTL_MS) return null;
+  return {
+    phase:     live.phase,
+    round:     live.progress?.round ?? 1,
+    sold:      live.progress?.sold ?? 0,
+    total:     live.progress?.total ?? 0,
+    updatedAt: stamp.toISOString(),
+  };
+}
+
+/** Whether an auction is being run right now in one league. */
+export async function getAuctionLiveSummary(leagueId: string): Promise<LiveAuctionSummary | null> {
+  const row = await AuctionLiveModel.findByPk(leagueId);
+  return row ? toLiveSummary(row.state, row.updatedAt) : null;
+}
+
+/**
+ * The subset of `leagueIds` with an auction running right now — one query for a
+ * whole dashboard, so the league list can flag them without N round trips.
+ */
+export async function getLiveLeagueIds(leagueIds: string[]): Promise<string[]> {
+  if (leagueIds.length === 0) return [];
+  const rows = await AuctionLiveModel.findAll({
+    where: { leagueId: { [Op.in]: leagueIds } },
+    attributes: ['leagueId', 'state', 'updatedAt'],
+    raw: true,
+  });
+  return rows.filter((r) => toLiveSummary(r.state, r.updatedAt)).map((r) => r.leagueId as string);
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────

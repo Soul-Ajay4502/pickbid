@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeaguesByCreator, getLeaguesJoinedByUser, getLeaguesCoOrganizedByUser, createLeague } from '@/lib/store';
+import { getLeaguesByCreator, getLeaguesJoinedByUser, getLeaguesCoOrganizedByUser, getLiveLeagueIds, createLeague } from '@/lib/store';
 import { parsePickPreference } from '@/lib/types';
 import { auth } from '@/auth';
 
@@ -19,7 +19,12 @@ export async function GET() {
     // management role is the more meaningful listing, so it wins
     const coOrganizingIds = new Set(coOrganizing.map((l) => l.id));
     const joined = joinedRaw.filter((l) => !coOrganizingIds.has(l.id));
-    return NextResponse.json({ created, coOrganizing, joined });
+    // Which of these has an auction running right now, so the dashboard can
+    // flag it the moment the app opens — one query for every league listed.
+    const liveLeagueIds = await getLiveLeagueIds(
+      [...created, ...coOrganizing, ...joined].map((l) => l.id)
+    );
+    return NextResponse.json({ created, coOrganizing, joined, liveLeagueIds });
   } catch (error) {
     console.error('Error fetching leagues:', error);
     return NextResponse.json({ error: 'Failed to fetch leagues' }, { status: 500 });

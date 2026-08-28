@@ -33,6 +33,7 @@ export async function GET(
       coOrganizers: [],
       hasJoined: false,
       ledgerPublished: false,
+      liveAuction: null,
     });
     if (stats.soldPlayers.length === 0) {
       return NextResponse.json({ error: 'Nothing to wrap yet' }, { status: 404 });

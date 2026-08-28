@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, getAuctionLiveSummary, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
@@ -14,8 +14,9 @@ export async function GET(
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const [players, teams, officials, coOrganizers, ledgerPublished] = await Promise.all([
+    const [players, teams, officials, coOrganizers, ledgerPublished, liveAuction] = await Promise.all([
       getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id), hasPublishedLedger(id),
+      getAuctionLiveSummary(id),
     ]);
     const userId = session?.user?.id;
     const isCreator = userId === league.creatorId;
@@ -50,7 +51,10 @@ export async function GET(
     // array, so they're easy to find in the response rather than buried after it
     // Only whether a *published* ledger exists — the sheet itself, and the
     // existence of any draft, stay behind /api/leagues/[id]/ledger
-    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
+    // `liveAuction` is non-null only while an auction is actually being run —
+    // it's what puts the LIVE banner (and the only in-app route back into a
+    // running auction) on the league page.
+    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, liveAuction, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });

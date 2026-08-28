@@ -16,6 +16,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Gavel, Users, Trophy, CalendarDays, Handshake, ShieldCheck } from 'lucide-react';
+import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
 import { formatINR } from '@/lib/utils';
 import { SITE_NAME } from '@/lib/seo';
 import type { PublicLeagueView, PublicPlayer } from '@/lib/types';
@@ -80,6 +81,7 @@ function StatTile({
 
 export default function PublicLeagueView({ league }: { league: PublicLeagueView }) {
   const {
+    id,
     name,
     conductedBy,
     logoUrl,
@@ -91,6 +93,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
     standings,
     sponsors,
     auctionStatus,
+    liveAuction,
     registeredPlayers,
     totalSpend,
   } = league;
@@ -122,6 +125,10 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
           <li className="text-foreground/80">{name}</li>
         </ol>
       </nav>
+
+      {/* A logged-out visitor can follow the auction without an account — the
+          watch screen is public, and this is the only place it's advertised. */}
+      {liveAuction ? <LiveAuctionBanner leagueId={id} live={liveAuction} /> : null}
 
       {/* ── Identity ─────────────────────────────────────────────────────── */}
       <header className="flex flex-col sm:flex-row sm:items-center gap-5">

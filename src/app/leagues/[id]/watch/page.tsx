@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { MessageCircle, Copy, Presentation } from 'lucide-react';
 import { toast } from 'sonner';
@@ -156,12 +156,119 @@ function TeamSquadModal({ t, canShare, big, onClose }: { t: LivePurse; canShare:
   );
 }
 
+/** Shared shell for the roster lists behind the header counters. */
+function ListModal({ title, count, accent, big, onClose, children }: {
+  title: string; count: number; accent: string; big: boolean; onClose: () => void; children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onClick={onClose}>
+      <div className={`bg-[oklch(0.13_0.02_260)] border border-white/12 rounded-2xl w-full ${big ? 'max-w-2xl' : 'max-w-md'} max-h-[85vh] flex flex-col shadow-2xl text-white`}
+        style={{ animation: 'cardDropIn .35s cubic-bezier(.34,1.56,.64,1) both' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-white/10">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h3 className={`font-bold truncate ${big ? 'text-2xl' : 'text-lg'}`}>{title}</h3>
+            <span className={`tabular-nums shrink-0 font-bold ${accent} ${big ? 'text-lg' : 'text-sm'}`}>{count}</span>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white shrink-0 text-2xl leading-none" aria-label="Close">×</button>
+        </div>
+        <div className="overflow-y-auto px-5 py-2 flex-1">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Every sale so far, biggest first. Built from the purses the board already
+ * carries, so it costs the broadcast nothing.
+ */
+function SoldListModal({ purses, count, big, onClose }: {
+  purses: LivePurse[]; count: number; big: boolean; onClose: () => void;
+}) {
+  const sold = purses
+    .flatMap(t => t.players.map(p => ({ ...p, teamName: t.name, teamColor: t.color })))
+    .sort((a, b) => b.price - a.price);
+  return (
+    <ListModal title="Sold" count={count} accent="text-green-400" big={big} onClose={onClose}>
+      {sold.length === 0 ? (
+        <p className={`text-center py-10 ${big ? 'text-lg text-white/60' : 'text-sm text-white/40'}`}>
+          {count > 0 ? 'This auction has no teams set up, so there is no breakdown to list.' : 'No players sold yet.'}
+        </p>
+      ) : (
+        <table className={`w-full ${big ? 'text-lg' : 'text-sm'}`}>
+          <thead>
+            <tr className={`uppercase tracking-widest border-b border-white/10 ${big ? 'text-xs text-white/55' : 'text-[10px] text-white/30'}`}>
+              <th className="py-2 pr-2 text-left font-bold w-6">#</th>
+              <th className="py-2 text-left font-bold">Player</th>
+              <th className="py-2 px-2 text-left font-bold">Team</th>
+              <th className="py-2 pl-2 text-right font-bold">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sold.map((p, i) => (
+              <tr key={`${p.teamName}-${p.name}-${i}`} className="border-b border-white/5 last:border-0">
+                <td className={`py-2 pr-2 tabular-nums ${big ? 'text-white/55' : 'text-white/35'}`}>{i + 1}</td>
+                <td className={`py-2 font-medium truncate ${big ? 'text-white' : 'text-white/85'}`}>{p.name}</td>
+                <td className="py-2 px-2">
+                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.teamColor }} />
+                    <span className={`truncate ${big ? 'text-white/80' : 'text-white/55'}`}>{p.teamName}</span>
+                  </span>
+                </td>
+                <td className={`py-2 pl-2 text-right tabular-nums ${big ? 'text-white/90' : 'text-white/70'}`}>{fmt(p.price)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </ListModal>
+  );
+}
+
+/**
+ * Who is still to be called: the pool alphabetically, then the unsold queue
+ * re-entering in the next round. The list order deliberately says nothing about
+ * who is up next — picks are random, and this screen is public.
+ */
+function RemainingListModal({ remaining, count, big, onClose }: {
+  remaining: NonNullable<LiveAuctionState['remaining']>; count: number; big: boolean; onClose: () => void;
+}) {
+  const list = [...remaining].sort(
+    (a, b) => Number(a.isUnsold) - Number(b.isUnsold) || a.name.localeCompare(b.name)
+  );
+  return (
+    <ListModal title="Still to come" count={count} accent="text-white/70" big={big} onClose={onClose}>
+      {list.length === 0 ? (
+        <p className={`text-center py-10 ${big ? 'text-lg text-white/60' : 'text-sm text-white/40'}`}>
+          {count > 0 ? "The auctioneer's board hasn't sent the list yet." : 'Everyone has been called.'}
+        </p>
+      ) : (
+        <ul className="py-1">
+          {list.map((p, i) => (
+            <li key={`${p.name}-${i}`} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+              <span className={`tabular-nums w-6 shrink-0 ${big ? 'text-lg text-white/55' : 'text-sm text-white/35'}`}>{i + 1}</span>
+              <span className={`flex-1 min-w-0 truncate font-medium ${big ? 'text-lg text-white' : 'text-sm text-white/85'}`}>{p.name}</span>
+              <span className={`shrink-0 ${big ? 'text-base text-white/55' : 'text-xs text-white/35'}`}>{p.role}</span>
+              {p.isUnsold && (
+                <span className={`shrink-0 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold uppercase tracking-wide ${big ? 'px-2.5 py-1 text-xs' : 'px-2 py-0.5 text-[10px]'}`}>
+                  Unsold
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </ListModal>
+  );
+}
+
 export default function WatchPage() {
   const { id } = useParams<{ id: string }>();
   const [live, setLive] = useState<LiveAuctionState | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [scale, setScale] = useState(1.2);
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  // Which roster list the header counters have opened, if any
+  const [listView, setListView] = useState<'sold' | 'left' | null>(null);
   // Projector mode — bigger, higher-contrast chrome for the big screen in the
   // hall. Off by default so phone spectators keep the compact layout.
   const [big, setBig] = useState(false);
@@ -276,8 +383,18 @@ export default function WatchPage() {
         <div className={`flex items-center gap-3 sm:gap-5 font-semibold shrink-0 ${big ? 'text-lg sm:text-2xl' : 'text-sm'}`}>
           {live && (
             <>
-              <span className="text-green-400 tabular-nums hidden sm:inline">{live.progress.sold} Sold</span>
-              <span className={`tabular-nums hidden sm:inline ${big ? 'text-white/70' : 'text-white/40'}`}>{live.progress.left} Left</span>
+              <button
+                onClick={() => setListView('sold')}
+                title="Show every player sold so far"
+                className="tabular-nums hidden sm:inline-flex items-center rounded-lg px-2 py-0.5 text-green-400 hover:bg-green-500/15 hover:text-green-300 transition-colors">
+                {live.progress.sold} Sold
+              </button>
+              <button
+                onClick={() => setListView('left')}
+                title="Show who is still to be called"
+                className={`tabular-nums hidden sm:inline-flex items-center rounded-lg px-2 py-0.5 transition-colors hover:bg-white/10 hover:text-white ${big ? 'text-white/70' : 'text-white/40'}`}>
+                {live.progress.left} Left
+              </button>
               {live.progress.round > 1 && <span className={`text-indigo-400 uppercase tracking-widest ${big ? 'text-lg' : 'text-xs'}`}>Rnd {live.progress.round}</span>}
             </>
           )}
@@ -320,7 +437,12 @@ export default function WatchPage() {
         ) : !live || phase === 'lobby' ? (
           <WaitScreen big={big} title="Waiting for the auction to begin" subtitle="The big moments are about to start 🏏" />
         ) : phase === 'idle' ? (
-          <WaitScreen big={big} title="Up next…" subtitle={live.progress.left > 0 ? `${live.progress.left} players still in the pool` : 'Final calls'} />
+          <WaitScreen
+            big={big}
+            title="Up next…"
+            subtitle={live.progress.left > 0 ? `${live.progress.left} players still in the pool` : 'Final calls'}
+            onSubtitleClick={live.progress.left > 0 ? () => setListView('left') : undefined}
+          />
         ) : phase === 'picking' ? (
           <PickingScreen big={big} />
         ) : phase === 'done' ? (
@@ -392,11 +514,19 @@ export default function WatchPage() {
       {purses.length > 0 && <PurseStrip purses={purses} big={big} onView={onViewTeam} />}
 
       {viewPurse && <TeamSquadModal t={viewPurse} canShare={canManage} big={big} onClose={() => setViewTeamId(null)} />}
+      {listView === 'sold' && live && (
+        <SoldListModal purses={purses} count={live.progress.sold} big={big} onClose={() => setListView(null)} />
+      )}
+      {listView === 'left' && live && (
+        <RemainingListModal remaining={live.remaining ?? []} count={live.progress.left} big={big} onClose={() => setListView(null)} />
+      )}
     </div>
   );
 }
 
-function WaitScreen({ title, subtitle, big }: { title: string; subtitle: string; big: boolean }) {
+function WaitScreen({ title, subtitle, big, onSubtitleClick }: {
+  title: string; subtitle: string; big: boolean; onSubtitleClick?: () => void;
+}) {
   return (
     <div className="relative z-10 flex flex-col items-center gap-6 text-center">
       <div className="relative">
@@ -405,7 +535,15 @@ function WaitScreen({ title, subtitle, big }: { title: string; subtitle: string;
       </div>
       <div>
         <h2 className={`font-black tracking-tight ${big ? 'text-4xl sm:text-6xl' : 'text-2xl sm:text-4xl'}`}>{title}</h2>
-        {subtitle && <p className={`mt-2 ${big ? 'text-xl sm:text-3xl text-white/70' : 'text-sm sm:text-lg text-white/40'}`}>{subtitle}</p>}
+        {subtitle && (onSubtitleClick ? (
+          <button
+            onClick={onSubtitleClick}
+            className={`mt-2 underline decoration-dotted underline-offset-4 transition-colors hover:text-white ${big ? 'text-xl sm:text-3xl text-white/70' : 'text-sm sm:text-lg text-white/40'}`}>
+            {subtitle}
+          </button>
+        ) : (
+          <p className={`mt-2 ${big ? 'text-xl sm:text-3xl text-white/70' : 'text-sm sm:text-lg text-white/40'}`}>{subtitle}</p>
+        ))}
       </div>
     </div>
   );
