@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { formatINR } from '@/lib/utils';
 import type { AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from '@/lib/types';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import {
   ShieldCheck, LogOut, RefreshCw, Trophy, Users, IdCard, Wallet, Shield, Gavel,
   Globe, Lock, DoorClosed, DoorOpen, Award, RotateCcw, RadioTower, Trash2, Search, Star,
@@ -191,6 +192,8 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('analytics');
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState('');
+  // League awaiting delete confirmation (null = dialog closed)
+  const [leagueToDelete, setLeagueToDelete] = useState<AdminLeagueRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -237,16 +240,15 @@ export default function AdminDashboard() {
   }, [load]);
 
   async function removeLeague(league: AdminLeagueRow) {
-    if (!confirm(
-      `Delete "${league.name}" permanently?\n\n${league.playerCount} player cards, ${league.teamCount} teams, and all matches, officials, sponsors and ledger entries go with it. This cannot be undone.`
-    )) return;
     setBusyId(league.id);
     try {
       const res = await fetch(`/api/admin/leagues/${league.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       toast.success(`"${league.name}" deleted`);
+      setLeagueToDelete(null);
       await load();
     } catch {
+      // Dialog stays open so the delete can be retried without re-confirming.
       toast.error('Delete failed');
     } finally {
       setBusyId('');
@@ -517,7 +519,7 @@ export default function AdminDashboard() {
                           </button>
                         )}
                         <button
-                          onClick={() => removeLeague(l)} disabled={busyId === l.id}
+                          onClick={() => setLeagueToDelete(l)} disabled={busyId === l.id}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-red-500/25 text-red-600 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
                         >
                           <Trash2 className="w-3 h-3" />Delete
@@ -569,6 +571,24 @@ export default function AdminDashboard() {
           </div>
         )}
       </main>
+
+      {/* Permanent league delete — a custom dialog rather than window.confirm so
+          the console can show progress and stay inert until the API answers */}
+      <ConfirmDialog
+        open={!!leagueToDelete}
+        title="Delete this league permanently?"
+        description={leagueToDelete ? (
+          <>
+            <strong className="text-foreground">{leagueToDelete.name}</strong> — {leagueToDelete.playerCount} player
+            card{leagueToDelete.playerCount === 1 ? '' : 's'}, {leagueToDelete.teamCount} team{leagueToDelete.teamCount === 1 ? '' : 's'} and all
+            its matches, officials, sponsors and ledger entries go with it. This cannot be undone.
+          </>
+        ) : undefined}
+        confirmLabel="Delete league"
+        pendingLabel="Deleting…"
+        onConfirm={() => { if (leagueToDelete) return removeLeague(leagueToDelete); }}
+        onClose={() => setLeagueToDelete(null)}
+      />
     </div>
   );
 }

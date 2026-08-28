@@ -11,6 +11,7 @@ import CertificateDownloadButtons from '@/components/CertificateDownloadButtons'
 import TemplateSelector from '@/components/TemplateSelector';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
 import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
@@ -49,6 +50,8 @@ function LeaguePageInner() {
   const [showPlayers, setShowPlayers] = useState(false);
   // Creator-only co-organizer management modal
   const [coOrgOpen, setCoOrgOpen] = useState(false);
+  // Creator-only 'delete this league' confirmation
+  const [deleteLeagueOpen, setDeleteLeagueOpen] = useState(false);
   // Non-null only while an auction is being run right now. Kept separate from
   // `data` because it's polled on its own — see the interval below.
   const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(null);
@@ -257,13 +260,15 @@ function LeaguePageInner() {
   }
 
   async function handleDeleteLeague() {
-    if (!confirm(`Delete "${data?.name}"? This will remove all player cards too and cannot be undone.`)) return;
     try {
       const res = await fetch(`/api/leagues/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete league');
       toast.success('League deleted');
+      // Deliberately leaves the dialog spinning until the route change lands —
+      // the league is gone, so re-enabling this screen would only show a 404.
       router.push('/');
     } catch {
+      // Dialog stays open so the organizer can retry without re-confirming.
       toast.error('Failed to delete league');
     }
   }
@@ -874,7 +879,7 @@ function LeaguePageInner() {
 
           {data.isCreator && (
             <button
-              onClick={handleDeleteLeague}
+              onClick={() => setDeleteLeagueOpen(true)}
               className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-all duration-200"
               title="Delete league"
               aria-label="Delete league"
@@ -1062,6 +1067,24 @@ function LeaguePageInner() {
           onClose={(changed) => { setCoOrgOpen(false); if (changed) fetchLeague(); }}
         />
       )}
+
+      {/* Delete league (creator only) — replaces window.confirm so the delete
+          can show progress and keep the page inert until it finishes */}
+      <ConfirmDialog
+        open={deleteLeagueOpen}
+        title="Delete this league?"
+        description={
+          <>
+            <strong className="text-foreground">{data.name}</strong> and all {data.players.length} player
+            card{data.players.length === 1 ? '' : 's'} will be removed, along with its teams, matches,
+            sponsors and ledger. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete league"
+        pendingLabel="Deleting…"
+        onConfirm={handleDeleteLeague}
+        onClose={() => setDeleteLeagueOpen(false)}
+      />
 
       {/* Full player view */}
       <Dialog open={!!viewPlayer} onOpenChange={(open) => { if (!open) setViewPlayer(null); }}>
