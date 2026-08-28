@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import { MessageCircle, Copy, Presentation } from 'lucide-react';
+import Link from 'next/link';
+import { MessageCircle, Copy, Presentation, Home } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
 import Confetti from '@/components/Confetti';
@@ -297,6 +298,12 @@ export default function WatchPage() {
     if (on) setBig(true);
   }, [id]);
 
+  // Navigating away while projector mode is fullscreen would leave the next
+  // page fullscreen with no browser chrome either — still no escape.
+  const leaveFullscreen = useCallback(() => {
+    try { if (document.fullscreenElement) void document.exitFullscreen().catch(() => { /* blocked */ }); } catch { /* unsupported */ }
+  }, []);
+
   const toggleBig = useCallback(() => {
     const next = !big;
     setBig(next);
@@ -376,9 +383,21 @@ export default function WatchPage() {
 
       {/* Header */}
       <header className="flex items-center justify-between gap-3 px-5 sm:px-7 py-3.5 border-b border-white/8 bg-white/3 backdrop-blur-xl shrink-0">
-        <div className="min-w-0">
-          <h1 className={`font-black truncate ${big ? 'text-xl sm:text-3xl' : 'text-base sm:text-xl'}`}>{live?.league.name ?? 'Live Auction'}</h1>
-          {live?.league.conductedBy && <p className={`truncate ${big ? 'text-sm sm:text-lg text-white/65' : 'text-[11px] sm:text-xs text-white/40'}`}>Conducted by {live.league.conductedBy}</p>}
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          {/* The only way off this page — projector mode hides the browser
+              chrome, so without this a spectator is stuck on the stream. */}
+          <Link
+            href="/"
+            onClick={leaveFullscreen}
+            title="Leave the live view and go to the home page"
+            aria-label="Go to the home page"
+            className={`inline-flex items-center justify-center rounded-xl border shrink-0 transition-colors ${big ? 'p-2.5 border-white/20 bg-white/8 text-white/70 hover:text-white hover:border-white/35' : 'p-2 border-white/12 bg-white/5 text-white/50 hover:text-white hover:border-white/25'}`}>
+            <Home className={big ? 'w-5 h-5' : 'w-4 h-4'} />
+          </Link>
+          <div className="min-w-0">
+            <h1 className={`font-black truncate ${big ? 'text-xl sm:text-3xl' : 'text-base sm:text-xl'}`}>{live?.league.name ?? 'Live Auction'}</h1>
+            {live?.league.conductedBy && <p className={`truncate ${big ? 'text-sm sm:text-lg text-white/65' : 'text-[11px] sm:text-xs text-white/40'}`}>Conducted by {live.league.conductedBy}</p>}
+          </div>
         </div>
         <div className={`flex items-center gap-3 sm:gap-5 font-semibold shrink-0 ${big ? 'text-lg sm:text-2xl' : 'text-sm'}`}>
           {live && (
