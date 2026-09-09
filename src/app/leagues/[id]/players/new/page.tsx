@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import PlayerForm, { type PlayerFormData } from '@/components/PlayerForm';
 import PlayerSearchPicker from '@/components/PlayerSearchPicker';
@@ -13,9 +13,19 @@ import { ArrowLeft, Check, Sparkles, UserPlus, Users, ShieldCheck } from 'lucide
 /** Lets the header's action button submit the form it sits outside of. */
 const FORM_ID = 'player-card-form';
 
-export default function NewPlayerPage() {
+const SkeletonFallback = () => (
+  <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="h-5 w-32 bg-muted rounded-lg mb-4 shimmer" />
+    <div className="h-8 w-56 bg-muted rounded-lg mb-2 shimmer" />
+    <div className="h-4 w-72 bg-muted rounded-lg mb-6 shimmer" />
+    <div className="h-[26rem] bg-muted rounded-2xl shimmer" />
+  </div>
+);
+
+function NewPlayerPageInner() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const { status } = useSession();
   const [loading, setLoading] = useState(false);
   const [league, setLeague] = useState<LeagueWithPlayers | null>(null);
@@ -43,12 +53,25 @@ export default function NewPlayerPage() {
       .finally(() => setFetching(false));
   }, [id, status]);
 
-  const isCreatorMode = !!league?.canManage;
-  // This league wants an ID and the person registering themselves doesn't have
-  // one on file. The API refuses the POST either way; catching it here means
-  // they don't fill the whole form before finding out. Organizers adding cards
-  // on someone's behalf are not held to it — see the players POST handler.
-  const needsIdProof = !!league?.idProofRequired && !isCreatorMode && !profile?.idProofUrl;
+  const isManager = !!league?.canManage;
+  // `?self=1` — the league page's Join button, i.e. this person is registering
+  // themselves. Organizers play in their own leagues too, so "can manage this
+  // league" answers a different question from "whose card is this": without the
+  // flag an organizer who tapped Join League got the blank on-behalf-of form
+  // instead of their own details.
+  const selfRegister = searchParams.get('self') === '1';
+  const isCreatorMode = isManager && !selfRegister;
+  // Registering *yourself* means the league's document requirements apply,
+  // whoever you are — an organizer who set "receipt mandatory" and then joins
+  // as a player is holding their own card to their own rule. Only adding
+  // *someone else's* card is exempt, which is the line the players POST draws
+  // too (it exempts organizers outright, so for them this is the only gate —
+  // they can still bypass it via Add Player, which is exactly on-behalf-of).
+  const heldToRequirements = selfRegister || !isManager;
+  // This league wants an ID and the person registering doesn't have one on
+  // file. Catching it here means they don't fill the whole form before finding
+  // out — see the players POST handler.
+  const needsIdProof = !!league?.idProofRequired && heldToRequirements && !profile?.idProofUrl;
 
   async function handleSubmit(data: PlayerFormData) {
     setLoading(true);
@@ -126,19 +149,11 @@ export default function NewPlayerPage() {
     setFormKey((k) => k + 1);
   }
 
-  if (fetching || status === 'loading') {
-    return (
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="h-5 w-32 bg-muted rounded-lg mb-4 shimmer" />
-        <div className="h-8 w-56 bg-muted rounded-lg mb-2 shimmer" />
-        <div className="h-4 w-72 bg-muted rounded-lg mb-6 shimmer" />
-        <div className="h-[26rem] bg-muted rounded-2xl shimmer" />
-      </div>
-    );
-  }
+  if (fetching || status === 'loading') return <SkeletonFallback />;
 
   if (needsIdProof) {
-    const back = `/leagues/${id}/players/new`;
+    // Keep the self-register flag across the trip to /profile and back
+    const back = `/leagues/${id}/players/new${selfRegister ? '?self=1' : ''}`;
     return (
       <div className="max-w-lg mx-auto px-4 py-8 animate-fade-in-up">
         <button
@@ -287,7 +302,7 @@ export default function NewPlayerPage() {
             } : undefined
           }
           showPaymentProof={!!league?.paymentProofRequired}
-          requirePaymentProof={!!league?.paymentProofRequired && !isCreatorMode}
+          requirePaymentProof={!!league?.paymentProofRequired && heldToRequirements}
           onSubmit={handleSubmit}
           submitLabel={submitLabel}
           loading={loading}
@@ -295,5 +310,19 @@ export default function NewPlayerPage() {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The registration form. Two modes, decided by `?self=1` rather than by who
+ * can manage the league: an organizer adding other people's cards gets a blank
+ * form that clears after each save, while anyone registering *themselves* —
+ * organizers included — gets theirs prefilled from their cricket profile.
+ */
+export default function NewPlayerPage() {
+  return (
+    <Suspense fallback={<SkeletonFallback />}>
+      <NewPlayerPageInner />
+    </Suspense>
   );
 }

@@ -92,8 +92,10 @@ function LeaguePageInner() {
   useEffect(() => {
     if (sessionStatus !== 'authenticated') return;
     fetch('/api/profile')
-      .then((r) => r.json())
-      .then((d) => { if (d) setProfile(d); })
+      .then((r) => (r.ok ? r.json() : null))
+      // An error body is an object too, and only a real profile carries a
+      // userId — taking `{ error }` for one offers Join with nothing to prefill.
+      .then((d) => { if (d?.userId) setProfile(d); })
       .catch(() => { });
   }, [sessionStatus]);
 
@@ -541,6 +543,11 @@ function LeaguePageInner() {
   const joinNeedsForm =
     (data.paymentProofRequired ?? false) ||
     ((data.idProofRequired ?? false) && !profile?.idProofUrl);
+  // `self=1` tells the form this is the viewer registering *themselves*, so it
+  // prefills from their profile. Organizers play in their own leagues too, and
+  // the form otherwise reads "can manage" as "adding someone else's card" and
+  // opens blank.
+  const selfRegisterUrl = `/leagues/${id}/players/new?self=1`;
   const showAddCard = canManage || canJoin;
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
@@ -665,7 +672,7 @@ function LeaguePageInner() {
                 </span>
               ) : profile ? (
                 <button
-                  onClick={joinNeedsForm ? () => router.push(`/leagues/${id}/players/new`) : handleJoin}
+                  onClick={joinNeedsForm ? () => router.push(selfRegisterUrl) : handleJoin}
                   disabled={joining}
                   title={joinNeedsForm ? 'This league asks for documents when you register' : undefined}
                   className="btn-premium inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
@@ -979,7 +986,7 @@ function LeaguePageInner() {
               </span>
             ) : profile ? (
               <button
-                onClick={joinNeedsForm ? () => router.push(`/leagues/${id}/players/new`) : handleJoin}
+                onClick={joinNeedsForm ? () => router.push(selfRegisterUrl) : handleJoin}
                 disabled={joining}
                 title={joinNeedsForm ? 'This league asks for documents when you register' : undefined}
                 className="btn-premium inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"

@@ -118,6 +118,16 @@ behalf are deliberately *not* held to either; the register shows the gaps so
 they can chase them. A clone inherits both requirements but never the receipts:
 a new season has its own fee.
 
+An organizer *joining as a player* is neither case, and the POST can't tell
+that request from an on-behalf-of one — so the registration form is the gate.
+`/leagues/[id]/players/new` reads its mode from `?self=1`, not from
+`canManage`: with the flag (where the league page's **Join League** button
+sends everyone) it prefills from the visitor's profile and holds them to both
+requirements whoever they are; without it, it is the organizer's blank
+add-someone-else form, exempt exactly like the API. Don't collapse those two
+modes back onto `canManage` — organizers play in their own leagues, so "can
+manage this league" is a different question from "whose card is this".
+
 **`contactNumber` is organizer-only.** The players GET handler strips it for
 everyone who can't manage the league — the platform owner included in "can
 manage", since the owner console is an organizer-grade view. Any new endpoint
