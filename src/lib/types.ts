@@ -20,6 +20,21 @@ export function parsePickPreference(value: unknown): PlayerRole[] | null | undef
   return value as PlayerRole[];
 }
 
+/** The kinds of document a player can submit as identity proof. */
+export const ID_PROOF_TYPES = ['Aadhaar', 'PAN', 'Voter ID', 'Driving Licence', 'Other'] as const;
+export type IdProofType = (typeof ID_PROOF_TYPES)[number];
+
+/**
+ * Validates an identity-proof type from a request body. Returns `null` for
+ * "cleared", the type for a good one, and `undefined` when the payload is
+ * malformed so callers can 400 — same contract as `parsePickPreference`.
+ */
+export function parseIdProofType(value: unknown): IdProofType | null | undefined {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  return ID_PROOF_TYPES.includes(value as IdProofType) ? (value as IdProofType) : undefined;
+}
+
 export interface League {
   id: string;
   name: string;
@@ -44,6 +59,19 @@ export interface League {
    * only download one once this is set. See `LeagueCertificate`.
    */
   certificatesReleasedAt: string | null;
+  /**
+   * When true, a player can't self-register a card here without an identity
+   * proof on their profile. Opt-in per league and false by default, so leagues
+   * created before the feature existed are unaffected.
+   */
+  idProofRequired: boolean;
+  /**
+   * When true, a player can't self-register a card here without attaching a
+   * payment receipt. Opt-in per league and false by default. Unlike the
+   * identity document this one is per *card* — an entry fee is paid to one
+   * league, so it never carries across to another.
+   */
+  paymentProofRequired: boolean;
   createdAt: string;
 }
 
@@ -68,6 +96,13 @@ export interface Player {
   creatorToken: string;
   /** Personal contact number — records only; never shown on cards/posters or exposed to non-creators */
   contactNumber?: string | null;
+  /**
+   * Cloudinary URL of the entry-fee receipt for *this* league. Organizer-grade
+   * PII like `contactNumber` — a payment screenshot carries account handles —
+   * so it is stripped for anyone who can't manage the league, and never goes on
+   * a card, poster or PDF.
+   */
+  paymentProofUrl?: string | null;
   createdAt: string;
   // Auction
   teamId?: string | null;
@@ -159,6 +194,41 @@ export interface LedgerResponse {
   ledger: LeagueLedger | null;
 }
 
+/**
+ * One player's documents on the organizer's register.
+ *
+ * The two come from different places, which is why they behave differently.
+ * The identity document is read off the *user account* the card is linked to,
+ * so a card with no `userId` can never carry one — that shows up as
+ * `linked: false`, a different problem from a linked player who simply hasn't
+ * uploaded yet. The payment receipt is on the card itself, so it works for
+ * anonymous cards too.
+ */
+export interface PlayerDocuments {
+  playerId: string;
+  playerName: string;
+  photo: string;
+  /** Whether this card belongs to a signed-in account at all. */
+  linked: boolean;
+  idProofType: IdProofType | null;
+  /** Cloudinary URL of the ID document — organizers only. Null when not submitted. */
+  idProofUrl: string | null;
+  /** When the owning account last saved their profile, or null if unlinked. */
+  idSubmittedAt: string | null;
+  /** Cloudinary URL of this league's entry-fee receipt — organizers only. */
+  paymentProofUrl: string | null;
+}
+
+/** GET /api/leagues/[id]/identity — the organizer's document register. */
+export interface LeagueDocumentsResponse {
+  leagueName: string;
+  /** Whether this league makes an ID mandatory for self-registration. */
+  idRequired: boolean;
+  /** Whether this league makes a payment receipt mandatory for self-registration. */
+  paymentRequired: boolean;
+  players: PlayerDocuments[];
+}
+
 export interface Match {
   id: string;
   leagueId: string;
@@ -220,6 +290,14 @@ export interface UserProfile {
   isWicketKeeper: boolean;
   /** Personal contact number — records only; never shown on cards/posters or exposed to non-creators */
   contactNumber?: string | null;
+  /** Which document `idProofUrl` is a photo of, or null when none is on file. */
+  idProofType?: IdProofType | null;
+  /**
+   * Cloudinary URL of the identity document. Organizer-grade PII — it goes to
+   * the player themselves and to the managers of a league they have a card in,
+   * and nowhere else. Never put it on a player card, poster or PDF.
+   */
+  idProofUrl?: string | null;
   updatedAt: string;
 }
 

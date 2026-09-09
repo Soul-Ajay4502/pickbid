@@ -116,6 +116,7 @@ function LeaguePageInner() {
           bowlingType: profile.bowlingType,
           role: profile.role,
           isWicketKeeper: profile.isWicketKeeper,
+          contactNumber: profile.contactNumber ?? null,
           creatorToken,
         }),
       });
@@ -532,6 +533,14 @@ function LeaguePageInner() {
   const canManage = data.canManage;
   // Non-organizers can only join via a register link while registration is open
   const canJoin = isOpen && !registrationClosed;
+  // One-click Join copies the profile straight into a card, which can't satisfy
+  // a league that asks for documents: an entry-fee receipt is per-card and never
+  // on file, and an ID the player hasn't uploaded yet isn't either. Both would
+  // just bounce off the players POST with a toast and no way forward, so those
+  // joiners go through the registration form, which collects what's missing.
+  const joinNeedsForm =
+    (data.paymentProofRequired ?? false) ||
+    ((data.idProofRequired ?? false) && !profile?.idProofUrl);
   const showAddCard = canManage || canJoin;
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
@@ -656,8 +665,9 @@ function LeaguePageInner() {
                 </span>
               ) : profile ? (
                 <button
-                  onClick={handleJoin}
+                  onClick={joinNeedsForm ? () => router.push(`/leagues/${id}/players/new`) : handleJoin}
                   disabled={joining}
+                  title={joinNeedsForm ? 'This league asks for documents when you register' : undefined}
                   className="btn-premium inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {joining && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
@@ -712,6 +722,13 @@ function LeaguePageInner() {
               </button>
               <button onClick={() => router.push(`/leagues/${id}/sponsors/manage`)} className="toolbar-btn">
                 <Handshake className="w-3.5 h-3.5" />Sponsors
+              </button>
+              {/* Organizer-only register of players' identity proofs and
+                  entry-fee receipts. Also where both "require it to register"
+                  switches live, so an existing league can turn either on
+                  without being re-created. */}
+              <button onClick={() => router.push(`/leagues/${id}/identity`)} className="toolbar-btn" title="Identity proofs and payment receipts — organizers only">
+                <ShieldCheck className="w-3.5 h-3.5" />Documents
               </button>
               {/* Always offered to organizers — the page is also where an
                   unstarted ledger gets created. Optional feature: a league
@@ -962,8 +979,9 @@ function LeaguePageInner() {
               </span>
             ) : profile ? (
               <button
-                onClick={handleJoin}
+                onClick={joinNeedsForm ? () => router.push(`/leagues/${id}/players/new`) : handleJoin}
                 disabled={joining}
+                title={joinNeedsForm ? 'This league asks for documents when you register' : undefined}
                 className="btn-premium inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {joining ? 'Joining…' : 'Join League'}

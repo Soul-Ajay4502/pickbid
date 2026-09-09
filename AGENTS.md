@@ -88,6 +88,36 @@ signing in. Do not add session gating to
 [api/leagues/[id]/players](src/app/api/leagues/[id]/players/route.ts) or
 [api/upload](src/app/api/upload/route.ts).
 
+**Player documents are organizer-only, and the two live in different places.**
+The *identity proof* is on the user (`users.idProofType` / `users.idProofUrl`):
+uploaded once from `/profile`, reused by every league they join. The *entry-fee
+receipt* is on the card (`players.paymentProofUrl`), because a fee is paid to
+one specific league and proves nothing about another. Both surface on one
+screen, [leagues/[id]/identity](src/app/leagues/[id]/identity/page.tsx), backed
+by an endpoint gated on `requireLeagueManager` and marked `private, no-store`.
+There is deliberately no member-readable variant — unlike the ledger, nothing
+here is ever shared with players or spectators. **Never put `idProofUrl` or
+`paymentProofUrl` on a player card, poster, PDF or any spectator surface**;
+`PlayerCard` renders on the public `/watch` screen, so anything added to it is
+world-readable.
+
+`paymentProofUrl` rides on `Player`, so every handler returning players to a
+non-manager must blank it exactly like `contactNumber`. Use
+`stripOrganizerFields` ([utils.ts](src/lib/utils.ts)) rather than spreading the
+nulls by hand — it is what keeps the four call sites (the players GET, the
+single-player GET, the league GET and the live-auction broadcast) from drifting
+apart when a fifth private field appears.
+
+`leagues.idProofRequired` and `leagues.paymentProofRequired` are both opt-in and
+default to false, so leagues predating the feature are unaffected. When either
+is on, *self-registration* through
+[api/leagues/[id]/players](src/app/api/leagues/[id]/players/route.ts) is held to
+it — the one sanctioned exception to the anonymous-player rule below, and only
+for leagues whose organizer asked for it. Organizers adding cards on someone's
+behalf are deliberately *not* held to either; the register shows the gaps so
+they can chase them. A clone inherits both requirements but never the receipts:
+a new season has its own fee.
+
 **`contactNumber` is organizer-only.** The players GET handler strips it for
 everyone who can't manage the league — the platform owner included in "can
 manage", since the owner console is an organizer-grade view. Any new endpoint

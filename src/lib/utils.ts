@@ -113,6 +113,19 @@ export function playerNameKey(name: string): string {
   return cleanPlayerName(name).toLowerCase();
 }
 
+/**
+ * Blank the fields on a player card that only a league's organizers may see:
+ * the contact number and the entry-fee receipt. Every handler returning players
+ * to someone who can't manage the league must run them through this — keeping
+ * it in one place is what stops the next private field being remembered at
+ * three of the four call sites.
+ */
+export function stripOrganizerFields<T extends { contactNumber?: string | null; paymentProofUrl?: string | null }>(
+  player: T
+): T {
+  return { ...player, contactNumber: null, paymentProofUrl: null };
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

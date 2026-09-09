@@ -39,15 +39,16 @@ when features change.
 - `auth/[...nextauth]`: NextAuth handlers.
 - `leagues`: list (created/joined) and create leagues.
 - `leagues/[id]`: get/update/delete a league with players, teams, officials.
-- `leagues/[id]/players`, `players/[playerId]`: player cards CRUD (anonymous via creatorToken).
+- `leagues/[id]/players`, `players/[playerId]`: player cards CRUD (anonymous via creatorToken). Contact numbers and payment receipts are blanked with `stripOrganizerFields` for anyone who can't manage the league.
 - `leagues/[id]/teams`, `officials`, `matches`: team, official and match management.
 - `leagues/[id]/auction/live`, `auction/live/summary`, `auction/reset`: live auction state broadcast/poll, the cheap "is an auction running right now" summary behind the LIVE banner, and reset.
 - `leagues/[id]/ledger`: optional markdown income & expense sheet. Organizers read/write incl. drafts; league members read only once published; non-members 403 regardless of `isPublic`.
+- `leagues/[id]/identity`: the organizer's document register — every player card with its entry-fee receipt (`players.paymentProofUrl`) and the ID document from the account it belongs to (`users.idProofUrl`). `requireLeagueManager` only, `private, no-store`, and no member-readable variant; neither document may reach a card, poster or PDF.
 - `leagues/[id]/can-manage`: just the caller's manage flag — the watch screen's cheap substitute for reading a whole league.
 - `leagues/[id]/clone`: duplicate a league.
 - `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
-- `profile`: user profile. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
+- `profile`: user profile, including the optional identity proof (`idProofType` + `idProofUrl`) that leagues with `idProofRequired` check at self-registration. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
 - `admin/login`, `admin/logout`: owner console sign-in (env credentials, IP-throttled) and sign-out.
 - `admin/overview`: whole-platform analytics, every league and every user in one payload. `admin/leagues/[id]`: owner overrides on any league — publish, open/close registration, release certificates, reset auction, clear the live broadcast, delete. Both gated by `requireAdmin`. An owner session additionally satisfies `requireLeagueManager` (but never `requireLeagueCreator`), so the owner can open any league's detail pages in full.
 

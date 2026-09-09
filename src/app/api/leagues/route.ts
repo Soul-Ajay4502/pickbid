@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, totalPlayers, conductedBy, templateId, logoUrl, pickPreference } = body;
+    const { name, totalPlayers, conductedBy, templateId, logoUrl, pickPreference, idProofRequired, paymentProofRequired } = body;
 
     if (!name || !totalPlayers || !conductedBy) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
       templateId: templateId ?? 'classic-green',
       logoUrl: logoUrl ?? '',
       pickPreference: parsedPickPreference,
+      idProofRequired: Boolean(idProofRequired),
+      paymentProofRequired: Boolean(paymentProofRequired),
     });
 
     return NextResponse.json(league, { status: 201 });

@@ -6,6 +6,7 @@ import {
 import { notifyPlayerSold } from '@/lib/whatsapp';
 import { auth } from '@/auth';
 import type { Player } from '@/lib/types';
+import { stripOrganizerFields } from '@/lib/utils';
 
 // Card changes are allowed for the league's organizers — creator or
 // co-organizer, proven by session and re-checked on every request so a
@@ -25,7 +26,7 @@ async function canManagePlayer(
 }
 
 const UPDATABLE_FIELDS = [
-  'name', 'photo', 'battingType', 'bowlingType', 'role', 'isWicketKeeper', 'contactNumber',
+  'name', 'photo', 'battingType', 'bowlingType', 'role', 'isWicketKeeper', 'contactNumber', 'paymentProofUrl',
   'teamId', 'soldPrice', 'isUnsold', 'isIcon',
   'statsMatches', 'statsRuns', 'statsWickets', 'statsAverage', 'statsSR',
 ] as const;
@@ -40,10 +41,11 @@ export async function GET(
     if (!player || player.leagueId !== id) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
-    // Phone number is records-only — return it only to the league creator or the card's owner
+    // Phone number and payment receipt are records-only — return them only to
+    // the league organizers or the card's own holder
     const token = request.nextUrl.searchParams.get('creatorToken');
     const canManage = await canManagePlayer(id, player, token);
-    return NextResponse.json(canManage ? player : { ...player, contactNumber: null });
+    return NextResponse.json(canManage ? player : stripOrganizerFields(player));
   } catch (error) {
     console.error('Error fetching player:', error);
     return NextResponse.json({ error: 'Failed to fetch player' }, { status: 500 });
@@ -103,6 +105,10 @@ export async function PUT(
     // Photo replaced or removed → drop the old Cloudinary asset if nothing else uses it
     if (typeof patch.photo === 'string' && patch.photo !== player.photo) {
       await cleanupImages([player.photo]);
+    }
+    // Same for a replaced receipt — nothing else ever points at it
+    if (typeof patch.paymentProofUrl === 'string' && patch.paymentProofUrl !== player.paymentProofUrl) {
+      await cleanupImages([player.paymentProofUrl]);
     }
 
     // A player was just sold to a team → WhatsApp them the team, their owner's
@@ -167,7 +173,7 @@ export async function DELETE(
     if (!success) {
       return NextResponse.json({ error: 'Failed to delete player' }, { status: 500 });
     }
-    await cleanupImages([player.photo]);
+    await cleanupImages([player.photo, player.paymentProofUrl]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting player:', error);

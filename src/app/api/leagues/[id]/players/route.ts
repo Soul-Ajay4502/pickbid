@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlayers, createPlayer, getLeague, canManageLeague, findOrCreateUserIdByEmail, getCreatorOwnedPlayerUserId } from '@/lib/store';
+import { getPlayers, createPlayer, getLeague, canManageLeague, findOrCreateUserIdByEmail, getCreatorOwnedPlayerUserId, hasIdentityProof } from '@/lib/store';
+import { stripOrganizerFields } from '@/lib/utils';
 import { auth } from '@/auth';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,10 +18,10 @@ export async function GET(
   try {
     const { id } = await params;
     const [players, session, league] = await Promise.all([getPlayers(id), auth(), getLeague(id)]);
-    // Phone numbers are records-only — strip them unless the requester runs
-    // this league (creator or co-organizer)
+    // Phone numbers and payment receipts are records-only — strip them unless
+    // the requester runs this league (creator or co-organizer)
     const canManage = !!league && (await canManageLeague(session?.user?.id, league));
-    const safe = canManage ? players : players.map((p) => ({ ...p, contactNumber: null }));
+    const safe = canManage ? players : players.map(stripOrganizerFields);
     return NextResponse.json(safe);
   } catch (error) {
     console.error('Error fetching players:', error);
@@ -47,7 +48,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, photo, battingType, bowlingType, role, isWicketKeeper, contactNumber, creatorToken, email, sourcePlayerId } = body;
+    const { name, photo, battingType, bowlingType, role, isWicketKeeper, contactNumber, paymentProofUrl, creatorToken, email, sourcePlayerId } = body;
 
     if (!name || !battingType || !bowlingType || !role || !creatorToken) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -67,6 +68,10 @@ export async function POST(
     if (contactNumber != null && (typeof contactNumber !== 'string' || contactNumber.length > 40)) {
       return NextResponse.json({ error: 'Invalid contact number' }, { status: 400 });
     }
+    if (paymentProofUrl != null && (typeof paymentProofUrl !== 'string' || paymentProofUrl.length > 1000)) {
+      return NextResponse.json({ error: 'Invalid payment proof URL' }, { status: 400 });
+    }
+    const paymentProof = (typeof paymentProofUrl === 'string' && paymentProofUrl.trim()) || null;
 
     // Resolve who this player card actually belongs to. An organizer adding
     // cards on other people's behalf must NOT have the card linked to their
@@ -93,6 +98,24 @@ export async function POST(
     } else {
       playerUserId = session?.user?.id ?? null;;
     }
+    // Leagues that require identity proof only hold *self-registration* to it:
+    // the player signs in, so their profile is the one being checked. An
+    // organizer adding a card on someone's behalf is not blocked — they chose
+    // the requirement and may be collecting documents offline — and the gaps
+    // show up on the league's identity register for them to chase.
+    if (league.idProofRequired && !isOrganizer && !(await hasIdentityProof(playerUserId))) {
+      return NextResponse.json(
+        { error: 'This league requires an identity proof. Add one to your profile, then register.' },
+        { status: 403 }
+      );
+    }
+    if (league.paymentProofRequired && !isOrganizer && !paymentProof) {
+      return NextResponse.json(
+        { error: 'This league requires proof of the entry fee. Attach your payment receipt to register.' },
+        { status: 403 }
+      );
+    }
+
     const player = await createPlayer({
       leagueId: id,
       userId: playerUserId,
@@ -103,6 +126,7 @@ export async function POST(
       role,
       isWicketKeeper: Boolean(isWicketKeeper),
       contactNumber: (typeof contactNumber === 'string' && contactNumber.trim()) || null,
+      paymentProofUrl: paymentProof,
       creatorToken,
     });
 

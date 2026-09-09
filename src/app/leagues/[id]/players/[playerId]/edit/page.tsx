@@ -76,6 +76,10 @@ export default function EditPlayerPage() {
         const folder = `${sanitizeFolder(leagueName)}/players`;
         photoUrl = await uploadFile(data.photoFile, folder);
       }
+      let paymentProofUrl = data.paymentProofUrl;
+      if (data.paymentProofFile) {
+        paymentProofUrl = await uploadFile(data.paymentProofFile, `${sanitizeFolder(league?.name ?? id)}/payments`);
+      }
 
       const res = await fetch(`/api/leagues/${id}/players/${playerId}`, {
         method: 'PUT',
@@ -88,6 +92,7 @@ export default function EditPlayerPage() {
           role: data.role,
           isWicketKeeper: data.isWicketKeeper,
           contactNumber: data.contactNumber.trim() || null,
+          paymentProofUrl: paymentProofUrl || null,
           // Proves card ownership to the API when the editor isn't the league creator
           creatorToken: localStorage.getItem(`creator_player_${playerId}`) ?? undefined,
         }),
@@ -153,7 +158,9 @@ export default function EditPlayerPage() {
               bowlingType: player.bowlingType,
               role: player.role,
               isWicketKeeper: player.isWicketKeeper,
+              paymentProofUrl: player.paymentProofUrl ?? '',
             }}
+            showPaymentProof={!!league?.paymentProofRequired}
             onSubmit={handleSubmit}
             submitLabel="Save Changes"
             loading={loading}

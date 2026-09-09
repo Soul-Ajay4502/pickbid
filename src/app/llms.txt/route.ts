@@ -49,6 +49,10 @@ shared with a single link. It runs in any modern browser with no app install.
   and export a PDF squad sheet to share on WhatsApp in one tap.
 - **Matches and results** — record fixtures, scores and winners for the league.
 - **League ledger** — an optional income and expense sheet for organizers.
+- **Identity and payment proof** — players can add a photo of an ID to their
+  profile once, and attach an entry-fee receipt when they register. Organizers
+  can require either before a player joins, and see both on one page. Only a
+  league's organizers can open them; they never appear on cards or downloads.
 - **Participation certificates** — organizers release certificates for a league
   in one click, and every player downloads their own as a print-ready PNG or PDF
   from their profile.

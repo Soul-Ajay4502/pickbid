@@ -62,6 +62,12 @@ function ProfilePageInner() {
       if (data.photoFile) {
         photoUrl = await uploadFile(data.photoFile, 'profiles');
       }
+      // Identity documents go to their own Cloudinary folder — they are never
+      // served alongside the public card photos.
+      let idProofUrl = data.idProofUrl;
+      if (data.idProofFile) {
+        idProofUrl = await uploadFile(data.idProofFile, 'identity-proofs');
+      }
 
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -74,6 +80,8 @@ function ProfilePageInner() {
           bowlingType: data.bowlingType,
           role: data.role,
           isWicketKeeper: data.isWicketKeeper,
+          idProofType: data.idProofType,
+          idProofUrl,
         }),
       });
 
@@ -105,6 +113,8 @@ function ProfilePageInner() {
         bowlingType: profile.bowlingType,
         role: profile.role,
         isWicketKeeper: profile.isWicketKeeper,
+        idProofType: profile.idProofType ?? null,
+        idProofUrl: profile.idProofUrl ?? '',
       }
     : {
         name: session?.user?.name ?? '',
@@ -176,6 +186,7 @@ function ProfilePageInner() {
             onSubmit={handleSubmit}
             submitLabel={submitLabel}
             loading={loading}
+            showIdProof
           />
         </div>
       </div>

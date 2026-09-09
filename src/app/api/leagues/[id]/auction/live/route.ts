@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuctionLive, setAuctionLive } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
 import type { LiveAuctionState, Player, PlayerRole } from '@/lib/types';
+import { stripOrganizerFields } from '@/lib/utils';
 
 // Spectators poll this every 1.5s, so the handler itself must never be
 // statically rendered — but the *response* is deliberately cacheable at the CDN
@@ -10,8 +11,8 @@ import type { LiveAuctionState, Player, PlayerRole } from '@/lib/types';
 // with it, the edge answers them all from a single origin read per second.
 export const dynamic = 'force-dynamic';
 
-function stripContact<T extends Player | null>(p: T): T {
-  return (p ? { ...p, contactNumber: null } : p) as T;
+function stripPrivate<T extends Player | null>(p: T): T {
+  return (p ? stripOrganizerFields(p) : p) as T;
 }
 
 // Public — anyone with the watch link mirrors the auction in real time.
@@ -62,9 +63,9 @@ export async function POST(
       phase: body.phase,
       updatedAt: Number(body.updatedAt) || 0,
       league: body.league ?? { name: league.name, conductedBy: league.conductedBy, logoUrl: league.logoUrl, templateId: league.templateId },
-      current: stripContact(body.current ?? null),
+      current: stripPrivate(body.current ?? null),
       lastSold: body.lastSold
-        ? { ...body.lastSold, player: stripContact(body.lastSold.player) }
+        ? { ...body.lastSold, player: stripPrivate(body.lastSold.player) }
         : null,
       progress: body.progress ?? { sold: 0, total: 0, unsold: 0, left: 0, round: 1 },
       purses: body.purses ?? [],

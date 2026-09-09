@@ -22,6 +22,8 @@ export class UserModel extends Model<
   declare role: CreationOptional<string>;
   declare isWicketKeeper: CreationOptional<boolean>;
   declare contactNumber: CreationOptional<string | null>;
+  declare idProofType: CreationOptional<string | null>;
+  declare idProofUrl: CreationOptional<string | null>;
   declare profileCompleted: CreationOptional<boolean>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -37,6 +39,8 @@ UserModel.init(
     role:             { type: DataTypes.STRING,  allowNull: false, defaultValue: 'Batter' },
     isWicketKeeper:   { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     contactNumber:    { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    idProofType:      { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    idProofUrl:       { type: DataTypes.TEXT,    allowNull: true,  defaultValue: null },
     profileCompleted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     updatedAt:        { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
@@ -60,6 +64,8 @@ export class LeagueModel extends Model<
   declare registrationClosed: CreationOptional<boolean>;
   declare pickPreference: CreationOptional<string[] | null>;
   declare certificatesReleasedAt: CreationOptional<Date | null>;
+  declare idProofRequired: CreationOptional<boolean>;
+  declare paymentProofRequired: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -77,6 +83,8 @@ LeagueModel.init(
     registrationClosed: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     pickPreference:     { type: DataTypes.JSONB,   allowNull: true,  defaultValue: null },
     certificatesReleasedAt: { type: DataTypes.DATE, allowNull: true, defaultValue: null },
+    idProofRequired:    { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    paymentProofRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }
@@ -125,6 +133,7 @@ export class PlayerModel extends Model<
   declare isWicketKeeper: CreationOptional<boolean>;
   declare creatorToken: string;
   declare contactNumber: CreationOptional<string | null>;
+  declare paymentProofUrl: CreationOptional<string | null>;
   // Auction
   declare teamId: CreationOptional<string | null>;
   declare soldPrice: CreationOptional<number | null>;
@@ -152,6 +161,7 @@ PlayerModel.init(
     isWicketKeeper: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     creatorToken:   { type: DataTypes.STRING,  allowNull: false },
     contactNumber:  { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
+    paymentProofUrl:{ type: DataTypes.TEXT,    allowNull: true,  defaultValue: null },
     teamId:         { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     soldPrice:      { type: DataTypes.INTEGER, allowNull: true,  defaultValue: null },
     isUnsold:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

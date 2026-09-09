@@ -13,7 +13,7 @@ import { sanitizeFolder, uploadFile } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
 import type { Player, PlayerRole } from '@/lib/types';
-import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered } from 'lucide-react';
+import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered, ShieldCheck, ReceiptIndianRupee } from 'lucide-react';
 
 const PREVIEW_PLAYER: Player = {
   id: 'preview',
@@ -38,6 +38,8 @@ export default function NewLeaguePage() {
   const [logoPreview, setLogoPreview] = useState('');
   const [form, setForm] = useState({ name: '', conductedBy: '', totalPlayers: '' });
   const [pickPreference, setPickPreference] = useState<PlayerRole[]>([]);
+  const [idProofRequired, setIdProofRequired] = useState(false);
+  const [paymentProofRequired, setPaymentProofRequired] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') signIn('google');
@@ -94,6 +96,8 @@ export default function NewLeaguePage() {
           templateId,
           logoUrl,
           pickPreference: pickPreference.length > 0 ? pickPreference : null,
+          idProofRequired,
+          paymentProofRequired,
         }),
       });
 
@@ -266,6 +270,72 @@ export default function NewLeaguePage() {
                 Pick a role order (e.g. Bowlers first, then Batters) to control who comes up first in the auction. Leave empty to pick everyone randomly.
               </p>
               <PickPreferenceSelector value={pickPreference} onChange={setPickPreference} />
+            </div>
+
+            <Separator />
+
+            {/* Registration requirements — both off by default, so nothing
+                changes for an organizer who doesn't care about either. Both can
+                also be flipped later from the league's Documents page. */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Registration Requirements (optional)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Documents players submit when they register. Only you and your co-organizers can open them —
+                they never appear on a player card, poster or download.
+              </p>
+              {([
+                {
+                  on: idProofRequired,
+                  set: setIdProofRequired,
+                  Icon: ShieldCheck,
+                  title: 'Require an identity proof',
+                  hint: 'Players need an ID on their profile before they can add a card.',
+                },
+                {
+                  on: paymentProofRequired,
+                  set: setPaymentProofRequired,
+                  Icon: ReceiptIndianRupee,
+                  title: 'Require a payment receipt',
+                  hint: 'Players attach proof of the entry fee when they add their card.',
+                },
+              ] as const).map(({ on, set, Icon, title, hint }) => (
+                <button
+                  key={title}
+                  type="button"
+                  role="switch"
+                  aria-checked={on}
+                  disabled={loading}
+                  onClick={() => set((v) => !v)}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                    on ? 'border-green-500/40 bg-green-500/8' : 'border-border bg-input hover:border-primary/30'
+                  }`}
+                >
+                  <span className="flex items-start gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${on ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{title}</span>
+                      <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`relative inline-flex h-5.5 w-10 shrink-0 items-center rounded-full transition-colors duration-200 ${
+                      on ? 'bg-green-600' : 'bg-muted-foreground/25'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                        on ? 'translate-x-5' : 'translate-x-1'
+                      }`}
+                    />
+                  </span>
+                </button>
+              ))}
             </div>
 
             {/* Submit */}

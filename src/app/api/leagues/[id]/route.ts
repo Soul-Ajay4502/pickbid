@@ -3,6 +3,7 @@ import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPubl
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
+import { stripOrganizerFields } from '@/lib/utils';
 
 export async function GET(
   _request: NextRequest,
@@ -38,9 +39,9 @@ export async function GET(
         iconOfTeam: team ? { id: team.id, name: team.name, colorHex: team.colorHex } : null,
       };
     });
-    // Contact numbers are for the organisers' records only — never expose them
-    // to anyone who isn't running this league (creator or co-organizer)
-    const safePlayers = canManage ? withIconTeam : withIconTeam.map((p) => ({ ...p, contactNumber: null }));
+    // Contact numbers and payment receipts are for the organisers' records only
+    // — never expose them to anyone who isn't running this league
+    const safePlayers = canManage ? withIconTeam : withIconTeam.map(stripOrganizerFields);
     const safeOfficials = canManage ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
     // Co-organizer names/photos are public (they're shown as badges), but their
     // emails are only the creator's business — they power the manage list
@@ -71,7 +72,7 @@ export async function PATCH(
     const { error, status } = await requireLeagueManager(id);
     if (error) return NextResponse.json({ error }, { status });
     const body = await request.json();
-    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed'];
+    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed', 'idProofRequired', 'paymentProofRequired'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
     let updated = await updateLeague(id, patch);
     // Certificates aren't a plain column write: the client sends a boolean and
@@ -97,7 +98,7 @@ export async function DELETE(
     if (error !== null) return NextResponse.json({ error }, { status });
     // Collect image URLs before the cascade delete wipes the player rows
     const players = await getPlayers(id);
-    const imageUrls = [league.logoUrl, ...players.map((p) => p.photo)];
+    const imageUrls = [league.logoUrl, ...players.flatMap((p) => [p.photo, p.paymentProofUrl])];
     await deleteLeague(id);
     // After the delete, anything still referenced (e.g. a photo shared with a
     // user profile or another league) survives; the rest is removed from Cloudinary

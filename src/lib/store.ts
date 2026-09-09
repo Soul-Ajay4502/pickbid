@@ -5,7 +5,7 @@ import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficia
 import { calcStandings } from './standings';
 import { playerNameKey } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
-import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import type { IdProofType, PlayerDocuments, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,8 @@ function toLeague(row: LeagueModel): League {
     registrationClosed: row.registrationClosed ?? false,
     pickPreference: (row.pickPreference as League['pickPreference']) ?? null,
     certificatesReleasedAt: row.certificatesReleasedAt?.toISOString() ?? null,
+    idProofRequired: row.idProofRequired ?? false,
+    paymentProofRequired: row.paymentProofRequired ?? false,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -40,6 +42,7 @@ function toPlayer(row: PlayerModel): Player {
     isWicketKeeper: row.isWicketKeeper ?? false,
     creatorToken:   row.creatorToken,
     contactNumber:  row.contactNumber ?? null,
+    paymentProofUrl: row.paymentProofUrl ?? null,
     teamId:         row.teamId ?? null,
     soldPrice:      row.soldPrice ?? null,
     isUnsold:       row.isUnsold ?? false,
@@ -90,6 +93,8 @@ function toProfile(row: UserModel): UserProfile | null {
     role:           (row.role ?? 'Batter')                as UserProfile['role'],
     isWicketKeeper: row.isWicketKeeper ?? false,
     contactNumber:  row.contactNumber ?? null,
+    idProofType:    (row.idProofType ?? null) as UserProfile['idProofType'],
+    idProofUrl:     row.idProofUrl ?? null,
     updatedAt:      row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -281,6 +286,8 @@ export async function createLeague(data: {
   logoUrl?: string;
   isPublic?: boolean;
   pickPreference?: League['pickPreference'];
+  idProofRequired?: boolean;
+  paymentProofRequired?: boolean;
 }): Promise<League> {
   await ensureUser(data.creatorId, data.creatorEmail);
   const joinCode = data.isPublic ? generateJoinCode() : null;
@@ -295,6 +302,8 @@ export async function createLeague(data: {
     isPublic:     data.isPublic ?? false,
     joinCode,
     pickPreference: data.pickPreference ?? null,
+    idProofRequired: data.idProofRequired ?? false,
+    paymentProofRequired: data.paymentProofRequired ?? false,
   });
   return toLeague(row);
 }
@@ -388,6 +397,9 @@ export async function cloneLeague(
         certificatesReleasedAt: null,
         // Pick preference carries over from the source league by default
         pickPreference: overrides.pickPreference !== undefined ? overrides.pickPreference : (source.pickPreference as League['pickPreference']),
+        // A league that vets its players keeps doing so in the next season
+        idProofRequired: source.idProofRequired ?? false,
+        paymentProofRequired: source.paymentProofRequired ?? false,
       },
       { transaction: t }
     );
@@ -439,6 +451,9 @@ export async function cloneLeague(
             role:           p.role,
             isWicketKeeper: p.isWicketKeeper,
             contactNumber:  options.copyContactNumbers ? p.contactNumber : null,
+            // A receipt proves a fee was paid for *that* league — the clone is a
+            // new season with its own fee, so it always starts unpaid
+            paymentProofUrl: null,
             isIcon:         p.isIcon,
             teamId:         keepTeam,
             soldPrice:      preserveAuctionResults ? p.soldPrice : null,
@@ -998,6 +1013,7 @@ export async function createPlayer(data: Omit<Player, 'id' | 'createdAt'>): Prom
     isWicketKeeper: data.isWicketKeeper,
     creatorToken:   data.creatorToken,
     contactNumber:  data.contactNumber ?? null,
+    paymentProofUrl: data.paymentProofUrl ?? null,
     teamId:         data.teamId ?? null,
     soldPrice:      data.soldPrice ?? null,
     isUnsold:       data.isUnsold ?? false,
@@ -1336,6 +1352,8 @@ export async function setProfile(
     role:             data.role,
     isWicketKeeper:   data.isWicketKeeper,
     contactNumber:    data.contactNumber ?? null,
+    idProofType:      data.idProofType ?? null,
+    idProofUrl:       data.idProofUrl ?? null,
     profileCompleted: true,
   });
   return toProfile(row)!;
@@ -1356,6 +1374,8 @@ export async function updateProfile(
     role:             data.role ?? row.role,
     isWicketKeeper:   data.isWicketKeeper ?? row.isWicketKeeper,
     contactNumber:    data.contactNumber ?? row.contactNumber,
+    idProofType:      data.idProofType ?? row.idProofType,
+    idProofUrl:       data.idProofUrl ?? row.idProofUrl,
     profileCompleted: true,
   });
   return toProfile(row)!;
@@ -1371,20 +1391,78 @@ export async function updateProfile(
  * player, user profile, or league logo still points at it. Best-effort:
  * failures are logged, never thrown.
  */
+// ── Identity proof ─────────────────────────────────────────────────────
+// The document lives on the user, uploaded once from their profile. Both
+// functions here return organizer-grade PII, so their callers gate on
+// `requireLeagueManager` — nothing below authorizes itself.
+
+/** Whether this account has an identity document on file. Null userId → false. */
+export async function hasIdentityProof(userId: string | null | undefined): Promise<boolean> {
+  if (!userId) return false;
+  const row = await UserModel.findByPk(userId, { attributes: ['idProofUrl'] });
+  return !!row?.idProofUrl;
+}
+
+/**
+ * The organizer's document register for one league: every player card with its
+ * entry-fee receipt, and the identity document from the account it belongs to.
+ *
+ * The payment receipt is a column on the card, so it comes back with the first
+ * query. The identity document isn't — it lives on the user — so it takes a
+ * second lookup, keyed on the account ids actually present rather than joined,
+ * because there is no Player↔User association. Two round trips however many
+ * players a league has. Cards sharing an account (the same person registered
+ * twice) resolve to the same ID, which is correct; their receipts stay separate,
+ * which is also correct.
+ */
+export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocuments[]> {
+  const players = await PlayerModel.findAll({
+    where: { leagueId },
+    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl'],
+    order: [['createdAt', 'ASC']],
+  });
+  if (players.length === 0) return [];
+
+  const userIds = [...new Set(players.map((p) => p.userId).filter((v): v is string => !!v))];
+  const users = userIds.length
+    ? await UserModel.findAll({
+        where: { id: { [Op.in]: userIds } },
+        attributes: ['id', 'idProofType', 'idProofUrl', 'updatedAt'],
+      })
+    : [];
+  const userById = Object.fromEntries(users.map((u) => [u.id, u]));
+
+  return players.map((p) => {
+    const owner = p.userId ? userById[p.userId] : undefined;
+    return {
+      playerId:       p.id,
+      playerName:     p.name,
+      photo:          p.photo ?? '',
+      linked:         !!owner,
+      idProofType:    (owner?.idProofType ?? null) as IdProofType | null,
+      idProofUrl:     owner?.idProofUrl || null,
+      idSubmittedAt:  owner?.idProofUrl ? (owner.updatedAt?.toISOString() ?? null) : null,
+      paymentProofUrl: p.paymentProofUrl || null,
+    };
+  });
+}
+
 export async function cleanupImages(urls: Array<string | null | undefined>): Promise<void> {
   const { deleteFromCloudinary, cloudinaryPublicId } = await import('./cloudinary');
   const candidates = [...new Set(urls.filter((u): u is string => !!u && !!cloudinaryPublicId(u)))];
 
   await Promise.allSettled(
     candidates.map(async (url) => {
-      const [playerRefs, profileRefs, logoRefs, officialRefs, sponsorRefs] = await Promise.all([
+      const [playerRefs, profileRefs, idRefs, payRefs, logoRefs, officialRefs, sponsorRefs] = await Promise.all([
         PlayerModel.count({ where: { photo: url } }),
         UserModel.count({ where: { photo: url } }),
+        UserModel.count({ where: { idProofUrl: url } }),
+        PlayerModel.count({ where: { paymentProofUrl: url } }),
         LeagueModel.count({ where: { logoUrl: url } }),
         TeamOfficialModel.count({ where: { photo: url } }),
         SponsorModel.count({ where: { logoUrl: url } }),
       ]);
-      if (playerRefs + profileRefs + logoRefs + officialRefs + sponsorRefs === 0) {
+      if (playerRefs + profileRefs + idRefs + payRefs + logoRefs + officialRefs + sponsorRefs === 0) {
         await deleteFromCloudinary(url);
       }
     })
