@@ -3,6 +3,7 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
+import { playerNameKey } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
 import type { League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
@@ -1088,14 +1089,73 @@ export async function resetAuction(leagueId: string): Promise<number> {
 
 // ── Global leaderboard ──────────────────────────────────────────────────────────
 
+/** One row of the raw candidate pool behind the global leaderboard. */
+interface TopBidRow {
+  id: string;
+  name: string;
+  photo: string | null;
+  sold_price: number | string;
+  budget: number | string;
+  purse_share: number | string;
+  is_icon: boolean;
+  league_id: string;
+  league_name: string;
+  team_name: string;
+  team_color: string | null;
+}
+
+/**
+ * How many candidate buys to pull per board slot. The board shows one row per
+ * *person*, and the regulars who dominate it turn up in three or four leagues
+ * each, so the pool has to be several times the slot count for twenty distinct
+ * players to survive the grouping — and wide enough that a player's other big
+ * buys are in it to be counted.
+ */
+const TOP_BID_POOL_FACTOR = 10;
+
+/**
+ * Bucket the candidate pool into one list per person, best buy first.
+ *
+ * **The name is the only identity available.** `players.user_id` is whoever
+ * *created* the card, not who the player is — an organizer who bulk-adds their
+ * whole league while signed in stamps their own id on every card (one account
+ * here owns 144 cards under 144 different names), and `contact_number` gets
+ * reused as a placeholder across players. Matching on either merged whole
+ * leagues into a single "player". So two buys are the same person when their
+ * names match once punctuation, digits and case are stripped, and the cost of
+ * that is namesakes: two different Rahuls in different leagues share a row.
+ *
+ * Only the best buy per league survives in a bucket, so a namesake inside one
+ * league can't inflate the badge — the count is leagues, not sales.
+ */
+function groupBuysByPerson(rows: TopBidRow[]): TopBidRow[][] {
+  const byPerson = new Map<string, TopBidRow[]>();
+  for (const row of rows) {
+    const key = playerNameKey(row.name) || `id:${row.id}`; // a nameless card merges with nothing
+    const bucket = byPerson.get(key);
+    if (!bucket) { byPerson.set(key, [row]); continue; }
+    if (bucket.some((b) => b.league_id === row.league_id)) continue;
+    bucket.push(row);
+  }
+  // Rows arrive best-first, so each bucket leads with the person's best buy and
+  // the map's insertion order is already the board's order.
+  return [...byPerson.values()];
+}
+
 /**
  * The biggest buys across the entire system, ranked by **share of the buying
- * team's purse** rather than raw rupees.
+ * team's purse** rather than raw rupees, one row per player.
  *
  * Every league sets its own budgets — a ₹1 lakh street tournament and a ₹10
  * crore corporate league both live here — so ordering on `sold_price` only ever
  * surfaced whoever picked the biggest numbers. `sold_price / budget` puts every
  * auction on the same 0–1 scale, and price breaks ties inside it.
+ *
+ * The same regulars then went big in several leagues each and took three slots
+ * apiece, so buys are grouped by person and only the best one is ranked; the
+ * rest ride along in `otherBuys` for the badge and its tooltip. Counts are
+ * therefore over the candidate pool, not a player's whole career — a small buy
+ * that never came near the board isn't in it.
  *
  * Raw SQL because the ordering key spans two tables and there is no
  * Player↔Team association to lean on; the alternative is pulling every sold
@@ -1103,19 +1163,7 @@ export async function resetAuction(leagueId: string): Promise<number> {
  * hence the float cast — Postgres would otherwise floor the ratio to 0.
  */
 export async function getTopBids(limit = 20): Promise<TopBid[]> {
-  const rows = await sequelize.query<{
-    id: string;
-    name: string;
-    photo: string | null;
-    sold_price: number | string;
-    budget: number | string;
-    purse_share: number | string;
-    is_icon: boolean;
-    league_id: string;
-    league_name: string;
-    team_name: string;
-    team_color: string | null;
-  }>(
+  const rows = await sequelize.query<TopBidRow>(
     `SELECT p.id,
             p.name,
             p.photo,
@@ -1132,22 +1180,29 @@ export async function getTopBids(limit = 20): Promise<TopBid[]> {
        JOIN leagues l ON l.id = p.league_id
       WHERE p.sold_price > 0 AND t.budget > 0
       ORDER BY purse_share DESC, p.sold_price DESC
-      LIMIT :limit`,
-    { replacements: { limit }, type: QueryTypes.SELECT }
+      LIMIT :pool`,
+    { replacements: { pool: limit * TOP_BID_POOL_FACTOR }, type: QueryTypes.SELECT }
   );
 
-  return rows.map((r) => ({
-    playerId:   r.id,
-    playerName: r.name,
-    photo:      r.photo ?? '',
-    soldPrice:  Number(r.sold_price),
-    teamBudget: Number(r.budget),
-    purseShare: Number(r.purse_share),
-    isIcon:     r.is_icon ?? false,
-    leagueId:   r.league_id,
-    leagueName: r.league_name ?? '—',
-    teamName:   r.team_name ?? '—',
-    teamColor:  r.team_color ?? '#64748b',
+  return groupBuysByPerson(rows).slice(0, limit).map(([best, ...others]) => ({
+    playerId:   best.id,
+    playerName: best.name,
+    photo:      best.photo ?? '',
+    soldPrice:  Number(best.sold_price),
+    teamBudget: Number(best.budget),
+    purseShare: Number(best.purse_share),
+    isIcon:     best.is_icon ?? false,
+    leagueId:   best.league_id,
+    leagueName: best.league_name ?? '—',
+    teamName:   best.team_name ?? '—',
+    teamColor:  best.team_color ?? '#64748b',
+    otherBuys:  others.map((o) => ({
+      leagueId:   o.league_id,
+      leagueName: o.league_name ?? '—',
+      teamName:   o.team_name ?? '—',
+      soldPrice:  Number(o.sold_price),
+      purseShare: Number(o.purse_share),
+    })),
   }));
 }
 

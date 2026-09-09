@@ -90,6 +90,29 @@ export function whatsappShareLink(message: string): string {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
+// Organizers routinely bake serial numbers and phone numbers into the name they
+// type — "111.Amal Kannan (6282148147)". These two helpers clean that up for
+// display and for matching one person across leagues; the stored name is never
+// rewritten.
+const NAME_JUNK = /[^\p{L}\s'’-]+/gu;                    // digits, dots, brackets, …
+const NAME_DANGLING = /(?<!\p{L})['’-]+|['’-]+(?!\p{L})/gu; // punctuation not joining two letters
+
+/**
+ * A player name with everything but letters stripped, keeping the hyphens and
+ * apostrophes real names use (Jean-Pierre, D'Souza). Junk becomes a space so
+ * the surrounding words don't run together. A name written entirely in digits
+ * keeps its raw form rather than rendering blank.
+ */
+export function cleanPlayerName(name: string): string {
+  const cleaned = name.replace(NAME_JUNK, ' ').replace(NAME_DANGLING, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || name;
+}
+
+/** Case- and punctuation-insensitive key for matching one person across leagues. */
+export function playerNameKey(name: string): string {
+  return cleanPlayerName(name).toLowerCase();
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

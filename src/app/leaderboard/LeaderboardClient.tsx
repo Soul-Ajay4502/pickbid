@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Trophy, Crown, Medal, Star, Globe, ArrowUpRight } from 'lucide-react';
 import type { TopBid } from '@/lib/types';
+import { cleanPlayerName } from '@/lib/utils';
 
 function fmt(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -66,18 +67,6 @@ function thumb(url: string): string {
   return url;
 }
 
-// Organizers often bake serial numbers and phone numbers into the name they
-// type — "111.Amal Kannan (6282148147)". Display-only cleanup; the stored name
-// is left exactly as the player entered it.
-const NAME_JUNK = /[^\p{L}\s'’-]+/gu;                        // digits, dots, brackets, …
-const DANGLING  = /(?<!\p{L})['’-]+|['’-]+(?!\p{L})/gu;      // punctuation not joining two letters
-
-/** Strip everything but letters, keeping the hyphens and apostrophes real names use. */
-function cleanName(name: string): string {
-  const cleaned = name.replace(NAME_JUNK, ' ').replace(DANGLING, ' ').replace(/\s+/g, ' ').trim();
-  return cleaned || name; // a name written entirely in digits keeps its raw form
-}
-
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 }
@@ -105,6 +94,33 @@ function Avatar({ photo, name, color, size, ring }: { photo: string; name: strin
   );
 }
 
+/**
+ * "×3" beside a player who went big in more than one league. The board ranks
+ * only their best buy — that dedupe is the whole point, it keeps the twenty
+ * slots holding twenty different people — so the badge is what tells you the
+ * other buys existed, and its tooltip lists them.
+ *
+ * A titled span rather than a button: the badge sits inside the card's <Link>,
+ * and interactive content can't nest inside an anchor.
+ */
+function RepeatBadge({ bid }: { bid: TopBid }) {
+  if (bid.otherBuys.length === 0) return null;
+  const buys = [{ leagueName: bid.leagueName, purseShare: bid.purseShare, soldPrice: bid.soldPrice }, ...bid.otherBuys];
+  const label =
+    `Went big in ${buys.length} leagues — the board ranks the best:\n` +
+    buys.map((b) => `• ${b.leagueName} — ${pct(b.purseShare)} (${fmt(b.soldPrice)})`).join('\n');
+  return (
+    <span
+      title={label}
+      className="shrink-0 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-px text-[10px] font-bold tabular-nums cursor-help"
+    >
+      <span aria-hidden="true">×{buys.length}</span>
+      {/* `title` is a hover-only affordance — screen readers get the breakdown here. */}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 const RANK = [
   { ring: '#f59e0b', ped: 'from-amber-400 to-yellow-600', text: 'text-amber-500', medal: Crown, av: 104, height: 88 },
   { ring: '#cbd5e1', ped: 'from-slate-300 to-slate-500', text: 'text-slate-400', medal: Medal, av: 84, height: 64 },
@@ -117,7 +133,7 @@ function PodiumCard({ bid, rank, mounted }: { bid: TopBid; rank: number; mounted
   const r = RANK[rank];
   const Medalish = r.medal;
   const isLeader = rank === 0;
-  const name = cleanName(bid.playerName);
+  const name = cleanPlayerName(bid.playerName);
   // Reveal 1st, then 2nd, then 3rd — the winner lands first and holds the eye.
   const delay = rank * 0.12;
   return (
@@ -146,6 +162,7 @@ function PodiumCard({ bid, rank, mounted }: { bid: TopBid; rank: number; mounted
         <p className="font-bold text-sm sm:text-base flex items-center justify-center gap-1 leading-tight group-hover:text-primary transition-colors">
           {bid.isIcon && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
           <span className="truncate">{name}</span>
+          <RepeatBadge bid={bid} />
         </p>
         <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-0.5 truncate">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: bid.teamColor }} />
@@ -199,9 +216,11 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
           <Trophy className="w-6 h-6 text-amber-500 animate-trophy" />Global Leaderboard
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          The top 20 buys across every league on Pickbid, ranked by{' '}
+          The top 20 players across every league on Pickbid, ranked by{' '}
           <span className="font-semibold text-foreground/80">share of the team&apos;s purse</span> — so a
-          ₹50,000 league and a ₹5 crore league compare fairly.
+          ₹50,000 league and a ₹5 crore league compare fairly. One row per player: a{' '}
+          <span className="text-amber-600 dark:text-amber-400 font-semibold">×n</span> badge means they went
+          big in more than one league, and the board ranks their best.
         </p>
       </div>
 
@@ -239,7 +258,8 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
                       <div className="flex-1 min-w-0 transition-transform duration-200 group-hover:translate-x-0.5">
                         <p className="font-semibold text-sm truncate flex items-center gap-1.5 group-hover:text-primary transition-colors">
                           {b.isIcon && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
-                          {cleanName(b.playerName)}
+                          <span className="truncate">{cleanPlayerName(b.playerName)}</span>
+                          <RepeatBadge bid={b} />
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.teamColor }} />

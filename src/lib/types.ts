@@ -377,6 +377,22 @@ export interface TopBid {
   leagueName: string;
   teamName: string;
   teamColor: string;
+  /**
+   * The same player's *other* big buys, best-first — empty for most players.
+   * A regular who goes big in three leagues would otherwise fill three of the
+   * twenty slots, so the board shows their best buy and folds the rest in here
+   * for the count badge and its tooltip.
+   */
+  otherBuys: TopBidAppearance[];
+}
+
+/** One of a player's runner-up buys, folded into their `TopBid`. */
+export interface TopBidAppearance {
+  leagueId: string;
+  leagueName: string;
+  teamName: string;
+  soldPrice: number;
+  purseShare: number;
 }
 
 /** Whole-platform totals shown on the signed-out landing page */
