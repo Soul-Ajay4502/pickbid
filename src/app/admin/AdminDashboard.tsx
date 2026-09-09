@@ -403,7 +403,7 @@ export default function AdminDashboard() {
               </section>
 
               <section className="rounded-2xl border border-foreground/10 bg-foreground/3 p-5">
-                <h3 className="text-sm font-semibold text-foreground/80 mb-4">Biggest sales anywhere</h3>
+                <h3 className="text-sm font-semibold text-foreground/80 mb-4">Biggest buys anywhere <span className="font-normal text-muted-foreground">· share of purse</span></h3>
                 {overview.topBids.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No completed sales yet.</p>
                 ) : (
@@ -417,7 +417,10 @@ export default function AdminDashboard() {
                           {b.isIcon && <Star className="inline w-3 h-3 ml-1 text-amber-500 fill-amber-500" />}
                           <span className="text-muted-foreground"> · {b.leagueName}</span>
                         </span>
-                        <span className="tabular-nums font-semibold shrink-0">{formatINR(b.soldPrice)}</span>
+                        <span className="text-right shrink-0 leading-tight">
+                          <span className="block tabular-nums font-semibold">{(b.purseShare * 100).toFixed(1)}%</span>
+                          <span className="block text-[11px] tabular-nums text-muted-foreground">{formatINR(b.soldPrice)}</span>
+                        </span>
                       </li>
                     ))}
                   </ol>

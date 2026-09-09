@@ -10,6 +10,17 @@ function fmt(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
+/**
+ * Share of the team's purse, as a percentage. One decimal keeps the ranking
+ * legible when the top few buys land within a fraction of a point of each
+ * other; anything under 0.1% shows as `<0.1%` rather than a flat `0.0%`.
+ */
+function pct(share: number): string {
+  const p = share * 100;
+  if (p > 0 && p < 0.1) return '<0.1%';
+  return `${p.toFixed(1)}%`;
+}
+
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -41,9 +52,10 @@ function useCountUp(target: number, active: boolean, duration = 900, delay = 0):
   return val;
 }
 
-function Price({ value, active, className, delay }: { value: number; active: boolean; className?: string; delay?: number }) {
+/** The ranked figure ticks up on reveal; the rupee footnote stays static. */
+function Share({ value, active, className, delay }: { value: number; active: boolean; className?: string; delay?: number }) {
   const n = useCountUp(value, active, 900, delay);
-  return <span className={`tabular-nums ${className ?? ''}`}>{fmt(n)}</span>;
+  return <span className={`tabular-nums ${className ?? ''}`}>{pct(n)}</span>;
 }
 
 /** Ask Cloudinary for a small face-cropped square instead of the full upload. */
@@ -52,6 +64,18 @@ function thumb(url: string): string {
     return url.replace('/upload/', '/upload/w_300,h_300,c_fill,g_auto/');
   }
   return url;
+}
+
+// Organizers often bake serial numbers and phone numbers into the name they
+// type — "111.Amal Kannan (6282148147)". Display-only cleanup; the stored name
+// is left exactly as the player entered it.
+const NAME_JUNK = /[^\p{L}\s'’-]+/gu;                        // digits, dots, brackets, …
+const DANGLING  = /(?<!\p{L})['’-]+|['’-]+(?!\p{L})/gu;      // punctuation not joining two letters
+
+/** Strip everything but letters, keeping the hyphens and apostrophes real names use. */
+function cleanName(name: string): string {
+  const cleaned = name.replace(NAME_JUNK, ' ').replace(DANGLING, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || name; // a name written entirely in digits keeps its raw form
 }
 
 function initials(name: string): string {
@@ -93,6 +117,7 @@ function PodiumCard({ bid, rank, mounted }: { bid: TopBid; rank: number; mounted
   const r = RANK[rank];
   const Medalish = r.medal;
   const isLeader = rank === 0;
+  const name = cleanName(bid.playerName);
   // Reveal 1st, then 2nd, then 3rd — the winner lands first and holds the eye.
   const delay = rank * 0.12;
   return (
@@ -111,7 +136,7 @@ function PodiumCard({ bid, rank, mounted }: { bid: TopBid; rank: number; mounted
           />
         )}
         <div className={`relative ${isLeader ? 'animate-float' : ''}`}>
-          <Avatar photo={bid.photo} name={bid.playerName} color={bid.teamColor} size={r.av} ring={r.ring} />
+          <Avatar photo={bid.photo} name={name} color={bid.teamColor} size={r.av} ring={r.ring} />
           <div className="absolute -top-1.5 -right-1.5 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-lg">
             <Medalish className={`${r.text} ${isLeader ? 'animate-trophy' : ''}`} style={{ width: 18, height: 18 }} />
           </div>
@@ -120,19 +145,22 @@ function PodiumCard({ bid, rank, mounted }: { bid: TopBid; rank: number; mounted
       <div className="text-center px-1">
         <p className="font-bold text-sm sm:text-base flex items-center justify-center gap-1 leading-tight group-hover:text-primary transition-colors">
           {bid.isIcon && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
-          <span className="truncate">{bid.playerName}</span>
+          <span className="truncate">{name}</span>
         </p>
         <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mt-0.5 truncate">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: bid.teamColor }} />
           <span className="truncate">{bid.teamName}</span>
         </p>
         <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5">{bid.leagueName}</p>
-        <Price
-          value={bid.soldPrice}
+        <Share
+          value={bid.purseShare}
           active={mounted}
           delay={delay * 1000}
           className={`block mt-1 font-black ${isLeader ? 'text-xl text-gradient-gold' : `text-lg ${r.text}`}`}
         />
+        <p className="text-[11px] text-muted-foreground/70 tabular-nums leading-tight">
+          {fmt(bid.soldPrice)} <span className="text-muted-foreground/50">of {fmt(bid.teamBudget)}</span>
+        </p>
       </div>
       {/* Pedestal rises from nothing on mount */}
       <div
@@ -170,7 +198,11 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
         <h1 className="text-2xl sm:text-3xl font-black text-gradient-green tracking-tight flex items-center gap-2.5">
           <Trophy className="w-6 h-6 text-amber-500 animate-trophy" />Global Leaderboard
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">The top 20 winning bids across every league on Pickbid.</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          The top 20 buys across every league on Pickbid, ranked by{' '}
+          <span className="font-semibold text-foreground/80">share of the team&apos;s purse</span> — so a
+          ₹50,000 league and a ₹5 crore league compare fairly.
+        </p>
       </div>
 
       {initialBids.length === 0 ? (
@@ -193,7 +225,7 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
           {rest.length > 0 && (
             <div className="rounded-2xl border border-border bg-card overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.06s' }}>
               <div className="px-5 py-3.5 border-b border-border bg-muted/40">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">More Top Bids</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">More Top Buys</p>
               </div>
               <ol className="divide-y divide-border/60">
                 {rest.map((b, i) => (
@@ -207,7 +239,7 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
                       <div className="flex-1 min-w-0 transition-transform duration-200 group-hover:translate-x-0.5">
                         <p className="font-semibold text-sm truncate flex items-center gap-1.5 group-hover:text-primary transition-colors">
                           {b.isIcon && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
-                          {b.playerName}
+                          {cleanName(b.playerName)}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: b.teamColor }} />
@@ -216,7 +248,10 @@ export default function LeaderboardClient({ initialBids }: { initialBids: TopBid
                           <span className="truncate text-muted-foreground/60">{b.leagueName}</span>
                         </p>
                       </div>
-                      <Price value={b.soldPrice} active={revealed} delay={350 + i * 45} className="text-sm font-bold text-green-600 dark:text-green-400 shrink-0" />
+                      <span className="text-right shrink-0 leading-tight">
+                        <Share value={b.purseShare} active={revealed} delay={350 + i * 45} className="block text-sm font-bold text-green-600 dark:text-green-400" />
+                        <span className="block text-[11px] text-muted-foreground/60 tabular-nums">{fmt(b.soldPrice)}</span>
+                      </span>
                       <ArrowUpRight className="w-4 h-4 text-muted-foreground/30 shrink-0 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
                     </Link>
                   </li>

@@ -355,15 +355,23 @@ export interface PublicLeagueView {
 }
 
 /**
- * One entry on the global (system-wide) bid leaderboard: the highest winning
- * bids across every league. Flattened with the league/team context the board
- * needs so the client doesn't have to join anything.
+ * One entry on the global (system-wide) bid leaderboard: the biggest buys
+ * across every league. Flattened with the league/team context the board needs
+ * so the client doesn't have to join anything.
+ *
+ * The board ranks on `purseShare`, not `soldPrice` — leagues set their own
+ * budgets, so rupee totals from a ₹1 lakh league and a ₹10 crore league aren't
+ * comparable. `soldPrice` is still carried for display.
  */
 export interface TopBid {
   playerId: string;
   playerName: string;
   photo: string;
   soldPrice: number;
+  /** The buying team's full purse — the denominator behind `purseShare`. */
+  teamBudget: number;
+  /** `soldPrice / teamBudget`, 0–1. The leaderboard's ranking key. */
+  purseShare: number;
   isIcon: boolean;
   leagueId: string;
   leagueName: string;

@@ -43,7 +43,8 @@ shared with a single link. It runs in any modern browser with no app install.
   auction, shareable without an account, with a projector mode for large-format
   display in the hall.
 - **Leaderboards** — biggest auction buys per league and a global leaderboard
-  across every public league on the platform.
+  across every public league on the platform, ranked by the share of the team's
+  purse a player took so leagues of any budget size compare fairly.
 - **Teams, squads and officials** — manage rosters, budgets and team officials,
   and export a PDF squad sheet to share on WhatsApp in one tap.
 - **Matches and results** — record fixtures, scores and winners for the league.
@@ -71,7 +72,7 @@ cards without spreadsheets, WhatsApp threads or paper chits.
 - [Pricing](${SITE_URL}/pricing): what it costs and what is included.
 - [FAQ](${SITE_URL}/faq): accounts, costs, who can see a league, how bidding works.
 - [Discover leagues](${SITE_URL}/leagues/discover): public league directory, or join by code.
-- [Global leaderboard](${SITE_URL}/leaderboard): biggest auction buys across all public leagues.
+- [Global leaderboard](${SITE_URL}/leaderboard): biggest auction buys across all public leagues, ranked by share of the team's purse.
 - [About](${SITE_URL}/about): background on the product.
 
 ## Guides and explainers

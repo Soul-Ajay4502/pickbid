@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
@@ -1089,38 +1089,65 @@ export async function resetAuction(leagueId: string): Promise<number> {
 // ── Global leaderboard ──────────────────────────────────────────────────────────
 
 /**
- * The highest winning bids across the entire system — every sold player in
- * every league, ranked by price. There is no Player↔Team association, so the
- * league and team names are resolved with two follow-up lookups keyed on the
- * ids that appear in the top slice (never the whole table).
+ * The biggest buys across the entire system, ranked by **share of the buying
+ * team's purse** rather than raw rupees.
+ *
+ * Every league sets its own budgets — a ₹1 lakh street tournament and a ₹10
+ * crore corporate league both live here — so ordering on `sold_price` only ever
+ * surfaced whoever picked the biggest numbers. `sold_price / budget` puts every
+ * auction on the same 0–1 scale, and price breaks ties inside it.
+ *
+ * Raw SQL because the ordering key spans two tables and there is no
+ * Player↔Team association to lean on; the alternative is pulling every sold
+ * player into JS to rank them. Both divisor and dividend are INTEGER columns,
+ * hence the float cast — Postgres would otherwise floor the ratio to 0.
  */
 export async function getTopBids(limit = 20): Promise<TopBid[]> {
-  const rows = await PlayerModel.findAll({
-    where: { teamId: { [Op.ne]: null }, soldPrice: { [Op.gt]: 0 } },
-    order: [['soldPrice', 'DESC']],
-    limit,
-  });
-  if (rows.length === 0) return [];
-
-  const leagueIds = [...new Set(rows.map((r) => r.leagueId!))];
-  const teamIds = [...new Set(rows.map((r) => r.teamId!))];
-  const [leagues, teams] = await Promise.all([
-    LeagueModel.findAll({ where: { id: { [Op.in]: leagueIds } }, attributes: ['id', 'name'] }),
-    TeamModel.findAll({ where: { id: { [Op.in]: teamIds } }, attributes: ['id', 'name', 'colorHex'] }),
-  ]);
-  const leagueById = Object.fromEntries(leagues.map((l) => [l.id, l]));
-  const teamById = Object.fromEntries(teams.map((t) => [t.id, t]));
+  const rows = await sequelize.query<{
+    id: string;
+    name: string;
+    photo: string | null;
+    sold_price: number | string;
+    budget: number | string;
+    purse_share: number | string;
+    is_icon: boolean;
+    league_id: string;
+    league_name: string;
+    team_name: string;
+    team_color: string | null;
+  }>(
+    `SELECT p.id,
+            p.name,
+            p.photo,
+            p.sold_price,
+            p.is_icon,
+            p.league_id,
+            t.budget,
+            t.name       AS team_name,
+            t.color_hex  AS team_color,
+            l.name       AS league_name,
+            p.sold_price::float8 / t.budget AS purse_share
+       FROM players p
+       JOIN teams   t ON t.id = p.team_id
+       JOIN leagues l ON l.id = p.league_id
+      WHERE p.sold_price > 0 AND t.budget > 0
+      ORDER BY purse_share DESC, p.sold_price DESC
+      LIMIT :limit`,
+    { replacements: { limit }, type: QueryTypes.SELECT }
+  );
 
   return rows.map((r) => ({
     playerId:   r.id,
     playerName: r.name,
     photo:      r.photo ?? '',
-    soldPrice:  r.soldPrice ?? 0,
-    isIcon:     r.isIcon ?? false,
-    leagueId:   r.leagueId!,
-    leagueName: leagueById[r.leagueId!]?.name ?? '—',
-    teamName:   teamById[r.teamId!]?.name ?? '—',
-    teamColor:  teamById[r.teamId!]?.colorHex ?? '#64748b',
+    soldPrice:  Number(r.sold_price),
+    teamBudget: Number(r.budget),
+    purseShare: Number(r.purse_share),
+    isIcon:     r.is_icon ?? false,
+    leagueId:   r.league_id,
+    leagueName: r.league_name ?? '—',
+    teamName:   r.team_name ?? '—',
+    teamColor:  r.team_color ?? '#64748b',
   }));
 }
 

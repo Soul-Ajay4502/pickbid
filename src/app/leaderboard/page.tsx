@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 const PAGE_PATH = '/leaderboard';
 const PAGE_TITLE = 'Global Leaderboard';
 const PAGE_DESCRIPTION =
-  'The top 20 winning bids across every cricket league on Pickbid — the ' +
-  'biggest auction buys, their teams and their leagues, updated live.';
+  'The top 20 buys across every cricket league on Pickbid, ranked by share of ' +
+  "the team's purse so leagues of any budget compare fairly — updated live.";
 
 export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
