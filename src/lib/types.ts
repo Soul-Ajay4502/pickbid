@@ -72,6 +72,24 @@ export interface League {
    * league, so it never carries across to another.
    */
   paymentProofRequired: boolean;
+  /**
+   * When false, a player opening this league sees only their own card and the
+   * icon players — the rest of the roster is withheld. Organizers (and the
+   * platform owner) always see everyone. Defaults to true, so leagues created
+   * before the switch existed are unaffected.
+   *
+   * This governs the league's *own* roster listing. It is not a substitute for
+   * making a league private: a public league is served to logged-out visitors
+   * by `getPublicLeagueView`, which publishes every player by design.
+   */
+  rosterVisibleToPlayers: boolean;
+  /**
+   * When false, only the league's organizers may delete a player card — the
+   * `creatorToken` that normally proves card ownership no longer authorises a
+   * delete. Editing is untouched either way, so a player can still fix their
+   * own photo or stats. Defaults to true.
+   */
+  playersCanDeleteCards: boolean;
   createdAt: string;
 }
 
@@ -303,7 +321,21 @@ export interface UserProfile {
 
 /** Shape returned by GET /api/leagues/[id] */
 export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
+  /**
+   * The roster this requester is allowed to see. Normally every registered
+   * card; trimmed to the requester's own cards plus the icon players when the
+   * league has `rosterVisibleToPlayers` off — read `registeredPlayers`, never
+   * `players.length`, for how many people have actually signed up.
+   */
   players: Player[];
+  /**
+   * How many cards the league really holds, independent of what `players`
+   * carries. Always the true count, so the slots-filled meter stays honest for
+   * a player looking at a hidden roster.
+   */
+  registeredPlayers: number;
+  /** True when `players` was trimmed above — the cue to explain the gap. */
+  rosterHidden: boolean;
   teams: Team[];
   officials: TeamOfficial[];
   isCreator: boolean;

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, totalPlayers, conductedBy, templateId, logoUrl, pickPreference, idProofRequired, paymentProofRequired } = body;
+    const { name, totalPlayers, conductedBy, templateId, logoUrl, pickPreference, idProofRequired, paymentProofRequired, rosterVisibleToPlayers, playersCanDeleteCards } = body;
 
     if (!name || !totalPlayers || !conductedBy) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -61,6 +61,10 @@ export async function POST(request: NextRequest) {
       pickPreference: parsedPickPreference,
       idProofRequired: Boolean(idProofRequired),
       paymentProofRequired: Boolean(paymentProofRequired),
+      // Both permissive unless the form explicitly sends `false`, so an older
+      // client that doesn't know these fields creates the league it always did
+      rosterVisibleToPlayers: rosterVisibleToPlayers !== false,
+      playersCanDeleteCards: playersCanDeleteCards !== false,
     });
 
     return NextResponse.json(league, { status: 201 });

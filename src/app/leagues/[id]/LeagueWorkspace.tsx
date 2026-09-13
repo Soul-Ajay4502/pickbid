@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
+import PlayerAccessModal from '@/components/league/PlayerAccessModal';
 import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
@@ -21,7 +22,7 @@ import {
   ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
   UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
-  ShieldCheck, ReceiptText, Award,
+  ShieldCheck, ReceiptText, Award, Eye, EyeOff,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -52,6 +53,8 @@ function LeaguePageInner() {
   const [coOrgOpen, setCoOrgOpen] = useState(false);
   // Creator-only 'delete this league' confirmation
   const [deleteLeagueOpen, setDeleteLeagueOpen] = useState(false);
+  // Organizer controls for roster visibility and player-side card deletion
+  const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   // Non-null only while an auction is being run right now. Kept separate from
   // `data` because it's polled on its own — see the interval below.
   const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(null);
@@ -222,13 +225,26 @@ function LeaguePageInner() {
   }
 
   // ── Player helpers ─────────────────────────────────────────────────────────
-  function canEditPlayer(playerCreatorToken: string, playerId: string): boolean {
+  /** Whoever created this card in *this* browser, proven by the stored token. */
+  function holdsCardToken(playerCreatorToken: string, playerId: string): boolean {
     if (typeof window === 'undefined') return false;
     const playerToken = localStorage.getItem(`creator_player_${playerId}`);
-    return (
-      data?.canManage === true ||
-      (!!playerToken && playerToken === playerCreatorToken)
-    );
+    return !!playerToken && playerToken === playerCreatorToken;
+  }
+
+  function canEditPlayer(playerCreatorToken: string, playerId: string): boolean {
+    return data?.canManage === true || holdsCardToken(playerCreatorToken, playerId);
+  }
+
+  /**
+   * Deleting is the narrower right: the organizers always have it, but the
+   * card's own holder only while the league leaves `playersCanDeleteCards` on.
+   * Mirrors the DELETE handler — this just keeps the button from offering
+   * something the API would refuse.
+   */
+  function canDeletePlayer(playerCreatorToken: string, playerId: string): boolean {
+    if (data?.canManage === true) return true;
+    return (data?.playersCanDeleteCards ?? true) && holdsCardToken(playerCreatorToken, playerId);
   }
 
   async function handleDeletePlayer(playerId: string) {
@@ -238,11 +254,15 @@ function LeaguePageInner() {
       const token = localStorage.getItem(`creator_player_${playerId}`);
       const qs = token ? `?creatorToken=${encodeURIComponent(token)}` : '';
       const res = await fetch(`/api/leagues/${id}/players/${playerId}${qs}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) {
+        // The league may have card deletion switched off — say which it is
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to delete player card');
+      }
       toast.success('Player card deleted');
       fetchLeague();
-    } catch {
-      toast.error('Failed to delete player card');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete player card');
     }
   }
 
@@ -529,6 +549,16 @@ function LeaguePageInner() {
     : data.players;
 
   const registrationClosed = data.registrationClosed ?? false;
+  // The organizer has closed the roster and this viewer isn't one — `players`
+  // carries only their own card plus the icons. `registeredPlayers` is still
+  // the true signup count, so the capacity meter below stays honest.
+  const rosterHidden = data.rosterHidden ?? false;
+  const registeredPlayers = data.registeredPlayers ?? data.players.length;
+  // Either player-access switch turned off — organizers never feel the effect
+  // themselves, so the toolbar button carries the state
+  const rosterVisibleToPlayers = data.rosterVisibleToPlayers ?? true;
+  const playersCanDeleteCards = data.playersCanDeleteCards ?? true;
+  const rosterLocked = !rosterVisibleToPlayers || !playersCanDeleteCards;
   // Organizers have released participation certificates to this league's players
   const certificatesReleased = !!data.certificatesReleasedAt;
   // Creator or co-organizer — either can manage this league
@@ -553,12 +583,14 @@ function LeaguePageInner() {
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
   // The auction is complete once every player is resolved (sold/icon or unsold) and real results exist
   const allResolved = data.players.length > 0 && data.players.every(p => p.teamId || p.isUnsold);
-  const auctionCompleted = data.teams.length > 0 && hasAuctionData && allResolved;
+  // A trimmed roster can look "all resolved" off a single card, so the
+  // completed-auction banner is only offered to viewers seeing everyone
+  const auctionCompleted = !rosterHidden && data.teams.length > 0 && hasAuctionData && allResolved;
   // Hide the card grid behind the "completed" banner until the viewer asks to see it
   const playersHidden = auctionCompleted && !showPlayers;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const fillPct = data.totalPlayers > 0
-    ? Math.min(100, Math.round((data.players.length / data.totalPlayers) * 100))
+    ? Math.min(100, Math.round((registeredPlayers / data.totalPlayers) * 100))
     : 0;
 
   return (
@@ -653,7 +685,7 @@ function LeaguePageInner() {
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
                 <span className="flex items-center gap-1.5">
                   <Users className="w-3 h-3" />
-                  {data.players.length} of {data.totalPlayers} slots filled
+                  {registeredPlayers} of {data.totalPlayers} slots filled
                 </span>
                 <span className="font-semibold text-foreground tabular-nums">{fillPct}%</span>
               </div>
@@ -760,6 +792,17 @@ function LeaguePageInner() {
                   ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                   : <Award className="w-3.5 h-3.5" />}
                 {certificatesReleased ? 'Certificates Released' : 'Release Certificates'}
+              </button>
+              {/* Roster visibility and player-side card deletion. Flagged when
+                  either is off, since both are silent from the organizer's own
+                  view — they always see the full roster and every button. */}
+              <button
+                onClick={() => setPlayerAccessOpen(true)}
+                className={`toolbar-btn ${rosterLocked ? 'text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
+                title="Control whether players can see the full roster and delete their own card"
+              >
+                {rosterLocked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                Player Access
               </button>
               {/* Only the creator manages who co-organizes */}
               {data.isCreator && (
@@ -954,7 +997,7 @@ function LeaguePageInner() {
       )}
 
       {/* Player grid */}
-      {data.players.length === 0 ? (
+      {registeredPlayers === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-5 animate-fade-in-up">
           <div className="relative">
             <div className="absolute inset-0 bg-green-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
@@ -1010,6 +1053,17 @@ function LeaguePageInner() {
             ) : null
           )}
         </div>
+      ) : rosterHidden && data.players.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-5 animate-fade-in-up text-center">
+          <EyeOff className="w-10 h-10 text-muted-foreground/40" />
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-bold">The player list is hidden</h2>
+            <p className="text-muted-foreground text-sm max-w-sm leading-relaxed mx-auto">
+              {registeredPlayers} player{registeredPlayers === 1 ? ' has' : 's have'} registered, but the
+              organizers have chosen not to show the roster. Your own card appears here once you join.
+            </p>
+          </div>
+        </div>
       ) : playersHidden ? (
         <div className="flex flex-col items-center justify-center py-20 gap-6 animate-fade-in-up text-center">
           <div className="relative">
@@ -1059,6 +1113,16 @@ function LeaguePageInner() {
               </button>
             </div>
           )}
+          {rosterHidden && (
+            <p className="flex items-start gap-2 max-w-2xl mx-auto mb-6 text-xs text-muted-foreground bg-muted/50 border border-border rounded-xl px-3.5 py-2.5 animate-fade-in-up">
+              <EyeOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                The organizers have hidden this league&apos;s roster. You can see your own card and
+                the icon players — {registeredPlayers} player{registeredPlayers === 1 ? ' has' : 's have'} registered
+                in total.
+              </span>
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
           {filteredPlayers.map((player, i) => (
             <div
@@ -1077,12 +1141,28 @@ function LeaguePageInner() {
                 logoUrl={data.logoUrl}
                 showEdit={canEditPlayer(player.creatorToken, player.id)}
                 onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
-                onDelete={() => handleDeletePlayer(player.id)}
+                onDelete={
+                  canDeletePlayer(player.creatorToken, player.id)
+                    ? () => handleDeletePlayer(player.id)
+                    : undefined
+                }
               />
             </div>
           ))}
           </div>
         </>
+      )}
+
+      {/* Roster visibility & card-deletion switches (organizers) */}
+      {playerAccessOpen && (
+        <PlayerAccessModal
+          leagueId={id}
+          rosterVisibleToPlayers={rosterVisibleToPlayers}
+          playersCanDeleteCards={playersCanDeleteCards}
+          isPublic={data.isPublic}
+          onSaved={(field, value) => setData(prev => prev ? { ...prev, [field]: value } : prev)}
+          onClose={() => setPlayerAccessOpen(false)}
+        />
       )}
 
       {/* Co-organizer management (creator only) */}
@@ -1100,8 +1180,8 @@ function LeaguePageInner() {
         title="Delete this league?"
         description={
           <>
-            <strong className="text-foreground">{data.name}</strong> and all {data.players.length} player
-            card{data.players.length === 1 ? '' : 's'} will be removed, along with its teams, matches,
+            <strong className="text-foreground">{data.name}</strong> and all {registeredPlayers} player
+            card{registeredPlayers === 1 ? '' : 's'} will be removed, along with its teams, matches,
             sponsors and ledger. This cannot be undone.
           </>
         }

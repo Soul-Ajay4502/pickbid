@@ -3,7 +3,7 @@ import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPubl
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
-import { stripOrganizerFields } from '@/lib/utils';
+import { stripOrganizerFields, visibleRoster } from '@/lib/utils';
 
 export async function GET(
   _request: NextRequest,
@@ -39,9 +39,14 @@ export async function GET(
         iconOfTeam: team ? { id: team.id, name: team.name, colorHex: team.colorHex } : null,
       };
     });
+    // A league running a closed roster shows a player only their own card and
+    // the icon signings. Computed after `hasJoined` above, which must keep
+    // looking at the whole roster to answer "have I joined?" correctly.
+    const rosterHidden = !canManage && !league.rosterVisibleToPlayers;
+    const roster = rosterHidden ? visibleRoster(withIconTeam, userId) : withIconTeam;
     // Contact numbers and payment receipts are for the organisers' records only
     // — never expose them to anyone who isn't running this league
-    const safePlayers = canManage ? withIconTeam : withIconTeam.map(stripOrganizerFields);
+    const safePlayers = canManage ? roster : roster.map(stripOrganizerFields);
     const safeOfficials = canManage ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
     // Co-organizer names/photos are public (they're shown as badges), but their
     // emails are only the creator's business — they power the manage list
@@ -55,7 +60,9 @@ export async function GET(
     // `liveAuction` is non-null only while an auction is actually being run —
     // it's what puts the LIVE banner (and the only in-app route back into a
     // running auction) on the league page.
-    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, liveAuction, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
+    // `registeredPlayers` is the true signup count even when `players` has been
+    // trimmed — the slots-filled meter reads it rather than `players.length`.
+    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, liveAuction, registeredPlayers: players.length, rosterHidden, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
@@ -72,7 +79,7 @@ export async function PATCH(
     const { error, status } = await requireLeagueManager(id);
     if (error) return NextResponse.json({ error }, { status });
     const body = await request.json();
-    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed', 'idProofRequired', 'paymentProofRequired'];
+    const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed', 'idProofRequired', 'paymentProofRequired', 'rosterVisibleToPlayers', 'playersCanDeleteCards'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
     let updated = await updateLeague(id, patch);
     // Certificates aren't a plain column write: the client sends a boolean and

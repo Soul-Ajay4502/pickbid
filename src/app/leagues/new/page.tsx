@@ -13,7 +13,7 @@ import { sanitizeFolder, uploadFile } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
 import type { Player, PlayerRole } from '@/lib/types';
-import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered, ShieldCheck, ReceiptIndianRupee } from 'lucide-react';
+import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered, ShieldCheck, ReceiptIndianRupee, Eye, Trash2 } from 'lucide-react';
 
 const PREVIEW_PLAYER: Player = {
   id: 'preview',
@@ -40,6 +40,9 @@ export default function NewLeaguePage() {
   const [pickPreference, setPickPreference] = useState<PlayerRole[]>([]);
   const [idProofRequired, setIdProofRequired] = useState(false);
   const [paymentProofRequired, setPaymentProofRequired] = useState(false);
+  // Both permissive by default — the organizer opts into a closed league
+  const [rosterVisibleToPlayers, setRosterVisibleToPlayers] = useState(true);
+  const [playersCanDeleteCards, setPlayersCanDeleteCards] = useState(true);
 
   useEffect(() => {
     if (status === 'unauthenticated') signIn('google');
@@ -98,6 +101,8 @@ export default function NewLeaguePage() {
           pickPreference: pickPreference.length > 0 ? pickPreference : null,
           idProofRequired,
           paymentProofRequired,
+          rosterVisibleToPlayers,
+          playersCanDeleteCards,
         }),
       });
 
@@ -317,6 +322,72 @@ export default function NewLeaguePage() {
                 >
                   <span className="flex items-start gap-2.5 min-w-0">
                     <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${on ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{title}</span>
+                      <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`relative inline-flex h-5.5 w-10 shrink-0 items-center rounded-full transition-colors duration-200 ${
+                      on ? 'bg-green-600' : 'bg-muted-foreground/25'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                        on ? 'translate-x-5' : 'translate-x-1'
+                      }`}
+                    />
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <Separator />
+
+            {/* Player access — both on by default, which is how the app has
+                always behaved. Flipping either here saves a trip to the league's
+                Player Access panel, where they can also be changed any time. */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Player Access
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                What your players can do with each other&apos;s cards. You and your co-organizers are
+                never restricted by either.
+              </p>
+              {([
+                {
+                  on: rosterVisibleToPlayers,
+                  set: setRosterVisibleToPlayers,
+                  Icon: Eye,
+                  title: 'Players can see the full roster',
+                  hint: 'Turn off and each player sees only their own card and the icon players.',
+                },
+                {
+                  on: playersCanDeleteCards,
+                  set: setPlayersCanDeleteCards,
+                  Icon: Trash2,
+                  title: 'Players can delete their own card',
+                  hint: 'Turn off and only you can remove a card. Players can still edit theirs.',
+                },
+              ] as const).map(({ on, set, Icon, title, hint }) => (
+                <button
+                  key={title}
+                  type="button"
+                  role="switch"
+                  aria-checked={on}
+                  disabled={loading}
+                  onClick={() => set((v) => !v)}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                    on ? 'border-green-500/40 bg-green-500/8' : 'border-amber-500/40 bg-amber-500/8'
+                  }`}
+                >
+                  <span className="flex items-start gap-2.5 min-w-0">
+                    <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${on ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-foreground">{title}</span>
                       <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>

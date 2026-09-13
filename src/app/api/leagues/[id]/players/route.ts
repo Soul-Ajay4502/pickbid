@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPlayers, createPlayer, getLeague, canManageLeague, findOrCreateUserIdByEmail, getCreatorOwnedPlayerUserId, hasIdentityProof } from '@/lib/store';
-import { stripOrganizerFields } from '@/lib/utils';
+import { stripOrganizerFields, visibleRoster } from '@/lib/utils';
 import { auth } from '@/auth';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,7 +21,11 @@ export async function GET(
     // Phone numbers and payment receipts are records-only — strip them unless
     // the requester runs this league (creator or co-organizer)
     const canManage = !!league && (await canManageLeague(session?.user?.id, league));
-    const safe = canManage ? players : players.map(stripOrganizerFields);
+    // Same closed-roster rule the league GET applies — a player gets their own
+    // cards and the icon signings, nothing else.
+    const rosterHidden = !!league && !canManage && !league.rosterVisibleToPlayers;
+    const roster = rosterHidden ? visibleRoster(players, session?.user?.id) : players;
+    const safe = canManage ? roster : roster.map(stripOrganizerFields);
     return NextResponse.json(safe);
   } catch (error) {
     console.error('Error fetching players:', error);

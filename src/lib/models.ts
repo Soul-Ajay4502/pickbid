@@ -66,6 +66,8 @@ export class LeagueModel extends Model<
   declare certificatesReleasedAt: CreationOptional<Date | null>;
   declare idProofRequired: CreationOptional<boolean>;
   declare paymentProofRequired: CreationOptional<boolean>;
+  declare rosterVisibleToPlayers: CreationOptional<boolean>;
+  declare playersCanDeleteCards: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -85,6 +87,9 @@ LeagueModel.init(
     certificatesReleasedAt: { type: DataTypes.DATE, allowNull: true, defaultValue: null },
     idProofRequired:    { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     paymentProofRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Both default true — that's how every league behaved before these existed
+    rosterVisibleToPlayers: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    playersCanDeleteCards:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }

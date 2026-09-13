@@ -25,6 +25,8 @@ function toLeague(row: LeagueModel): League {
     certificatesReleasedAt: row.certificatesReleasedAt?.toISOString() ?? null,
     idProofRequired: row.idProofRequired ?? false,
     paymentProofRequired: row.paymentProofRequired ?? false,
+    rosterVisibleToPlayers: row.rosterVisibleToPlayers ?? true,
+    playersCanDeleteCards: row.playersCanDeleteCards ?? true,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -288,6 +290,8 @@ export async function createLeague(data: {
   pickPreference?: League['pickPreference'];
   idProofRequired?: boolean;
   paymentProofRequired?: boolean;
+  rosterVisibleToPlayers?: boolean;
+  playersCanDeleteCards?: boolean;
 }): Promise<League> {
   await ensureUser(data.creatorId, data.creatorEmail);
   const joinCode = data.isPublic ? generateJoinCode() : null;
@@ -304,6 +308,9 @@ export async function createLeague(data: {
     pickPreference: data.pickPreference ?? null,
     idProofRequired: data.idProofRequired ?? false,
     paymentProofRequired: data.paymentProofRequired ?? false,
+    // Permissive by default — an organizer opts *into* a closed roster
+    rosterVisibleToPlayers: data.rosterVisibleToPlayers ?? true,
+    playersCanDeleteCards: data.playersCanDeleteCards ?? true,
   });
   return toLeague(row);
 }
@@ -400,6 +407,9 @@ export async function cloneLeague(
         // A league that vets its players keeps doing so in the next season
         idProofRequired: source.idProofRequired ?? false,
         paymentProofRequired: source.paymentProofRequired ?? false,
+        // …and one that runs a closed roster keeps running one
+        rosterVisibleToPlayers: source.rosterVisibleToPlayers ?? true,
+        playersCanDeleteCards: source.playersCanDeleteCards ?? true,
       },
       { transaction: t }
     );

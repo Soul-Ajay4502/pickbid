@@ -4,26 +4,45 @@ import {
   assignPlayerToTeam, AuctionRuleError, canManageLeague, getTeams, getOfficials,
 } from '@/lib/store';
 import { notifyPlayerSold } from '@/lib/whatsapp';
+import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
-import type { Player } from '@/lib/types';
+import type { League, Player } from '@/lib/types';
 import { stripOrganizerFields } from '@/lib/utils';
 
-// Card changes are allowed for the league's organizers — creator or
-// co-organizer, proven by session and re-checked on every request so a
-// removed co-organizer loses access instantly — or for whoever created the
-// card (proven by the creatorToken minted at creation time and kept in that
-// browser's localStorage).
-async function canManagePlayer(
-  leagueId: string,
+/**
+ * Who the caller is, relative to one player card. Resolved once per request
+ * because the league's own switches — `rosterVisibleToPlayers`,
+ * `playersCanDeleteCards` — decide what each of these two identities is worth,
+ * so neither can be answered by a bare boolean any more.
+ */
+interface CardAccess {
+  /** Holds the card's `creatorToken` — the anonymous proof minted at creation. */
+  isCardOwner: boolean;
+  /**
+   * Runs this league: creator, co-organizer, or the platform owner. Re-checked
+   * on every request, so a removed co-organizer loses access instantly.
+   */
+  isOrganizer: boolean;
+  /** The signed-in account, when there is one. */
+  viewerUserId: string | null;
+}
+
+async function resolveCardAccess(
+  league: League,
   player: Player,
   creatorToken: string | null
-): Promise<boolean> {
-  if (creatorToken && creatorToken === player.creatorToken) return true;
-  const session = await auth();
-  if (!session?.user?.id) return false;
-  const league = await getLeague(leagueId);
-  return !!league && (await canManageLeague(session.user.id, league));
+): Promise<CardAccess> {
+  const [session, platformAdmin] = await Promise.all([auth(), isAdmin()]);
+  const viewerUserId = session?.user?.id ?? null;
+  return {
+    isCardOwner: !!creatorToken && creatorToken === player.creatorToken,
+    isOrganizer: platformAdmin || (await canManageLeague(viewerUserId, league)),
+    viewerUserId,
+  };
 }
+
+/** Editing a card: unchanged by either switch — organizers or the card's holder. */
+const canEditCard = (a: CardAccess) => a.isCardOwner || a.isOrganizer;
 
 const UPDATABLE_FIELDS = [
   'name', 'photo', 'battingType', 'bowlingType', 'role', 'isWicketKeeper', 'contactNumber', 'paymentProofUrl',
@@ -37,15 +56,23 @@ export async function GET(
 ) {
   try {
     const { id, playerId } = await params;
-    const player = await getPlayer(playerId);
-    if (!player || player.leagueId !== id) {
+    const [player, league] = await Promise.all([getPlayer(playerId), getLeague(id)]);
+    if (!player || !league || player.leagueId !== id) {
+      return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+    }
+    const token = request.nextUrl.searchParams.get('creatorToken');
+    const access = await resolveCardAccess(league, player, token);
+    // Closed roster: someone else's card is not just redacted, it's withheld —
+    // a 404 matching the one a non-existent card gets, so this endpoint can't be
+    // walked to confirm who is in the league. Icons stay visible (they're
+    // announced signings) and so does the viewer's own card.
+    const ownCard = !!access.viewerUserId && player.userId === access.viewerUserId;
+    if (!canEditCard(access) && !league.rosterVisibleToPlayers && !player.isIcon && !ownCard) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
     // Phone number and payment receipt are records-only — return them only to
     // the league organizers or the card's own holder
-    const token = request.nextUrl.searchParams.get('creatorToken');
-    const canManage = await canManagePlayer(id, player, token);
-    return NextResponse.json(canManage ? player : stripOrganizerFields(player));
+    return NextResponse.json(canEditCard(access) ? player : stripOrganizerFields(player));
   } catch (error) {
     console.error('Error fetching player:', error);
     return NextResponse.json({ error: 'Failed to fetch player' }, { status: 500 });
@@ -58,14 +85,16 @@ export async function PUT(
 ) {
   try {
     const { id, playerId } = await params;
-    const player = await getPlayer(playerId);
-    if (!player || player.leagueId !== id) {
+    const [player, league] = await Promise.all([getPlayer(playerId), getLeague(id)]);
+    if (!player || !league || player.leagueId !== id) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
 
     const body = await request.json();
     const token = typeof body.creatorToken === 'string' ? body.creatorToken : null;
-    if (!(await canManagePlayer(id, player, token))) {
+    // A locked-down roster never blocks *editing* — a player keeps control of
+    // their own photo, stats and details whatever the organizer has switched off
+    if (!canEditCard(await resolveCardAccess(league, player, token))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -159,13 +188,24 @@ export async function DELETE(
 ) {
   try {
     const { id, playerId } = await params;
-    const player = await getPlayer(playerId);
-    if (!player || player.leagueId !== id) {
+    const [player, league] = await Promise.all([getPlayer(playerId), getLeague(id)]);
+    if (!player || !league || player.leagueId !== id) {
       return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     }
 
     const token = request.nextUrl.searchParams.get('creatorToken');
-    if (!(await canManagePlayer(id, player, token))) {
+    const access = await resolveCardAccess(league, player, token);
+    // With `playersCanDeleteCards` off, holding the card's creatorToken stops
+    // being enough: only the league's organizers can withdraw a card. Distinct
+    // message from a plain Forbidden so the holder knows it's the league's rule
+    // rather than a lost token.
+    if (!access.isOrganizer && access.isCardOwner && !league.playersCanDeleteCards) {
+      return NextResponse.json(
+        { error: 'The organizers have turned off player card deletion for this league. Ask them to remove it.' },
+        { status: 403 }
+      );
+    }
+    if (!access.isOrganizer && !access.isCardOwner) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

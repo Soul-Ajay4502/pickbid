@@ -126,6 +126,28 @@ export function stripOrganizerFields<T extends { contactNumber?: string | null; 
   return { ...player, contactNumber: null, paymentProofUrl: null };
 }
 
+/**
+ * The slice of a roster a given viewer may see when the league has
+ * `rosterVisibleToPlayers` switched off.
+ *
+ * Two kinds of card survive. Icon players are announced signings — the
+ * organizer put them on a team before the auction precisely so everyone knows
+ * they're in it — so hiding them would defeat the point. And the viewer's own
+ * cards, matched on `userId`: a player must always be able to find, open and
+ * edit their own.
+ *
+ * Anonymous cards (no `userId`) can't be matched to a viewer here — a browser's
+ * `creatorToken` never reaches a league-wide GET — so they're withheld like
+ * anyone else's. Callers must only apply this to requesters who can't manage
+ * the league; organizers and the platform owner always get the full roster.
+ */
+export function visibleRoster<T extends { isIcon?: boolean; userId?: string | null }>(
+  players: T[],
+  viewerUserId: string | null | undefined
+): T[] {
+  return players.filter((p) => p.isIcon || (!!viewerUserId && p.userId === viewerUserId));
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

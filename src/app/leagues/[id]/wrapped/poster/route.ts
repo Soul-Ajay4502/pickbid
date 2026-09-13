@@ -26,6 +26,9 @@ export async function GET(
     const stats = computeWrapped({
       ...league,
       players,
+      registeredPlayers: players.length,
+      // Server-side render of the organizers' own poster — nothing is trimmed
+      rosterHidden: false,
       teams,
       officials: [],
       isCreator: false,
