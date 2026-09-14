@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { MessageCircle, Copy, Presentation, Home } from 'lucide-react';
+import { MessageCircle, Copy, Presentation, Home, Maximize2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
+import PlayerFullView from '@/components/PlayerFullView';
 import Confetti from '@/components/Confetti';
 import { buildPlayerSoldMessage, whatsappShareLink, copyToClipboard } from '@/lib/utils';
-import type { LiveAuctionState, LivePurse } from '@/lib/types';
+import type { LiveAuctionState, LivePurse, Player } from '@/lib/types';
 
 // This page is both the projector view in the hall and the phone view for
 // spectators, so the type scale can't just be bumped for everyone. `big` is
@@ -262,6 +263,42 @@ function RemainingListModal({ remaining, count, big, onClose }: {
   );
 }
 
+/**
+ * The player on the block as a full profile — the uncropped photo, career stats
+ * and auction status — for the moment a bidder wants the numbers rather than
+ * the cinematic card. It reads the player straight off the live board, so the
+ * sale price fills itself in the instant the hammer falls.
+ */
+function PlayerProfileModal({ player, purses, league, big, onClose }: {
+  player: Player; purses: LivePurse[]; league: LiveAuctionState['league']; big: boolean; onClose: () => void;
+}) {
+  // Teams reach this screen only as purses, so resolve a sold player's team
+  // from there; an icon player carries their pre-assigned team on the card.
+  const bought = player.teamId ? purses.find(t => t.id === player.teamId) : null;
+  const team = bought
+    ? { name: bought.name, colorHex: bought.color }
+    : player.iconOfTeam
+      ? { name: player.iconOfTeam.name, colorHex: player.iconOfTeam.colorHex }
+      : null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm" onClick={onClose}>
+      <div className={`relative w-full ${big ? 'max-w-4xl' : 'max-w-2xl'} max-h-[88vh] overflow-y-auto rounded-2xl shadow-2xl`}
+        style={{ animation: 'cardDropIn .35s cubic-bezier(.34,1.56,.64,1) both' }} onClick={e => e.stopPropagation()}>
+        {/* The board stays dark whatever theme the visitor's device is in, and
+            PlayerFullView paints from the theme tokens — so scope it dark here,
+            or a light-mode spectator gets a white slab on a black stage. */}
+        <div className="dark">
+          <PlayerFullView player={player} team={team} leagueName={league.name} conductedBy={league.conductedBy} />
+        </div>
+        <button onClick={onClose} aria-label="Close"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-2xl leading-none text-white/60 backdrop-blur-sm transition-colors hover:text-white">
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function WatchPage() {
   const { id } = useParams<{ id: string }>();
   const [live, setLive] = useState<LiveAuctionState | null>(null);
@@ -270,6 +307,11 @@ export default function WatchPage() {
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   // Which roster list the header counters have opened, if any
   const [listView, setListView] = useState<'sold' | 'left' | null>(null);
+  // The player whose full profile is open. Held as an id rather than a flag so
+  // the board closing the profile is the same act as the auction moving on:
+  // once `current` is someone else (or nobody), this stops matching and the
+  // modal goes, instead of blinking out and back over the next player.
+  const [profilePlayerId, setProfilePlayerId] = useState<string | null>(null);
   // Projector mode — bigger, higher-contrast chrome for the big screen in the
   // hall. Off by default so phone spectators keep the compact layout.
   const [big, setBig] = useState(false);
@@ -376,6 +418,9 @@ export default function WatchPage() {
   // Look the team up by id each render so the modal stays live as sales come in
   const viewPurse = viewTeamId ? purses.find(p => p.id === viewTeamId) ?? null : null;
   const onViewTeam = (t: LivePurse) => setViewTeamId(t.id);
+  // Read back off the live board every render, so a sale updates the open
+  // profile in place rather than leaving a stale "not yet auctioned" panel.
+  const profilePlayer = profilePlayerId && live?.current?.id === profilePlayerId ? live.current : null;
 
   // Fit the player card to the viewport, reserving room for the side purse columns on desktop
   useEffect(() => {
@@ -491,7 +536,20 @@ export default function WatchPage() {
         ) : live.current ? (
           <div className="relative z-10 flex flex-col items-center gap-5">
             {phase === 'sold' && <Confetti key={live.v} />}
-            <div className="relative" style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale), overflow: 'hidden', animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
+            {/* The card is the button for the full profile — the whole thing,
+                because on a phone the card *is* the tap target, and an overlaid
+                icon would sit on the artwork the hall is looking at. The scale
+                transform stays on the inner div: stacking it with cardDropIn
+                shifts the card on mobile WebKit. */}
+            <div
+              onClick={() => setProfilePlayerId(live.current!.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfilePlayerId(live.current!.id); } }}
+              title="Open the full profile — photo, career stats and auction status"
+              aria-label={`Open ${live.current.name}'s full profile`}
+              className="relative cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-green-400"
+              style={{ width: Math.round(CARD_W * scale), height: Math.round(CARD_H * scale), overflow: 'hidden', animation: 'cardDropIn .55s cubic-bezier(.34,1.56,.64,1) both' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
                 <PlayerCard player={live.current} templateId={live.league.templateId} leagueName={live.league.name} conductedBy={live.league.conductedBy} logoUrl={live.league.logoUrl} pdfMode />
               </div>
@@ -508,9 +566,14 @@ export default function WatchPage() {
                 </div>
               )}
             </div>
-            {/* {phase === 'showing' && (
-              <p className="text-white/35 text-xs sm:text-sm uppercase tracking-[4px] font-bold relative z-10">On the block</p>
-            )} */}
+            {/* Only while the player is on the block: once the hammer falls the
+                result banner owns this space, and the hint has done its job. */}
+            {phase === 'showing' && (
+              <p className={`relative z-10 inline-flex items-center gap-2 uppercase font-bold tracking-[4px] pointer-events-none ${big ? 'text-sm text-white/55' : 'text-[11px] sm:text-xs text-white/35'}`}>
+                <Maximize2 className={big ? 'w-4 h-4' : 'w-3 h-3'} />
+                Tap the card for the full profile
+              </p>
+            )}
             {phase === 'sold' && live.lastSold && (
               <div className="relative z-40 flex flex-col items-center gap-2.5" style={{ animation: 'bannerUp .5s .15s cubic-bezier(.22,1,.36,1) both' }}>
                 <div className={`flex items-center gap-3 rounded-2xl border backdrop-blur ${big ? 'px-9 py-4 bg-white/12 border-white/25' : 'px-6 py-3 bg-white/8 border-white/15'}`}>
@@ -554,6 +617,9 @@ export default function WatchPage() {
       {/* Mobile: team purses as a horizontal strip below the stage */}
       {purses.length > 0 && <PurseStrip purses={purses} big={big} onView={onViewTeam} />}
 
+      {profilePlayer && live && (
+        <PlayerProfileModal player={profilePlayer} purses={purses} league={live.league} big={big} onClose={() => setProfilePlayerId(null)} />
+      )}
       {viewPurse && <TeamSquadModal t={viewPurse} canShare={canManage} big={big} onClose={() => setViewTeamId(null)} />}
       {listView === 'sold' && live && (
         <SoldListModal purses={purses} count={live.progress.sold} big={big} onClose={() => setListView(null)} />
