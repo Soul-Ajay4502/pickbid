@@ -372,17 +372,20 @@ export default function WatchPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleBig]);
 
-  // Poll the live board — best-effort. The beat follows the phase: `lobby` and
-  // `done` are the long static tails either side of an auction, where most of a
-  // night's requests would otherwise go and where nothing changes. Every other
-  // phase — including the idle beat between picks — stays fast, so the slot-
-  // machine reveal never lands late.
-  const pollMs = live?.phase === 'lobby' ? 5000 : live?.phase === 'done' ? 10000 : 1500;
+  // Poll the live board — best-effort. The beat follows the phase: `done` is
+  // the long static tail after an auction, where a night's leftover requests
+  // would otherwise go and where nothing changes. `lobby` is only moderately
+  // slow, because the single transition out of it — the organizer hitting
+  // Start — is the first thing a hall ever sees, and waiting out a 5s beat for
+  // it read as a broken board. Every other phase runs at 1s so the slot-machine
+  // reveal, the sold stamp and the unsold call never land visibly late: each is
+  // its own broadcast, and each pays this beat over again.
+  const pollMs = live?.phase === 'lobby' ? 2000 : live?.phase === 'done' ? 10000 : 1000;
   useEffect(() => {
     let active = true;
     const tick = async () => {
       // A backgrounded tab has nobody watching it. A phone in a pocket
-      // shouldn't spend a request every 1.5s for three hours.
+      // shouldn't spend a request every second for three hours.
       if (document.visibilityState === 'hidden') return;
       try {
         // Deliberately the default cache mode rather than `no-store`: that mode

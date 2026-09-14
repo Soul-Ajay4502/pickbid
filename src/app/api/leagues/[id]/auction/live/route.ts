@@ -4,10 +4,10 @@ import { requireLeagueManager } from '@/lib/leagueAuth';
 import type { LiveAuctionState, Player, PlayerRole } from '@/lib/types';
 import { stripOrganizerFields } from '@/lib/utils';
 
-// Spectators poll this every 1.5s, so the handler itself must never be
+// Spectators poll this every second, so the handler itself must never be
 // statically rendered — but the *response* is deliberately cacheable at the CDN
 // for one second (see the GET's headers). Without that, a hall of 500
-// spectators is 500 function invocations and 500 Neon queries every 1.5s;
+// spectators is 500 function invocations and 500 Neon queries every second;
 // with it, the edge answers them all from a single origin read per second.
 export const dynamic = 'force-dynamic';
 
@@ -30,8 +30,14 @@ export async function GET(
         'Cache-Control': 'public, max-age=0, must-revalidate',
         // …but the edge answers a second's worth of those asks from one origin
         // read, so viewer count stops driving origin load. Spectators already
-        // run up to 1.5s behind the auctioneer; this adds at most 1s to that.
-        'CDN-Cache-Control': 'public, s-maxage=1, stale-while-revalidate=2',
+        // run up to 1s behind the auctioneer; this adds at most 1s to that.
+        // Deliberately no `stale-while-revalidate`: it let the edge answer with a
+        // stale board for two seconds *past* s-maxage while refreshing behind it,
+        // so the poll that triggered the refresh still drew the old state and the
+        // fresh one only landed a beat later. That tail was seconds of visible lag
+        // on a pick, a sold stamp or an unsold call. A second of hard freshness
+        // collapses origin load just as well without it.
+        'CDN-Cache-Control': 'public, s-maxage=1',
       },
     });
   } catch (error) {

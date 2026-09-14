@@ -148,15 +148,18 @@ names an individual, so serve it only to that player or a league manager, and
 404 anything unreleased.
 
 **The live auction board is edge-cached on purpose.** Every spectator on
-`/watch` polls `api/leagues/[id]/auction/live` on a 1.5s beat, so origin load
+`/watch` polls `api/leagues/[id]/auction/live` on a 1s beat, so origin load
 would otherwise scale linearly with the crowd — one function invocation and one
 Neon query per viewer per poll. The GET therefore answers with
 `CDN-Cache-Control: s-maxage=1` while telling browsers `max-age=0,
 must-revalidate`; the edge collapses a whole hall into roughly one origin read
-per second. Don't put `no-store` back on it, and don't add `cache: 'no-store'`
-to the client fetch — that mode makes the browser send `Cache-Control:
-no-cache`, which can bypass the very cache this depends on. Anything genuinely
-per-caller (`can-manage`) stays `private, no-store`.
+per second. Don't put `no-store` back on it, don't add `stale-while-revalidate`
+(it answers with a stale board past the freshness window and the refreshed one
+only lands a beat later — seconds of visible lag on a pick, a sold stamp or an
+unsold call), and don't add `cache: 'no-store'` to the client fetch — that mode
+makes the browser send `Cache-Control: no-cache`, which can bypass the very
+cache this depends on. Anything genuinely per-caller (`can-manage`) stays
+`private, no-store`.
 
 **`DATABASE_URL` is Neon's *pooled* endpoint; migrations use
 `DATABASE_URL_UNPOOLED`.** Direct endpoints cap out near 110 connections and
