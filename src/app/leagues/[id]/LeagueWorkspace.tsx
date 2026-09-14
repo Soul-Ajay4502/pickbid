@@ -1118,37 +1118,36 @@ function LeaguePageInner() {
               <EyeOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
               <span>
                 The organizers have hidden this league&apos;s roster. You can see your own card and
-                the icon players — {registeredPlayers} player{registeredPlayers === 1 ? ' has' : 's have'} registered
-                in total.
+                the icon players have chosen for their team, but the full list of players is not visible.
               </span>
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
-          {filteredPlayers.map((player, i) => (
-            <div
-              key={player.id}
-              className="animate-fade-in-up cursor-pointer"
-              style={{ animationDelay: `${i * 0.06}s` }}
-              // Open the full view on click, but let the card's own buttons
-              // (edit, delete, icon badge) act normally
-              onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setViewPlayer(player); }}
-            >
-              <PlayerCard
-                player={player}
-                templateId={activeTemplateId}
-                leagueName={data.name}
-                conductedBy={data.conductedBy}
-                logoUrl={data.logoUrl}
-                showEdit={canEditPlayer(player.creatorToken, player.id)}
-                onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
-                onDelete={
-                  canDeletePlayer(player.creatorToken, player.id)
-                    ? () => handleDeletePlayer(player.id)
-                    : undefined
-                }
-              />
-            </div>
-          ))}
+            {filteredPlayers.map((player, i) => (
+              <div
+                key={player.id}
+                className="animate-fade-in-up cursor-pointer"
+                style={{ animationDelay: `${i * 0.06}s` }}
+                // Open the full view on click, but let the card's own buttons
+                // (edit, delete, icon badge) act normally
+                onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setViewPlayer(player); }}
+              >
+                <PlayerCard
+                  player={player}
+                  templateId={activeTemplateId}
+                  leagueName={data.name}
+                  conductedBy={data.conductedBy}
+                  logoUrl={data.logoUrl}
+                  showEdit={canEditPlayer(player.creatorToken, player.id)}
+                  onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
+                  onDelete={
+                    canDeletePlayer(player.creatorToken, player.id)
+                      ? () => handleDeletePlayer(player.id)
+                      : undefined
+                  }
+                />
+              </div>
+            ))}
           </div>
         </>
       )}
