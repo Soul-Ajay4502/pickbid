@@ -462,8 +462,10 @@ export async function cloneLeague(
             isWicketKeeper: p.isWicketKeeper,
             contactNumber:  options.copyContactNumbers ? p.contactNumber : null,
             // A receipt proves a fee was paid for *that* league — the clone is a
-            // new season with its own fee, so it always starts unpaid
+            // new season with its own fee, so it always starts unpaid, both the
+            // player's receipt and the organizer's confirmation of it
             paymentProofUrl: null,
+            paymentReceived: false,
             isIcon:         p.isIcon,
             teamId:         keepTeam,
             soldPrice:      preserveAuctionResults ? p.soldPrice : null,
@@ -1428,7 +1430,7 @@ export async function hasIdentityProof(userId: string | null | undefined): Promi
 export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocuments[]> {
   const players = await PlayerModel.findAll({
     where: { leagueId },
-    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl'],
+    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl', 'paymentReceived'],
     order: [['createdAt', 'ASC']],
   });
   if (players.length === 0) return [];
@@ -1453,8 +1455,27 @@ export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocume
       idProofUrl:     owner?.idProofUrl || null,
       idSubmittedAt:  owner?.idProofUrl ? (owner.updatedAt?.toISOString() ?? null) : null,
       paymentProofUrl: p.paymentProofUrl || null,
+      paymentReceived: p.paymentReceived,
     };
   });
+}
+
+/**
+ * Tick (or untick) the organizer's confirmation that a player's entry fee
+ * arrived. Scoped by league as well as card id, so a manager of one league
+ * can't flip a card that lives in another; returns false when the card isn't
+ * in this league, which the route answers as a 404.
+ */
+export async function setPlayerPaymentReceived(
+  leagueId: string,
+  playerId: string,
+  received: boolean
+): Promise<boolean> {
+  const [updated] = await PlayerModel.update(
+    { paymentReceived: received },
+    { where: { id: playerId, leagueId } }
+  );
+  return updated > 0;
 }
 
 export async function cleanupImages(urls: Array<string | null | undefined>): Promise<void> {

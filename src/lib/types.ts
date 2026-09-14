@@ -235,6 +235,15 @@ export interface PlayerDocuments {
   idSubmittedAt: string | null;
   /** Cloudinary URL of this league's entry-fee receipt — organizers only. */
   paymentProofUrl: string | null;
+  /**
+   * The organizer's own confirmation that this player's entry fee arrived,
+   * ticked by hand on the register. Independent of `paymentProofUrl`: a receipt
+   * is what the player claims, this is what the organizer verified, and fees
+   * paid in cash have the second without ever having the first. Deliberately
+   * absent from `Player` — it is written only through the organizer-gated
+   * register, never through the player PATCH a card holder can call.
+   */
+  paymentReceived: boolean;
 }
 
 /** GET /api/leagues/[id]/identity — the organizer's document register. */

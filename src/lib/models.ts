@@ -139,6 +139,7 @@ export class PlayerModel extends Model<
   declare creatorToken: string;
   declare contactNumber: CreationOptional<string | null>;
   declare paymentProofUrl: CreationOptional<string | null>;
+  declare paymentReceived: CreationOptional<boolean>;
   // Auction
   declare teamId: CreationOptional<string | null>;
   declare soldPrice: CreationOptional<number | null>;
@@ -167,6 +168,7 @@ PlayerModel.init(
     creatorToken:   { type: DataTypes.STRING,  allowNull: false },
     contactNumber:  { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     paymentProofUrl:{ type: DataTypes.TEXT,    allowNull: true,  defaultValue: null },
+    paymentReceived:{ type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     teamId:         { type: DataTypes.STRING,  allowNull: true,  defaultValue: null },
     soldPrice:      { type: DataTypes.INTEGER, allowNull: true,  defaultValue: null },
     isUnsold:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

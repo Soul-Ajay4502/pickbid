@@ -16,12 +16,28 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, ShieldCheck, ShieldAlert, UserX, FileText, Lock, Search,
   Maximize2, Minimize2, ExternalLink, ReceiptIndianRupee,
+  ArrowUpDown, BadgeCheck, Circle, FileDown, IndianRupee, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { downloadPaymentListPdf, partitionByPayment, type PaymentScope } from '@/lib/paymentPdf';
 import type { LeagueDocumentsResponse, PlayerDocuments } from '@/lib/types';
 
 type DocKind = 'id' | 'payment';
+
+/**
+ * How the register is ordered. Registration order is the default because it's
+ * the one the organizer watched happen; the two payment orders exist so the
+ * names still owing bubble to the top of a long list.
+ */
+type SortKey = 'added' | 'name' | 'unpaid' | 'paid';
+
+const SORT_LABELS: Record<SortKey, string> = {
+  added: 'Registration order',
+  name: 'Name (A–Z)',
+  unpaid: 'Unpaid first',
+  paid: 'Paid first',
+};
 
 /** What's open in the viewer — which player, and which of their two documents. */
 interface Viewing {
@@ -97,6 +113,48 @@ function DocSlot({
   );
 }
 
+/**
+ * The organizer's own tick that this player's fee arrived — the one control on
+ * this page that writes rather than reads. It sits beside the receipt slot on
+ * purpose: an uploaded screenshot is a claim, this is the confirmation, and
+ * seeing the two next to each other is the whole point of the register. Sized
+ * to match `DocSlot` so the three cells line up.
+ */
+function PaidToggle({
+  paid, busy, onToggle,
+}: {
+  paid: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="w-20 shrink-0 text-center">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={paid}
+        aria-label={paid ? 'Entry fee received — click to unmark' : 'Mark entry fee as received'}
+        title={paid ? 'Marked paid — click to unmark' : 'Mark the entry fee as received'}
+        disabled={busy}
+        onClick={onToggle}
+        className={`w-full h-11 rounded-lg border flex items-center justify-center gap-1 transition-all duration-200 ${
+          busy ? 'opacity-60 cursor-wait' : 'cursor-pointer'
+        } ${
+          paid
+            ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/15'
+            : 'border-border bg-card text-muted-foreground hover:border-green-500/40 hover:text-foreground'
+        }`}
+      >
+        {busy
+          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          : paid ? <BadgeCheck className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5 opacity-50" />}
+        <span className="text-[11px] font-bold">{paid ? 'Paid' : 'Unpaid'}</span>
+      </button>
+      <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">Entry fee</p>
+    </div>
+  );
+}
+
 export default function LeagueDocumentsPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
@@ -106,6 +164,10 @@ export default function LeagueDocumentsPage() {
   const [forbidden, setForbidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('added');
+  /** Card ids with a payment toggle in flight, so only that row shows a spinner. */
+  const [marking, setMarking] = useState<string[]>([]);
+  const [downloading, setDownloading] = useState<PaymentScope | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [zoomed, setZoomed] = useState(false);
 
@@ -143,6 +205,54 @@ export default function LeagueDocumentsPage() {
     }
   }
 
+  /**
+   * Tick or untick one player's fee. Applied optimistically and rolled back on
+   * failure: the organizer is usually working down a list with a stack of cash
+   * in front of them, and a round-trip before every row would make that crawl.
+   */
+  async function handleTogglePaid(player: PlayerDocuments) {
+    const next = !player.paymentReceived;
+    const apply = (value: boolean) =>
+      setData((prev) => prev && {
+        ...prev,
+        players: prev.players.map((p) => (p.playerId === player.playerId ? { ...p, paymentReceived: value } : p)),
+      });
+
+    setMarking((ids) => [...ids, player.playerId]);
+    apply(next);
+    try {
+      const res = await fetch(`/api/leagues/${id}/identity/${player.playerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentReceived: next }),
+      });
+      if (!res.ok) throw new Error('Failed to update payment status');
+    } catch (err) {
+      apply(!next);
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setMarking((ids) => ids.filter((v) => v !== player.playerId));
+    }
+  }
+
+  /**
+   * The chase list, as a PDF. Always built from the whole register rather than
+   * from `shown` — a search box the organizer forgot to clear must not quietly
+   * hand them a short list of who still owes money.
+   */
+  async function handleDownloadList(scope: PaymentScope) {
+    if (!data) return;
+    setDownloading(scope);
+    try {
+      await downloadPaymentListPdf(data.leagueName, partitionByPayment(data.players, scope), scope);
+    } catch (err) {
+      console.error('Failed to build payment PDF:', err);
+      toast.error(err instanceof Error ? err.message : 'Could not build the PDF');
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-3">
@@ -172,10 +282,19 @@ export default function LeagueDocumentsPage() {
   const total = data.players.length;
   const withId = data.players.filter((p) => p.idProofUrl).length;
   const withPayment = data.players.filter((p) => p.paymentProofUrl).length;
+  const paidCount = data.players.filter((p) => p.paymentReceived).length;
   const needle = query.trim().toLowerCase();
-  const shown = needle
+  const matched = needle
     ? data.players.filter((p) => p.playerName.toLowerCase().includes(needle))
     : data.players;
+  // `sort` is stable in every engine this runs on, so equal rows keep the
+  // registration order the API sent them in — the payment sorts group without
+  // shuffling names inside a group.
+  const shown = sort === 'added' ? matched : [...matched].sort((a, b) => {
+    if (sort === 'name') return a.playerName.localeCompare(b.playerName, undefined, { sensitivity: 'base' });
+    const rank = Number(a.paymentReceived) - Number(b.paymentReceived);
+    return sort === 'unpaid' ? rank : -rank;
+  });
 
   const viewedUrl = viewing
     ? (viewing.kind === 'id' ? viewing.player.idProofUrl : viewing.player.paymentProofUrl)
@@ -217,7 +336,8 @@ export default function LeagueDocumentsPage() {
       </h1>
       <p className="text-muted-foreground text-sm mt-1">
         Identity proofs and entry-fee receipts, visible to you and your co-organizers only.
-        They never appear on player cards, posters or downloads.
+        They never appear on player cards, posters or downloads. Tick a player off once
+        their fee lands — cash or transfer, receipt or not.
       </p>
 
       {/* Requirement switches */}
@@ -257,7 +377,9 @@ export default function LeagueDocumentsPage() {
         </div>
       ) : (
         <>
-          {/* Counts + search */}
+          {/* Counts. Receipts and fees are counted separately on purpose: a
+              receipt on file is the player's claim, "paid" is what an organizer
+              ticked, and a cash payment has the second without the first. */}
           <div className="flex flex-wrap items-center gap-2 mt-6">
             <span className={`clay-pill inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
               withId === total ? 'text-green-700 dark:text-green-400 bg-green-500/10' : 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
@@ -268,9 +390,18 @@ export default function LeagueDocumentsPage() {
             <span className={`clay-pill inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
               withPayment === total ? 'text-green-700 dark:text-green-400 bg-green-500/10' : 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
             }`}>
-              <ReceiptIndianRupee className="w-3.5 h-3.5" />{withPayment}/{total} paid
+              <ReceiptIndianRupee className="w-3.5 h-3.5" />{withPayment}/{total} receipts
             </span>
-            <div className="relative ml-auto min-w-45 flex-1 sm:flex-none">
+            <span className={`clay-pill inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+              paidCount === total ? 'text-green-700 dark:text-green-400 bg-green-500/10' : 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
+            }`}>
+              <IndianRupee className="w-3.5 h-3.5" />{paidCount}/{total} paid
+            </span>
+          </div>
+
+          {/* Search, sort, and the two chase lists */}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="relative min-w-45 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
                 value={query}
@@ -279,11 +410,39 @@ export default function LeagueDocumentsPage() {
                 className="w-full h-9 pl-8.5 pr-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-green-500/40"
               />
             </div>
+            <div className="relative">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                aria-label="Sort players"
+                className="h-9 pl-8.5 pr-3 rounded-xl border border-border bg-card text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500/40"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                  <option key={key} value={key}>{SORT_LABELS[key]}</option>
+                ))}
+              </select>
+            </div>
+            {(['paid', 'unpaid'] as const).map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                onClick={() => handleDownloadList(scope)}
+                disabled={downloading !== null}
+                className="toolbar-btn"
+                title={scope === 'paid' ? 'Download the list of players marked paid' : 'Download the list of players who still owe the entry fee'}
+              >
+                {downloading === scope
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <FileDown className="w-3.5 h-3.5" />}
+                {scope === 'paid' ? 'Paid PDF' : 'Unpaid PDF'}
+              </button>
+            ))}
           </div>
 
           <ul className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border/60 mt-4">
             {shown.map((p) => (
-              <li key={p.playerId} className="flex items-center gap-3 px-4 py-3">
+              <li key={p.playerId} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <span className="w-10 h-10 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center text-xs font-bold text-muted-foreground">
                   {p.photo
                     // eslint-disable-next-line @next/next/no-img-element
@@ -291,7 +450,7 @@ export default function LeagueDocumentsPage() {
                     : initials(p.playerName)}
                 </span>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 basis-36">
                   <p className="text-sm font-semibold truncate">{p.playerName}</p>
                   {/* An unlinked card can never carry an ID — say so, rather than
                       leaving the organizer to chase a player who has no way to
@@ -303,19 +462,28 @@ export default function LeagueDocumentsPage() {
                   )}
                 </div>
 
-                <DocSlot
-                  label="ID"
-                  url={p.idProofUrl}
-                  caption={p.idProofType ?? 'ID'}
-                  required={data.idRequired && p.linked}
-                  onView={() => openDoc(p, 'id')}
-                />
-                <DocSlot
-                  label="Payment"
-                  url={p.paymentProofUrl}
-                  required={data.paymentRequired}
-                  onView={() => openDoc(p, 'payment')}
-                />
+                {/* The three cells travel as one block, so on a phone they wrap
+                    under the name together instead of breaking up mid-row. */}
+                <div className="flex items-start gap-2 ml-auto">
+                  <DocSlot
+                    label="ID"
+                    url={p.idProofUrl}
+                    caption={p.idProofType ?? 'ID'}
+                    required={data.idRequired && p.linked}
+                    onView={() => openDoc(p, 'id')}
+                  />
+                  <DocSlot
+                    label="Payment"
+                    url={p.paymentProofUrl}
+                    required={data.paymentRequired}
+                    onView={() => openDoc(p, 'payment')}
+                  />
+                  <PaidToggle
+                    paid={p.paymentReceived}
+                    busy={marking.includes(p.playerId)}
+                    onToggle={() => handleTogglePaid(p)}
+                  />
+                </div>
               </li>
             ))}
             {shown.length === 0 && (
