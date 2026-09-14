@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Trophy, Crown, Medal, Star, Globe, ArrowUpRight } from 'lucide-react';
 import type { TopBid } from '@/lib/types';
-import { cleanPlayerName } from '@/lib/utils';
+import { cleanPlayerName, cloudinaryImage } from '@/lib/utils';
 
 function fmt(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -61,10 +61,7 @@ function Share({ value, active, className, delay }: { value: number; active: boo
 
 /** Ask Cloudinary for a small face-cropped square instead of the full upload. */
 function thumb(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_300,h_300,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 300, h: 300 });
 }
 
 function initials(name: string): string {

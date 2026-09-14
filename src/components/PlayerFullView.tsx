@@ -1,7 +1,7 @@
 'use client';
 
 import { Star, Phone, Gavel, Ban, Clock, Shield } from 'lucide-react';
-import { formatIndianPhone, localPhoneDigits } from '@/lib/utils';
+import { cloudinaryImage, formatIndianPhone, localPhoneDigits } from '@/lib/utils';
 import type { Player } from '@/lib/types';
 
 function fmtPrice(n: number) {
@@ -57,7 +57,8 @@ export default function PlayerFullView({ player, team, leagueName, conductedBy, 
       <div className="relative flex aspect-square w-full items-center justify-center bg-linear-to-br from-muted/70 to-muted/20 sm:aspect-auto sm:w-[46%] sm:min-h-[420px]">
         {player.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={player.photo} alt={player.name} className="h-full w-full object-contain" />
+          <img src={cloudinaryImage(player.photo, { w: 900, mode: 'limit' })}
+            alt={player.name} decoding="async" className="h-full w-full object-contain" />
         ) : (
           <span className="text-7xl font-black text-foreground/25">{initials(player.name)}</span>
         )}

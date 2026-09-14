@@ -1,6 +1,7 @@
 'use client';
 
 import type { Player, Team, TeamOfficial } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 interface LeagueInfo {
   name: string;
@@ -28,10 +29,7 @@ function batShort(t: Player['battingType']): string {
 
 /** Ask Cloudinary for a small face-cropped square instead of the full upload */
 function thumbUrl(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_400,h_400,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 400, h: 400 });
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {

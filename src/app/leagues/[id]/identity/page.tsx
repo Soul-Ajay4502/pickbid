@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { downloadPaymentListPdf, partitionByPayment, type PaymentScope } from '@/lib/paymentPdf';
 import type { LeagueDocumentsResponse, PlayerDocuments } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 type DocKind = 'id' | 'payment';
 
@@ -58,10 +59,7 @@ function formatDate(iso: string): string {
  * *fitted* — a full-page ID centre-cropped shows nothing but its blank middle.
  */
 function thumb(url: string, mode: 'fill' | 'fit' = 'fill'): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', `/upload/w_200,h_200,c_${mode}/`);
-  }
-  return url;
+  return cloudinaryImage(url, { w: 200, h: 200, mode });
 }
 
 function docLabel(kind: DocKind, player: PlayerDocuments): string {

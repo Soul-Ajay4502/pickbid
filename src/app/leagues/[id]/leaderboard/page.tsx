@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Trophy, Crown, Medal, Star } from 'lucide-react';
 import type { LeagueWithPlayers, Player } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 /** Most bids shown on the board (top 3 podium + the rest as a list). */
 const MAX_RANKS = 20;
@@ -15,10 +16,7 @@ function fmt(n: number): string {
 
 /** Ask Cloudinary for a small face-cropped square instead of the full upload. */
 function thumb(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_300,h_300,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 300, h: 300 });
 }
 
 function initials(name: string): string {

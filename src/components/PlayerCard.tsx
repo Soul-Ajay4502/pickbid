@@ -4,10 +4,18 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Player } from '@/lib/types';
 import { getTemplate, DEFAULT_TEMPLATE_ID } from '@/lib/templates';
+import { cloudinaryImage } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
 
 export const CARD_W = 340;
 export const CARD_H = Math.round(CARD_W * 297 / 210);
+
+/**
+ * Density the card's artwork is requested at. It is tied to the `scale: 2` that
+ * `DownloadPDFButton` rasterises these cards with — ask Cloudinary for less than
+ * the PDF renders at and the exported card goes visibly soft. Bump both together.
+ */
+const ART_DPR = 2;
 
 function rgba(rgb: string, alpha: number) {
   return `rgba(${rgb}, ${alpha})`;
@@ -74,8 +82,12 @@ export default function PlayerCard({
     >
       {/* Full-bleed photo */}
       {hasPhoto && (
+        // No `loading="lazy"`: DownloadPDFButton renders these cards in a portal
+        // parked off-screen, where a lazy image never loads and would rasterise
+        // into a blank PDF.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={player.photo} alt={player.name} crossOrigin="anonymous"
+        <img src={cloudinaryImage(player.photo, { w: CARD_W * ART_DPR, h: CARD_H * ART_DPR })}
+          alt={player.name} crossOrigin="anonymous" decoding="async"
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
       )}
 
@@ -111,7 +123,8 @@ export default function PlayerCard({
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt="League Logo" crossOrigin="anonymous"
+          <img src={cloudinaryImage(logoUrl, { w: 40 * ART_DPR, h: 40 * ART_DPR, mode: 'fit' })}
+            alt="League Logo" crossOrigin="anonymous" decoding="async"
             style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
         ) : (
           <div style={{ width: 40, height: 40, borderRadius: 6, border: `1px dashed ${rgba(t.accentRgb, 0.40)}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: rgba(t.accentRgb, 0.5), fontSize: 7.5, lineHeight: 1.4, textAlign: 'center' }}>

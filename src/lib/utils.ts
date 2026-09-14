@@ -148,6 +148,39 @@ export function visibleRoster<T extends { isIcon?: boolean; userId?: string | nu
   return players.filter((p) => p.isIcon || (!!viewerUserId && p.userId === viewerUserId));
 }
 
+/**
+ * A Cloudinary delivery URL sized for where the image is actually rendered.
+ *
+ * `uploadToCloudinary` stores the original bytes untouched, so an 8MB photo
+ * straight off a phone stays an 8MB photo: anything rendering `player.photo`
+ * raw ships the whole upload to the browser, dozens of times over on a league
+ * page. Rewriting the URL asks Cloudinary for a resized, re-encoded copy
+ * instead — `f_auto,q_auto` alone typically takes a JPEG to a third of its
+ * size by serving WebP or AVIF to browsers that accept them.
+ *
+ * `w`/`h` are the size the image is *rendered* at, in device pixels — pass the
+ * CSS size multiplied by the pixel density you need to survive. `mode` mirrors
+ * Cloudinary's crop: `fill` crops to the exact box (with `g_auto`, so the crop
+ * lands on the subject rather than the centre of the frame), `fit` shrinks the
+ * whole image inside it, `limit` is `fit` that never upscales.
+ *
+ * URLs that already carry a transformation are returned untouched, so this is
+ * safe to call on a URL some other caller already sized, and a non-Cloudinary
+ * URL (a Google avatar) passes straight through.
+ */
+export function cloudinaryImage(
+  url: string,
+  { w, h, mode = 'fill' }: { w: number; h?: number; mode?: 'fill' | 'fit' | 'limit' }
+): string {
+  if (!url || !url.includes('/upload/')) return url;
+  // Matches every transformation this codebase produces, old and new.
+  if (/\/upload\/(f_|q_|w_|h_|c_)/.test(url)) return url;
+  const size = h ? `w_${w},h_${h}` : `w_${w}`;
+  // Subject-aware cropping only means anything when pixels are being discarded.
+  const gravity = mode === 'fill' ? ',g_auto' : '';
+  return url.replace('/upload/', `/upload/f_auto,q_auto,${size},c_${mode}${gravity}/`);
+}
+
 /** Convert a league name to a safe Cloudinary folder segment */
 export function sanitizeFolder(name: string): string {
   return (

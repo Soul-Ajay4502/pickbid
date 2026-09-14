@@ -168,6 +168,16 @@ every warm serverless instance holds up to `pool.max` of them
 deliberately prefers the direct URL, because sequelize-cli runs DDL in
 transactions that transaction-mode pooling handles badly.
 
+**Functions run in `sin1`, pinned in [vercel.json](vercel.json), because Neon
+is in `ap-southeast-1`.** They used to run in Vercel's `iad1` default, which put
+Washington DC between visitors in India and a database in Singapore: every
+query wave cost ~230ms of Pacific round-trip, and `/leaderboard` answered a cold
+request in 4.97s. Co-locating compute with the database makes each wave ~2ms.
+Don't remove the pin, and if the Neon project ever moves region, move this with
+it — compute belongs next to the database, because a page makes several
+sequential query waves but only one trip to the visitor. `bom1` is nearer our
+users and looks tempting; it isn't, for the same reason.
+
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
 `/sponsors` and the OG image routes are public today. The proxy is
@@ -201,6 +211,19 @@ fallbacks and breaks the layout on mobile. `html2canvas-pro` is used only in
 Player cards animate on entry. Keep `cardDropIn` off the element carrying
 `transform: scale(...)` — stacking both transforms causes a WebKit-only shift on
 mobile.
+
+**Never render a Cloudinary URL raw — size it with `cloudinaryImage`**
+([utils.ts](src/lib/utils.ts)). Uploads are stored untouched, so `player.photo`
+is whatever came off the phone: an 8MB original, shipped once per card. The
+helper asks Cloudinary for the rendered size in WebP/AVIF instead, and returns
+anything already transformed (or not on Cloudinary, like a Google avatar)
+unchanged. Pass *device* pixels — `PlayerCard` asks for twice its CSS size
+because `DownloadPDFButton` rasterises it at `scale: 2`, and requesting less
+makes the exported PDF soft.
+
+Cards rendered for a PDF live in a portal parked off-screen, so **never put
+`loading="lazy"` on an image inside `PlayerCard`** — a lazy image there never
+loads and rasterises into a blank card.
 
 ## Database changes
 

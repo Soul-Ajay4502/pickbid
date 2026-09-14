@@ -6,7 +6,7 @@ import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles } fro
 import { toast } from 'sonner';
 import PlayerFullView from '@/components/PlayerFullView';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { formatIndianPhone, localPhoneDigits, copyToClipboard } from '@/lib/utils';
+import { cloudinaryImage, copyToClipboard, formatIndianPhone, localPhoneDigits } from '@/lib/utils';
 import type { LeagueWithPlayers, Player, Team, TeamOfficial } from '@/lib/types';
 
 function fmt(n: number) {
@@ -15,10 +15,7 @@ function fmt(n: number) {
 
 /** Crop a Cloudinary upload to a small square avatar instead of the full image. */
 function thumb(url: string) {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_64,h_64,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 64, h: 64 });
 }
 
 function initials(name: string) {

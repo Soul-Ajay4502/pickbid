@@ -13,16 +13,14 @@ import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
 import HoloCard from '@/components/HoloCard';
 import { rarityOf, revealOrder, winningBids, RARITY_META, type Rarity } from '@/lib/recap';
 import type { LeagueWithPlayers, Player, Team } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 function fmt(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
 }
 
 function thumb(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_96,h_96,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 96, h: 96 });
 }
 
 const CONFETTI_COLORS = ['#f59e0b', '#22c55e', '#38bdf8', '#a855f7', '#ef4444', '#fcd34d', '#34d399'];

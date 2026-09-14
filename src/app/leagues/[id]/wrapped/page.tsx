@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { Download, Share2, RotateCcw, X, Users } from 'lucide-react';
 import { getTemplate } from '@/lib/templates';
 import { computeWrapped, teamOf, type WrappedStats, type TeamSpend } from '@/lib/recap';
-import { copyToClipboard } from '@/lib/utils';
+import { cloudinaryImage, copyToClipboard } from '@/lib/utils';
 import type { LeagueWithPlayers, Player } from '@/lib/types';
 
 const SLIDE_MS = 7000;
@@ -26,17 +26,11 @@ function fmt(n: number): string {
 
 /** Cloudinary crop for slide-sized portraits. */
 function portrait(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_500,h_500,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 500, h: 500 });
 }
 
 function thumb(url: string): string {
-  if (url.includes('/upload/') && !url.includes('/upload/w_')) {
-    return url.replace('/upload/', '/upload/w_96,h_96,c_fill,g_auto/');
-  }
-  return url;
+  return cloudinaryImage(url, { w: 96, h: 96 });
 }
 
 /** rAF count-up with ease-out — the Wrapped "number reveals". */

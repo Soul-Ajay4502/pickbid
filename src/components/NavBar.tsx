@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UserCircle, Sun, Moon, LogOut, Plus, Globe, Trophy } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
-import { MagneticButton } from './ui/magnetic-button';
 
 export default function NavBar() {
   const { data: session, status } = useSession();
@@ -28,14 +27,17 @@ export default function NavBar() {
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
 
-        {/* Logo */}
-        <MagneticButton>
-          <Link href="/" className="flex items-center gap-2.5 shrink-0 group cursor-pointer rounded-lg bg-linear-to-b  px-4 py-2 font-medium text-white ring-1 ring-white/20 ring-offset-1 ring-offset-green-500 transition-transform duration-150 ring-inset active:scale-98"
+        {/* Logo. Deliberately not wrapped in <MagneticButton>: the nav is in the
+            root layout, so its imports land in the shared bundle of every route
+            — that one hover effect was pulling all of Motion (~48KB brotli,
+            ~142KB parsed) onto pages that never animate anything, for a
+            mousemove trick that can't fire on the phones that are most of our
+            traffic. The hover/press feedback below is pure CSS. */}
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 group cursor-pointer rounded-lg bg-linear-to-b  px-4 py-2 font-medium text-white ring-1 ring-white/20 ring-offset-1 ring-offset-green-500 transition-transform duration-150 ring-inset hover:scale-105 active:scale-98"
 
-          >
-            <span className=" sm:block font-black text-xs sm:text-[15px] tracking-tight text-gradient-green">Pickbid</span>
-          </Link>
-        </MagneticButton>
+        >
+          <span className=" sm:block font-black text-xs sm:text-[15px] tracking-tight text-gradient-green">Pickbid</span>
+        </Link>
 
         {/* Nav links — both pages are public; joining from Discover prompts sign-in */}
         <nav className="flex items-center gap-1">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, X, UserCheck } from 'lucide-react';
 import type { Player } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 interface PlayerSearchPickerProps {
   leagueId: string;
@@ -101,7 +102,8 @@ export default function PlayerSearchPicker({ leagueId, onSelect }: PlayerSearchP
               >
                 {player.photo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={player.photo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  <img src={cloudinaryImage(player.photo, { w: 96, h: 96 })} alt=""
+                    loading="lazy" decoding="async" className="w-9 h-9 rounded-full object-cover shrink-0" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-semibold text-muted-foreground">
                     {player.name.slice(0, 1).toUpperCase()}
