@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { getLeague } from '@/lib/store';
 import { SITE_NAME } from '@/lib/seo';
 import { JsonLd, breadcrumbSchema } from '@/lib/jsonLd';
+import LeagueChrome from '@/components/league/LeagueChrome';
 import type { League } from '@/lib/types';
 
 // One DB hit per request, shared between generateMetadata and the layout body.
@@ -84,7 +85,11 @@ export default async function LeagueLayout({
           ])}
         />
       )}
-      {children}
+      {/* Wraps every league screen in the navigation rail. It hides itself on
+          the immersive routes (auction, watch, wrapped, sponsors, reveal) — the
+          check lives client-side because a server layout can't read the
+          pathname, and it returns `children` untouched there. */}
+      <LeagueChrome leagueId={id}>{children}</LeagueChrome>
     </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, X, UserPlus, Trash2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CoOrganizer } from '@/lib/types';
@@ -110,7 +111,23 @@ export default function CoOrganizersModal({ leagueId, onClose }: {
 
   const close = () => onClose(changed.current);
 
-  return (
+  // Portalled to the body, unlike the rest of this component's markup.
+  //
+  // `position: fixed` only escapes the page when nothing above it has opened a
+  // stacking context, and this modal is opened from the league sidebar, whose
+  // rail is `position: sticky` — that alone creates one, so `z-60` was being
+  // resolved *inside* the rail and the dialog painted under the player cards
+  // (which are stacking contexts of their own, courtesy of the transform
+  // `cardDropIn` leaves behind). The other dialogs here are built on Base UI's
+  // `Dialog`, which portals for exactly this reason; this one is hand-rolled,
+  // so it has to do it itself. Doing it here rather than at the call site keeps
+  // the fix with the component wherever it gets mounted next.
+  //
+  // Never server-rendered — it only mounts on a click — so there is no SSR pass
+  // for this guard to mismatch against.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={close}>
       <div
         className="bg-popover border border-foreground/12 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col animate-scale-in shadow-2xl"
@@ -223,6 +240,7 @@ export default function CoOrganizersModal({ leagueId, onClose }: {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

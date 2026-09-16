@@ -328,6 +328,38 @@ export interface UserProfile {
   updatedAt: string;
 }
 
+/**
+ * Shape returned by GET /api/leagues/[id]/nav — the league sidebar's entire
+ * data source.
+ *
+ * Deliberately scalar-only. The sidebar renders on every league screen, so it
+ * must not pull the roster: `playerCount` and `hasAuctionData` are counted in
+ * SQL precisely so the cards stay out of this payload. Nothing organizer-only
+ * (contact numbers, receipts, co-organizer emails) belongs here either — it
+ * is served to members and, for a public league, to any signed-in visitor.
+ */
+export interface LeagueNavSummary {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  joinCode: string | null;
+  templateId: string;
+  certificatesReleasedAt: string | null;
+  rosterVisibleToPlayers: boolean;
+  playersCanDeleteCards: boolean;
+  /** Strictly the true creator — never the platform owner. Gates Delete and Co-Organizers. */
+  isCreator: boolean;
+  /** Creator, co-organizer or platform owner. Gates the whole Manage group. */
+  canManage: boolean;
+  /** Member of this league (own card, co-organizer or creator) — gates the Ledger link. */
+  isMember: boolean;
+  ledgerPublished: boolean;
+  /** True signup count, used only to enable/disable Release Certificates. */
+  playerCount: number;
+  /** A non-icon player is on a team, or someone is flagged unsold — Reset Auction has work to do. */
+  hasAuctionData: boolean;
+}
+
 /** Shape returned by GET /api/leagues/[id] */
 export interface LeagueWithPlayers extends Omit<League, 'creatorId'> {
   /**

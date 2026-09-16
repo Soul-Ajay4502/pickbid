@@ -178,6 +178,36 @@ it — compute belongs next to the database, because a page makes several
 sequential query waves but only one trip to the visitor. `bom1` is nearer our
 users and looks tempting; it isn't, for the same reason.
 
+**League navigation lives in the sidebar, not on the league page.**
+[LeagueChrome](src/components/league/LeagueChrome.tsx) renders
+[LeagueSidebar](src/components/league/LeagueSidebar.tsx) from the league layout,
+so one mount serves every `/leagues/[id]/*` screen and survives navigation
+between them. Add a new league screen by adding a link there — not another
+button to the league page's header, which is now only exports and the join
+code. The rail keeps links and *actions* apart on purpose: destinations are
+`<Link>`s highlighted by `aria-current="page"`, while everything that mutates
+the league (template, visibility, certificates, player access, clone, reset,
+delete) sits in the collapsed *Manage* group. Gate new items on the same tier
+the endpoint enforces, so the rail never offers a button the API answers 403 to.
+
+It draws from `api/leagues/[id]/nav`, **not** `api/leagues/[id]` — the rail is
+on every screen and the full payload carries the whole roster, which the page in
+the content column is already fetching for itself. Keep that endpoint scalar:
+anything needing the players (`playerCount`, `hasAuctionData`) is counted in
+SQL. When you add a rail item that depends on new league state, extend
+`LeagueNavSummary` rather than reaching for the league GET.
+
+Because the rail's actions edit the league the page is rendering, it publishes
+`useLeagueRevision()`. A page that would show stale state after a settings
+change puts that number in its fetch effect's dependencies — see
+[LeagueWorkspace](src/app/leagues/[id]/LeagueWorkspace.tsx).
+
+`isImmersiveLeaguePath` ([leagueChrome.ts](src/lib/leagueChrome.ts)) is the one
+list of screens that run with no chrome — auction, watch, wrapped, sponsors,
+squad reveal. `NavBar` and `LeagueChrome` both read it so they can't disagree,
+and `LeagueChrome` returns early on a match: that is what keeps the rail's fetch
+off `/watch`, which a whole hall loads at once.
+
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
 `/sponsors` and the OG image routes are public today. The proxy is

@@ -937,6 +937,34 @@ export async function getPlayers(leagueId: string): Promise<Player[]> {
   return rows.map(toPlayer);
 }
 
+/**
+ * Counts the league sidebar needs, and nothing else — it decides whether to
+ * offer *Release Certificates* (needs at least one card) and *Reset Auction*
+ * (needs results to clear). Two `COUNT(*)`s rather than the full roster read
+ * the league GET does: the sidebar renders on every league screen, so paying
+ * ~100 KB of player cards for two booleans would undo the point of it.
+ */
+export async function getLeagueNavCounts(
+  leagueId: string
+): Promise<{ players: number; hasAuctionData: boolean }> {
+  const [players, auctionResults] = await Promise.all([
+    PlayerModel.count({ where: { leagueId } }),
+    // Mirrors `hasAuctionData` on the league page: a non-icon player sitting on
+    // a team, or anyone flagged unsold. Icon players are pre-assigned, so they
+    // survive a reset and don't count as something to clear.
+    PlayerModel.count({
+      where: {
+        leagueId,
+        [Op.or]: [
+          { teamId: { [Op.ne]: null }, isIcon: false },
+          { isUnsold: true },
+        ],
+      },
+    }),
+  ]);
+  return { players, hasAuctionData: auctionResults > 0 };
+}
+
 export async function getPlayer(id: string): Promise<Player | null> {
   const row = await PlayerModel.findByPk(id);
   return row ? toPlayer(row) : null;

@@ -6,17 +6,16 @@ import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UserCircle, Sun, Moon, LogOut, Plus, Globe, Trophy } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { isImmersiveLeaguePath } from '@/lib/leagueChrome';
 
 export default function NavBar() {
   const { data: session, status } = useSession();
   const { theme, toggle } = useTheme();
   const pathname = usePathname();
   // The auction, watch, wrapped, sponsors marquee and squad-reveal screens run
-  // as immersive full-screen experiences with no app chrome
-  const isImmersive =
-    /^\/leagues\/[^/]+\/(auction|watch|wrapped|sponsors)$/.test(pathname) ||
-    /^\/leagues\/[^/]+\/teams\/[^/]+\/reveal$/.test(pathname);
-  if (isImmersive) return null;
+  // as immersive full-screen experiences with no app chrome. Shared with
+  // `LeagueChrome` so the nav bar and the league rail can't disagree.
+  if (isImmersiveLeaguePath(pathname)) return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-2xl">

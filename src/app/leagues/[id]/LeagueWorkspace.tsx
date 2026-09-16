@@ -8,21 +8,17 @@ import PlayerCard from '@/components/PlayerCard';
 import PlayerFullView from '@/components/PlayerFullView';
 import DownloadPDFButton from '@/components/DownloadPDFButton';
 import CertificateDownloadButtons from '@/components/CertificateDownloadButtons';
-import TemplateSelector from '@/components/TemplateSelector';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import CoOrganizersModal from '@/components/CoOrganizersModal';
-import ConfirmDialog from '@/components/ui/confirm-dialog';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
-import PlayerAccessModal from '@/components/league/PlayerAccessModal';
+import { useLeagueRevision } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { toast } from 'sonner';
 import {
-  ArrowDown, ArrowUp, ArrowLeft, Search, X, Users, BarChart2, Globe, Lock, Unlock,
-  ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Trash2, Gavel, Palette,
-  UsersRound, Images, UserPlus, RotateCcw, Activity, Trophy, CopyPlus, Sparkles, Handshake,
-  ShieldCheck, ReceiptText, Award, Eye, EyeOff,
+  ArrowDown, ArrowUp, Search, X, Users, Globe, Lock, Unlock,
+  ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Gavel,
+  UsersRound, Images, UserPlus, Trophy, Sparkles, EyeOff,
 } from 'lucide-react';
 
 function LeaguePageInner() {
@@ -37,24 +33,13 @@ function LeaguePageInner() {
   const [data, setData] = useState<LeagueWithPlayers | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTemplateId, setActiveTemplateId] = useState('');
-  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [joining, setJoining] = useState(false);
-  const [togglingPublic, setTogglingPublic] = useState(false);
   const [togglingRegistration, setTogglingRegistration] = useState(false);
-  const [togglingCertificates, setTogglingCertificates] = useState(false);
-  const [resettingAuction, setResettingAuction] = useState(false);
   // Player shown in the full-view modal (null = closed)
   const [viewPlayer, setViewPlayer] = useState<Player | null>(null);
   // Once an auction is complete the cards are hidden behind a banner; this reveals them
   const [showPlayers, setShowPlayers] = useState(false);
-  // Creator-only co-organizer management modal
-  const [coOrgOpen, setCoOrgOpen] = useState(false);
-  // Creator-only 'delete this league' confirmation
-  const [deleteLeagueOpen, setDeleteLeagueOpen] = useState(false);
-  // Organizer controls for roster visibility and player-side card deletion
-  const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   // Non-null only while an auction is being run right now. Kept separate from
   // `data` because it's polled on its own — see the interval below.
   const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(null);
@@ -77,7 +62,11 @@ function LeaguePageInner() {
     }
   }, [id, router]);
 
-  useEffect(() => { fetchLeague(); }, [fetchLeague]);
+  // The sidebar owns the league's settings now — a template swap, Make Public,
+  // a reset or a player-access change all happen outside this component, so the
+  // rail bumps a revision and this re-reads rather than showing a stale board.
+  const leagueRevision = useLeagueRevision();
+  useEffect(() => { fetchLeague(); }, [fetchLeague, leagueRevision]);
 
   // An auction can start — or finish — while this page sits open, so re-check
   // the live summary on a timer. It's a single row read, unlike the full league
@@ -204,26 +193,6 @@ function LeaguePageInner() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  // ── Template ───────────────────────────────────────────────────────────────
-  async function handleTemplateChange(templateId: string) {
-    setActiveTemplateId(templateId);
-    setSavingTemplate(true);
-    try {
-      const res = await fetch(`/api/leagues/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId }),
-      });
-      if (!res.ok) throw new Error('Failed to save');
-      toast.success('Template updated');
-    } catch {
-      toast.error('Failed to save template');
-      setActiveTemplateId(data?.templateId ?? templateId);
-    } finally {
-      setSavingTemplate(false);
-    }
-  }
-
   // ── Player helpers ─────────────────────────────────────────────────────────
   /** Whoever created this card in *this* browser, proven by the stored token. */
   function holdsCardToken(playerCreatorToken: string, playerId: string): boolean {
@@ -263,36 +232,6 @@ function LeaguePageInner() {
       fetchLeague();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete player card');
-    }
-  }
-
-  async function handleResetAuction() {
-    if (!confirm('Reset the auction? Every sold player is removed from their team and unsold flags are cleared. Pre-assigned icon players stay on their teams. This cannot be undone.')) return;
-    setResettingAuction(true);
-    try {
-      const res = await fetch(`/api/leagues/${id}/auction/reset`, { method: 'POST' });
-      if (!res.ok) throw new Error();
-      const { reset } = await res.json();
-      toast.success(`Auction reset — ${reset} player${reset === 1 ? '' : 's'} cleared`);
-      fetchLeague();
-    } catch {
-      toast.error('Failed to reset auction');
-    } finally {
-      setResettingAuction(false);
-    }
-  }
-
-  async function handleDeleteLeague() {
-    try {
-      const res = await fetch(`/api/leagues/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete league');
-      toast.success('League deleted');
-      // Deliberately leaves the dialog spinning until the route change lands —
-      // the league is gone, so re-enabling this screen would only show a 404.
-      router.push('/');
-    } catch {
-      // Dialog stays open so the organizer can retry without re-confirming.
-      toast.error('Failed to delete league');
     }
   }
 
@@ -392,24 +331,6 @@ function LeaguePageInner() {
     doc.save(`${data.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_roster.pdf`);
   }
 
-  // ── Toggle public ──────────────────────────────────────────────────────────
-  async function handleTogglePublic() {
-    if (!data) return;
-    setTogglingPublic(true);
-    try {
-      const res = await fetch(`/api/leagues/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublic: !data.isPublic }),
-      });
-      if (!res.ok) throw new Error();
-      const updated = await res.json();
-      setData(prev => prev ? { ...prev, isPublic: updated.isPublic, joinCode: updated.joinCode } : prev);
-      toast.success(updated.isPublic ? `League is now public · Code: ${updated.joinCode}` : 'League set to private');
-    } catch { toast.error('Failed to update visibility'); }
-    finally { setTogglingPublic(false); }
-  }
-
   async function handleToggleRegistration() {
     if (!data) return;
     setTogglingRegistration(true);
@@ -425,33 +346,6 @@ function LeaguePageInner() {
       toast.success(next ? 'Registration closed — new players can no longer join' : 'Registration reopened');
     } catch { toast.error('Failed to update registration'); }
     finally { setTogglingRegistration(false); }
-  }
-
-  /**
-   * Release participation certificates to every player in the league, or
-   * withdraw them again. Releasing is what makes the certificate appear in each
-   * player's own profile — nothing is generated up front, so this is just the
-   * gate. Withdrawing takes them away again, hence the confirm.
-   */
-  async function handleToggleCertificates() {
-    if (!data) return;
-    const next = !data.certificatesReleasedAt;
-    if (!next && !confirm('Withdraw certificates? Players lose the download from their profile until you release again.')) return;
-    setTogglingCertificates(true);
-    try {
-      const res = await fetch(`/api/leagues/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ certificatesReleased: next }),
-      });
-      if (!res.ok) throw new Error();
-      const updated = await res.json();
-      setData(prev => prev ? { ...prev, certificatesReleasedAt: updated.certificatesReleasedAt } : prev);
-      toast.success(next
-        ? 'Certificates released — players can download theirs from their profile'
-        : 'Certificates withdrawn');
-    } catch { toast.error('Failed to update certificates'); }
-    finally { setTogglingCertificates(false); }
   }
 
   // ── Squad poster ───────────────────────────────────────────────────────────
@@ -554,11 +448,6 @@ function LeaguePageInner() {
   // the true signup count, so the capacity meter below stays honest.
   const rosterHidden = data.rosterHidden ?? false;
   const registeredPlayers = data.registeredPlayers ?? data.players.length;
-  // Either player-access switch turned off — organizers never feel the effect
-  // themselves, so the toolbar button carries the state
-  const rosterVisibleToPlayers = data.rosterVisibleToPlayers ?? true;
-  const playersCanDeleteCards = data.playersCanDeleteCards ?? true;
-  const rosterLocked = !rosterVisibleToPlayers || !playersCanDeleteCards;
   // Organizers have released participation certificates to this league's players
   const certificatesReleased = !!data.certificatesReleasedAt;
   // Creator or co-organizer — either can manage this league
@@ -601,14 +490,6 @@ function LeaguePageInner() {
           persistent transform, so each card wrapper is its own stacking context;
           without this the dropdown would render beneath them. */}
       <div className="relative z-30 mb-6 animate-fade-in-up">
-        <button
-          onClick={() => router.push('/')}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 group"
-        >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-          All Leagues
-        </button>
-
         {/* The only route back into a running auction from inside the app —
             organizers get the console, everyone else the public watch screen. */}
         {liveAuction && (
@@ -741,124 +622,12 @@ function LeaguePageInner() {
           </div>
         </div>
 
-        {/* Toolbar */}
+        {/* Header actions. Navigation and every management control moved to
+            the league sidebar (`LeagueChrome`), which carries them on all of
+            this league's screens rather than only this one. What stays here is
+            what needs the roster this page has already loaded — the exports —
+            plus the join code, which belongs with the league's identity. */}
         <div className="flex flex-wrap items-center gap-2 mt-6">
-          {canManage && (
-            <>
-              <button onClick={() => router.push(`/leagues/${id}/players/new`)} className="toolbar-btn">
-                <UserPlus className="w-3.5 h-3.5" />Add Player
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
-                <Users className="w-3.5 h-3.5" />Teams
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/matches`)} className="toolbar-btn">
-                <BarChart2 className="w-3.5 h-3.5" />Matches
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/analytics`)} className="toolbar-btn">
-                <Activity className="w-3.5 h-3.5" />Analytics
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
-                <Trophy className="w-3.5 h-3.5" />Leaderboard
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/sponsors/manage`)} className="toolbar-btn">
-                <Handshake className="w-3.5 h-3.5" />Sponsors
-              </button>
-              {/* Organizer-only register of players' identity proofs and
-                  entry-fee receipts. Also where both "require it to register"
-                  switches live, so an existing league can turn either on
-                  without being re-created. */}
-              <button onClick={() => router.push(`/leagues/${id}/identity`)} className="toolbar-btn" title="Identity proofs and payment receipts — organizers only">
-                <ShieldCheck className="w-3.5 h-3.5" />Documents
-              </button>
-              {/* Always offered to organizers — the page is also where an
-                  unstarted ledger gets created. Optional feature: a league
-                  that never uses it just never publishes one. */}
-              <button onClick={() => router.push(`/leagues/${id}/ledger`)} className="toolbar-btn" title="Income & expenses — optional, and only shared once you publish it">
-                <ReceiptText className="w-3.5 h-3.5" />Ledger
-              </button>
-              {/* End-of-league action: until an organizer clicks this, no player
-                  can download a participation certificate. Highlighted once
-                  released so the state is obvious at a glance. */}
-              <button
-                onClick={handleToggleCertificates}
-                disabled={togglingCertificates || data.players.length === 0}
-                className={`toolbar-btn ${certificatesReleased ? 'text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
-                title={data.players.length === 0
-                  ? 'Add players before releasing certificates'
-                  : certificatesReleased
-                    ? `Released ${new Date(data.certificatesReleasedAt!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — click to withdraw`
-                    : 'Let every player download a participation certificate from their profile'}
-              >
-                {togglingCertificates
-                  ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                  : <Award className="w-3.5 h-3.5" />}
-                {certificatesReleased ? 'Certificates Released' : 'Release Certificates'}
-              </button>
-              {/* Roster visibility and player-side card deletion. Flagged when
-                  either is off, since both are silent from the organizer's own
-                  view — they always see the full roster and every button. */}
-              <button
-                onClick={() => setPlayerAccessOpen(true)}
-                className={`toolbar-btn ${rosterLocked ? 'text-amber-600 dark:text-amber-400 border-amber-500/40' : ''}`}
-                title="Control whether players can see the full roster and delete their own card"
-              >
-                {rosterLocked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                Player Access
-              </button>
-              {/* Only the creator manages who co-organizes */}
-              {data.isCreator && (
-                <button onClick={() => setCoOrgOpen(true)} className="toolbar-btn" title="Invite trusted people to help run this league">
-                  <ShieldCheck className="w-3.5 h-3.5" />Co-Organizers
-                </button>
-              )}
-              <button onClick={() => setTemplatePanelOpen((v) => !v)} className="toolbar-btn" aria-expanded={templatePanelOpen}>
-                <Palette className="w-3.5 h-3.5" />
-                {templatePanelOpen ? 'Hide Templates' : 'Template'}
-              </button>
-              <button onClick={handleTogglePublic} disabled={togglingPublic} className="toolbar-btn">
-                {data.isPublic
-                  ? <><Lock className="w-3.5 h-3.5" />Make Private</>
-                  : <><Globe className="w-3.5 h-3.5" />Make Public</>}
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/clone`)} className="toolbar-btn" title="Create a copy of this league">
-                <CopyPlus className="w-3.5 h-3.5" />Clone
-              </button>
-              {hasAuctionData && (
-                <button onClick={handleResetAuction} disabled={resettingAuction} className="toolbar-btn hover:text-destructive hover:border-destructive/40" title="Clear all sold players and unsold flags">
-                  {resettingAuction
-                    ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                    : <RotateCcw className="w-3.5 h-3.5" />}
-                  Reset Auction
-                </button>
-              )}
-            </>
-          )}
-          {/* Public leagues are open for anyone to explore the squads & standings */}
-          {!canManage && data.isPublic && (
-            <>
-              <button onClick={() => router.push(`/leagues/${id}/teams`)} className="toolbar-btn">
-                <Users className="w-3.5 h-3.5" />Teams
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/analytics`)} className="toolbar-btn">
-                <Activity className="w-3.5 h-3.5" />Analytics
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/leaderboard`)} className="toolbar-btn">
-                <Trophy className="w-3.5 h-3.5" />Leaderboard
-              </button>
-              <button onClick={() => router.push(`/leagues/${id}/sponsors`)} className="toolbar-btn">
-                <Handshake className="w-3.5 h-3.5" />Sponsors
-              </button>
-            </>
-          )}
-          {/* The ledger is for the league's own members, so it's gated on
-              hasJoined rather than isPublic — a private league's players get
-              the link, a stranger browsing a public league doesn't. Shown only
-              once the organizers have actually published something. */}
-          {!canManage && data.hasJoined && data.ledgerPublished && (
-            <button onClick={() => router.push(`/leagues/${id}/ledger`)} className="toolbar-btn">
-              <ReceiptText className="w-3.5 h-3.5" />Ledger
-            </button>
-          )}
           {data.isPublic && data.joinCode && (
             <button
               onClick={() => copyLink(`${origin}/leagues/discover`, 'Discover link')}
@@ -943,31 +712,8 @@ function LeaguePageInner() {
             )}
           </div>
 
-          <div className="flex-1" />
-
-          {data.isCreator && (
-            <button
-              onClick={() => setDeleteLeagueOpen(true)}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5 transition-all duration-200"
-              title="Delete league"
-              aria-label="Delete league"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
-
-      {/* Template panel */}
-      {canManage && templatePanelOpen && (
-        <div className="mb-6 rounded-2xl border border-border bg-card/70 backdrop-blur-xl p-5 animate-scale-in">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-gradient-green">Card Template</p>
-            {savingTemplate && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
-          </div>
-          <TemplateSelector value={activeTemplateId} onChange={handleTemplateChange} />
-        </div>
-      )}
 
       <Separator className="mb-6" />
 
@@ -1152,44 +898,6 @@ function LeaguePageInner() {
           </div>
         </>
       )}
-
-      {/* Roster visibility & card-deletion switches (organizers) */}
-      {playerAccessOpen && (
-        <PlayerAccessModal
-          leagueId={id}
-          rosterVisibleToPlayers={rosterVisibleToPlayers}
-          playersCanDeleteCards={playersCanDeleteCards}
-          isPublic={data.isPublic}
-          onSaved={(field, value) => setData(prev => prev ? { ...prev, [field]: value } : prev)}
-          onClose={() => setPlayerAccessOpen(false)}
-        />
-      )}
-
-      {/* Co-organizer management (creator only) */}
-      {coOrgOpen && (
-        <CoOrganizersModal
-          leagueId={id}
-          onClose={(changed) => { setCoOrgOpen(false); if (changed) fetchLeague(); }}
-        />
-      )}
-
-      {/* Delete league (creator only) — replaces window.confirm so the delete
-          can show progress and keep the page inert until it finishes */}
-      <ConfirmDialog
-        open={deleteLeagueOpen}
-        title="Delete this league?"
-        description={
-          <>
-            <strong className="text-foreground">{data.name}</strong> and all {registeredPlayers} player
-            card{registeredPlayers === 1 ? '' : 's'} will be removed, along with its teams, matches,
-            sponsors and ledger. This cannot be undone.
-          </>
-        }
-        confirmLabel="Delete league"
-        pendingLabel="Deleting…"
-        onConfirm={handleDeleteLeague}
-        onClose={() => setDeleteLeagueOpen(false)}
-      />
 
       {/* Full player view */}
       <Dialog open={!!viewPlayer} onOpenChange={(open) => { if (!open) setViewPlayer(null); }}>

@@ -31,6 +31,7 @@ when features change.
 - [Owner console auth](src/lib/adminAuth.ts): super-admin credentials read from `ADMIN_EMAIL`/`ADMIN_PASSWORD` env plus a signed HMAC session cookie. Deliberately separate from Auth.js — no admin row, flag, migration or seed, and a normal Google session never grants admin. The cookie name lives in [adminCookie.ts](src/lib/adminCookie.ts) so `proxy.ts` can read it without importing `next/headers`.
 - [Database connection](src/lib/db.ts): Sequelize + pg, SSL required, pooled across hot reloads.
 - [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
+- [League chrome](src/components/league/LeagueChrome.tsx): frames every `/leagues/[id]/*` screen with the navigation rail — sticky on desktop, a slide-over drawer under `lg` — and publishes `useLeagueRevision()` so a page reloads when the rail changes the league. [LeagueSidebar](src/components/league/LeagueSidebar.tsx) holds the links and the organizer actions; [leagueChrome.ts](src/lib/leagueChrome.ts) is the immersive-route matcher it shares with `NavBar`.
 - [Certificate renderer](src/app/leagues/[id]/certificate/[playerId]/certificate.tsx): server-rendered participation certificate (satori), gated on the league's `certificatesReleasedAt`.
 - [SEO config](src/lib/seo.ts): single source of truth for metadata, OG images, sitemap, robots.
 
@@ -45,6 +46,7 @@ when features change.
 - `leagues/[id]/ledger`: optional markdown income & expense sheet. Organizers read/write incl. drafts; league members read only once published; non-members 403 regardless of `isPublic`.
 - `leagues/[id]/identity`: the organizer's document register — every player card with its entry-fee receipt (`players.paymentProofUrl`) and the ID document from the account it belongs to (`users.idProofUrl`). `requireLeagueManager` only, `private, no-store`, and no member-readable variant; neither document may reach a card, poster or PDF. `identity/[playerId]` PATCHes `players.paymentReceived` — the organizer's own confirmation that a fee arrived, on its own manager-gated endpoint precisely because the player PATCH also answers to a card's anonymous `creatorToken`.
 - `leagues/[id]/can-manage`: just the caller's manage flag — the watch screen's cheap substitute for reading a whole league.
+- `leagues/[id]/nav`: the scalars the league sidebar draws itself from — name, the three permission tiers, ledger/certificate state and two SQL-counted booleans. Same motive as `can-manage`: the rail renders on every league screen and must not pull the roster to decide which links to show.
 - `leagues/[id]/clone`: duplicate a league.
 - `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
