@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.11.0...v0.12.0) (2026-09-16)
+
+
+### Features
+
+* implement league navigation rail and sidebar ([695b6de](https://github.com/Soul-Ajay4502/pickbid/commit/695b6ded5234fb5a51b6622bbb6b0eb9ea23c74b))
+
+
+### Bug Fixes
+
+* conditionally render player registration progress based on roster visibility ([10e9fc9](https://github.com/Soul-Ajay4502/pickbid/commit/10e9fc98d009f29646c2dd65a0e204358e771450))
+
 ## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-09-14)
 
 
