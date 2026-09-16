@@ -681,18 +681,19 @@ function LeaguePageInner() {
               </div>
             )}
 
-            <div className="mt-3.5 max-w-xs">
-              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Users className="w-3 h-3" />
-                  {registeredPlayers} of {data.totalPlayers} slots filled
-                </span>
-                <span className="font-semibold text-foreground tabular-nums">{fillPct}%</span>
-              </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${fillPct}%` }} />
-              </div>
-            </div>
+            {!rosterHidden && (
+              <div className="mt-3.5 max-w-xs">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-3 h-3" />
+                    {registeredPlayers} of {data.totalPlayers} slots filled
+                  </span>
+                  <span className="font-semibold text-foreground tabular-nums">{fillPct}%</span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${fillPct}%` }} />
+                </div>
+              </div>)}
           </div>
 
           {/* Primary actions */}
