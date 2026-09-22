@@ -329,6 +329,32 @@ export interface UserProfile {
 }
 
 /**
+ * A PickBid account that could be added to a league as a player — one hit from
+ * GET /api/leagues/[id]/players/candidates.
+ *
+ * Every field but `email` is a player-card field, because that is what this
+ * shape is for: the account's own cricket profile is copied onto the new card,
+ * so the organizer picks a person rather than filling a form. `email` is what
+ * links the card back to that account and what tells two people with the same
+ * name apart.
+ *
+ * Organizer-grade like `Player.contactNumber`, so it is only ever served
+ * behind `requireLeagueManager`.
+ */
+export interface LeagueUserCandidate {
+  userId: string;
+  name: string;
+  email: string;
+  photo: string;
+  battingType: Player['battingType'];
+  bowlingType: Player['bowlingType'];
+  role: PlayerRole;
+  isWicketKeeper: boolean;
+  /** Organizer-only, exactly like `Player.contactNumber`. */
+  contactNumber?: string | null;
+}
+
+/**
  * Shape returned by GET /api/leagues/[id]/nav — the league sidebar's entire
  * data source.
  *

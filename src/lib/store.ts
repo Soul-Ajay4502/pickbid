@@ -5,7 +5,7 @@ import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficia
 import { calcStandings } from './standings';
 import { playerNameKey } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
-import type { IdProofType, PlayerDocuments, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import type { IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -623,6 +623,59 @@ export async function searchUsersForCoOrganizer(
     limit,
   });
   return rows.map((u) => ({ id: u.id, name: u.name ?? '', email: u.email, photo: u.photo ?? '' }));
+}
+
+/**
+ * Search PickBid accounts that could be added to `leagueId` as players —
+ * powers the organizer's "add from accounts" picker.
+ *
+ * Unlike `searchPlayersByCreator`, which looks through cards the organizer has
+ * typed before, this looks at the `users` table: the account already holds the
+ * cricket profile its owner maintains, so picking one copies a card straight
+ * out of it and links the card to a real person who can claim it.
+ *
+ * Two rows are skipped on purpose:
+ *  - anyone already holding a card in this league — they're on the roster, so
+ *    offering them again only invites a duplicate;
+ *  - accounts with no name or no email. Those are the stubs
+ *    `findOrCreateUserIdByEmail` mints for on-behalf-of cards; there is no
+ *    profile behind one to build a card from, and no address to link it by.
+ */
+export async function searchUserCandidatesForLeague(
+  leagueId: string,
+  query: string,
+  limit = 8
+): Promise<LeagueUserCandidate[]> {
+  const rostered = await PlayerModel.findAll({ where: { leagueId }, attributes: ['userId'] });
+  const rosteredUserIds = rostered.map((r) => r.userId).filter((v): v is string => !!v);
+
+  const q = `%${query}%`;
+  const rows = await UserModel.findAll({
+    where: {
+      name:  { [Op.ne]: '' },
+      email: { [Op.ne]: '' },
+      ...(rosteredUserIds.length > 0 ? { id: { [Op.notIn]: rosteredUserIds } } : {}),
+      [Op.or]: [
+        { name:          { [Op.iLike]: q } },
+        { email:         { [Op.iLike]: q } },
+        { contactNumber: { [Op.iLike]: q } },
+      ],
+    },
+    order: [['name', 'ASC']],
+    limit,
+  });
+
+  return rows.map((u) => ({
+    userId:         u.id,
+    name:           u.name,
+    email:          u.email,
+    photo:          u.photo ?? '',
+    battingType:    (u.battingType ?? 'Right-Hand Bat') as Player['battingType'],
+    bowlingType:    (u.bowlingType ?? 'N/A') as Player['bowlingType'],
+    role:           (u.role ?? 'Batter') as Player['role'],
+    isWicketKeeper: u.isWicketKeeper ?? false,
+    contactNumber:  u.contactNumber ?? null,
+  }));
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────────────

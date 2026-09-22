@@ -7,12 +7,13 @@ import { toast } from 'sonner';
 import {
   LayoutGrid, UserPlus, Users, BarChart2, Activity, Trophy, Handshake, ShieldCheck,
   ReceiptText, Palette, Globe, Lock, CopyPlus, RotateCcw, Award, Eye, EyeOff, Trash2,
-  ChevronDown, Settings2,
+  ChevronDown, Settings2, UserRoundPlus,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
 import PlayerAccessModal from '@/components/league/PlayerAccessModal';
+import AddPlayerFromAccountModal from '@/components/league/AddPlayerFromAccountModal';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueNavSummary } from '@/lib/types';
 
@@ -64,6 +65,7 @@ export default function LeagueSidebar({
   const [manageOpen, setManageOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [coOrgOpen, setCoOrgOpen] = useState(false);
+  const [addFromAccountOpen, setAddFromAccountOpen] = useState(false);
   const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -263,6 +265,16 @@ export default function LeagueSidebar({
 
             {manageOpen && (
               <div className="flex flex-col gap-0.5 mt-0.5">
+                {/* Adding a player mutates the roster, so it belongs with the
+                    actions rather than beside the Add Player link above. */}
+                <button
+                  onClick={() => setAddFromAccountOpen(true)}
+                  title="Add someone who already has a PickBid account — no form to fill"
+                  className="rail-link"
+                >
+                  <UserRoundPlus className="w-4 h-4 shrink-0" />Add from Accounts
+                </button>
+
                 <button onClick={() => setTemplateOpen(true)} className="rail-link">
                   <Palette className="w-4 h-4 shrink-0" />Card Template
                 </button>
@@ -371,6 +383,13 @@ export default function LeagueSidebar({
         <CoOrganizersModal
           leagueId={leagueId}
           onClose={(didChange) => { setCoOrgOpen(false); if (didChange) changed(); }}
+        />
+      )}
+
+      {addFromAccountOpen && (
+        <AddPlayerFromAccountModal
+          leagueId={leagueId}
+          onClose={(didChange) => { setAddFromAccountOpen(false); if (didChange) changed(); }}
         />
       )}
 
