@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.11.0...v0.12.0) (2026-09-22)
+
+
+### Features
+
+* add player from existing accounts functionality in league sidebar ([c487257](https://github.com/Soul-Ajay4502/pickbid/commit/c487257ced4b9bf8cedc47a85804f2fa539b348b))
+* implement image upload size validation and update related components ([5f96d0d](https://github.com/Soul-Ajay4502/pickbid/commit/5f96d0da6e034b8439ffd6eae6bc9462ef0f3e7f))
+* implement league navigation rail and sidebar ([695b6de](https://github.com/Soul-Ajay4502/pickbid/commit/695b6ded5234fb5a51b6622bbb6b0eb9ea23c74b))
+
+
+### Bug Fixes
+
+* conditionally render player registration progress based on roster visibility ([10e9fc9](https://github.com/Soul-Ajay4502/pickbid/commit/10e9fc98d009f29646c2dd65a0e204358e771450))
+
 ## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-09-14)
 
 
