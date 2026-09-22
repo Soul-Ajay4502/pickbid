@@ -151,8 +151,8 @@ export function visibleRoster<T extends { isIcon?: boolean; userId?: string | nu
 /**
  * A Cloudinary delivery URL sized for where the image is actually rendered.
  *
- * `uploadToCloudinary` stores the original bytes untouched, so an 8MB photo
- * straight off a phone stays an 8MB photo: anything rendering `player.photo`
+ * `uploadToCloudinary` stores the original bytes untouched, so a 5MB photo
+ * straight off a phone stays a 5MB photo: anything rendering `player.photo`
  * raw ships the whole upload to the browser, dozens of times over on a league
  * page. Rewriting the URL asks Cloudinary for a resized, re-encoded copy
  * instead — `f_auto,q_auto` alone typically takes a JPEG to a third of its
@@ -192,17 +192,53 @@ export function sanitizeFolder(name: string): string {
 }
 
 /**
+ * The ceiling on every image upload, shared by the pickers and `/api/upload`.
+ *
+ * Cloudinary stores whatever arrives untouched and the whole file travels
+ * through a serverless function body, so the limit is about the write path, not
+ * about how the image is eventually served — `cloudinaryImage` already shrinks
+ * delivery. 5MB clears a phone camera's own JPEG with room to spare while
+ * keeping an unedited DSLR frame or a screenshot burst out of the pipe.
+ */
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_LABEL = '5MB';
+
+/**
+ * Validate a picked file before it is previewed or uploaded.
+ *
+ * This is the fast, friendly copy of the check — the one that matters runs in
+ * `/api/upload`, which anyone can post to directly.
+ *
+ * @returns a message to show the user, or null when the file is fine.
+ */
+export function checkImageFile(file: File): string | null {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    return `Image must be under ${MAX_UPLOAD_LABEL} — this one is ${mb}MB.`;
+  }
+  return null;
+}
+
+/**
  * Upload a File to Cloudinary via the /api/upload route.
  * @param file    The image File to upload
  * @param folder  Cloudinary folder path (e.g. "premier_league/players")
  * @returns       The Cloudinary secure URL
  */
 export async function uploadFile(file: File, folder: string): Promise<string> {
+  // Backstop for a file that reached here without passing a picker's check.
+  const tooBig = checkImageFile(file);
+  if (tooBig) throw new Error(tooBig);
+
   const fd = new FormData();
   fd.append('file', file);
   fd.append('folder', folder);
   const res = await fetch('/api/upload', { method: 'POST', body: fd });
-  if (!res.ok) throw new Error('Image upload failed');
+  if (!res.ok) {
+    // Callers toast `err.message`, so pass the handler's reason through.
+    const { error } = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(error || 'Image upload failed');
+  }
   const { url } = (await res.json()) as { url: string };
   return url;
 }

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/utils';
 
 // Anonymous card creation is a supported flow, so this endpoint can't require
 // a session — instead it strictly limits what can be uploaded and where.
-const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+// The pickers check the same ceiling client-side; this is the one that counts.
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
 /** Mirror of the client-side sanitizeFolder rule, enforced server-side. */
@@ -30,8 +31,11 @@ export async function POST(request: NextRequest) {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json({ error: 'Only image uploads are allowed' }, { status: 415 });
     }
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: 'Image must be under 8MB' }, { status: 413 });
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: `Image must be under ${MAX_UPLOAD_LABEL}` },
+        { status: 413 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

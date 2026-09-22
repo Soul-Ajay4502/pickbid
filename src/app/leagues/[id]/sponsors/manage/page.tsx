@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Edit2, X, Check, ImagePlus, ExternalLink, Handshake, Eye } from 'lucide-react';
-import { sanitizeFolder, uploadFile } from '@/lib/utils';
+import { sanitizeFolder, uploadFile, checkImageFile } from '@/lib/utils';
 import type { LeagueWithPlayers, Sponsor } from '@/lib/types';
 
 export default function ManageSponsorsPage() {
@@ -209,6 +209,13 @@ export default function ManageSponsorsPage() {
               <input type="file" accept="image/*" className="hidden"
                 onChange={e => {
                   const f = e.target.files?.[0] ?? null;
+                  const tooBig = f && checkImageFile(f);
+                  if (tooBig) {
+                    // Clearing the input lets them re-pick the same file after resizing it.
+                    e.target.value = '';
+                    toast.error(tooBig);
+                    return;
+                  }
                   setFile(f);
                   setPreview(f ? URL.createObjectURL(f) : '');
                 }} />

@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus } from 'lucide-react';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
-import { sanitizeFolder, uploadFile, formatIndianPhone } from '@/lib/utils';
+import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
 import type { LeagueWithPlayers, Team, Player, TeamOfficial } from '@/lib/types';
 
 const TEAM_COLORS = [
@@ -479,6 +479,13 @@ export default function TeamsPage() {
                       <input type="file" accept="image/*" className="hidden"
                         onChange={e => {
                           const f = e.target.files?.[0] ?? null;
+                          const tooBig = f && checkImageFile(f);
+                          if (tooBig) {
+                            // Clearing the input lets them re-pick the same file after resizing it.
+                            e.target.value = '';
+                            toast.error(tooBig);
+                            return;
+                          }
                           setOFile(f);
                           setOPreview(f ? URL.createObjectURL(f) : '');
                         }} />

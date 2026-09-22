@@ -5,7 +5,7 @@ import { Camera, X, ShieldCheck, FileText, Upload, ReceiptIndianRupee } from 'lu
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { localPhoneDigits, formatIndianPhone } from '@/lib/utils';
+import { localPhoneDigits, formatIndianPhone, checkImageFile, MAX_UPLOAD_LABEL } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -137,6 +137,13 @@ export default function PlayerForm({
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const tooBig = checkImageFile(file);
+    if (tooBig) {
+      // Clearing the input lets them re-pick the same file after resizing it.
+      e.target.value = '';
+      toast.error(tooBig);
+      return;
+    }
     // Revoke previous object URL to avoid memory leak
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPhotoFile(file);
@@ -154,6 +161,13 @@ export default function PlayerForm({
   function handleProofChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const tooBig = checkImageFile(file);
+    if (tooBig) {
+      e.target.value = '';
+      setProofError(tooBig);
+      toast.error(tooBig);
+      return;
+    }
     if (proofPreview) URL.revokeObjectURL(proofPreview);
     setIdProofFile(file);
     setProofPreview(URL.createObjectURL(file));
@@ -173,6 +187,13 @@ export default function PlayerForm({
   function handlePaymentChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const tooBig = checkImageFile(file);
+    if (tooBig) {
+      e.target.value = '';
+      setPaymentError(tooBig);
+      toast.error(tooBig);
+      return;
+    }
     if (paymentPreview) URL.revokeObjectURL(paymentPreview);
     setPaymentProofFile(file);
     setPaymentPreview(URL.createObjectURL(file));
@@ -538,7 +559,7 @@ export default function PlayerForm({
               <p className="text-sm font-medium text-foreground">
                 {proofSrc ? 'Change document' : 'Upload document'}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">A clear photo of the ID — PNG or JPG</p>
+              <p className="text-xs text-muted-foreground mt-0.5">A clear photo of the ID — PNG or JPG, max {MAX_UPLOAD_LABEL}</p>
             </div>
             {proofSrc && (
               <button
@@ -614,7 +635,7 @@ export default function PlayerForm({
               <p className="text-sm font-medium text-foreground">
                 {paymentSrc ? 'Change receipt' : 'Upload receipt'}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">Screenshot of the transfer — PNG or JPG</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Screenshot of the transfer — PNG or JPG, max {MAX_UPLOAD_LABEL}</p>
             </div>
             {paymentSrc && (
               <button

@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import TemplateSelector from '@/components/TemplateSelector';
 import PickPreferenceSelector from '@/components/PickPreferenceSelector';
 import PlayerCard from '@/components/PlayerCard';
-import { sanitizeFolder, uploadFile } from '@/lib/utils';
+import { sanitizeFolder, uploadFile, checkImageFile, MAX_UPLOAD_LABEL } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
 import type { Player, PlayerRole } from '@/lib/types';
@@ -55,6 +55,13 @@ export default function NewLeaguePage() {
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const tooBig = checkImageFile(file);
+    if (tooBig) {
+      // Clearing the input lets them re-pick the same file after resizing it.
+      e.target.value = '';
+      toast.error(tooBig);
+      return;
+    }
     if (logoPreview) URL.revokeObjectURL(logoPreview);
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
@@ -232,7 +239,7 @@ export default function NewLeaguePage() {
                     {logoPreview ? 'Change logo' : 'Upload logo'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    PNG, JPG or SVG · shown on every player card
+                    PNG or JPG, max {MAX_UPLOAD_LABEL} · shown on every player card
                   </p>
                 </div>
                 {logoPreview && (
