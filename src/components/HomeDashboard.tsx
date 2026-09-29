@@ -1,9 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Users, Calendar, ArrowRight, Plus } from 'lucide-react';
+import {
+  motion,
+  stagger,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  type Transition,
+  type Variants,
+} from 'motion/react';
+import { Users, Calendar, ArrowUpRight, Plus, Globe, Lock, UserX } from 'lucide-react';
 import type { League } from '@/lib/types';
+import { cloudinaryImage } from '@/lib/utils';
 
 interface LeagueSections {
   created: League[];
@@ -13,20 +24,97 @@ interface LeagueSections {
 
 const EMPTY_SECTIONS: LeagueSections = { created: [], coOrganizing: [], joined: [] };
 
-// ── Colour palette for league initials avatars ────────────────────────────────
-const AVATAR_PALETTES = [
-  { bg: 'from-emerald-500/20 to-green-600/20', border: 'border-emerald-500/25', text: 'text-emerald-400' },
-  { bg: 'from-blue-500/20 to-indigo-600/20', border: 'border-blue-500/25', text: 'text-blue-400' },
-  { bg: 'from-violet-500/20 to-purple-600/20', border: 'border-violet-500/25', text: 'text-violet-400' },
-  { bg: 'from-orange-500/20 to-amber-600/20', border: 'border-orange-500/25', text: 'text-orange-400' },
-  { bg: 'from-rose-500/20 to-pink-600/20', border: 'border-rose-500/25', text: 'text-rose-400' },
-  { bg: 'from-cyan-500/20 to-teal-600/20', border: 'border-cyan-500/25', text: 'text-cyan-400' },
+// ── Per-league accent ─────────────────────────────────────────────────────────
+// `tint` carries the Tailwind classes for the monogram tile and the player
+// chip; `tone` is the same colour as a bare oklch "L C H" triplet, because the
+// cursor spotlight is a runtime gradient Tailwind can't generate.
+const ACCENTS = [
+  { tint: 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400', tone: '0.696 0.17 162.48' },
+  { tint: 'bg-blue-500/10 text-blue-600 ring-blue-500/20 dark:text-blue-400', tone: '0.623 0.214 259.815' },
+  { tint: 'bg-violet-500/10 text-violet-600 ring-violet-500/20 dark:text-violet-400', tone: '0.606 0.25 292.717' },
+  { tint: 'bg-orange-500/10 text-orange-600 ring-orange-500/20 dark:text-orange-400', tone: '0.705 0.213 47.604' },
+  { tint: 'bg-rose-500/10 text-rose-600 ring-rose-500/20 dark:text-rose-400', tone: '0.645 0.246 16.439' },
+  { tint: 'bg-cyan-500/10 text-cyan-600 ring-cyan-500/20 dark:text-cyan-400', tone: '0.715 0.143 215.221' },
 ];
 
-function palette(name: string) {
-  const idx = name.charCodeAt(0) % AVATAR_PALETTES.length;
-  return AVATAR_PALETTES[idx];
+/** FNV-1a over the whole name — keying on the first letter alone put every "O…" and "I…" league on the same colour. */
+function accent(name: string) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return ACCENTS[(h >>> 0) % ACCENTS.length];
 }
+
+// ── Motion ────────────────────────────────────────────────────────────────────
+// Entrance lives on the grid item and the hover lift on the link inside it, so
+// the two transforms never compete for one element. Everything animates
+// `transform`/`opacity` as whole values, which Motion hands to WAAPI — and which
+// `MotionConfig reducedMotion` doesn't strip (it only knows `x`, `scale`, …), so
+// `LeagueCard` reads the OS setting itself and swaps in the fade-only variants.
+const SPRING: Transition = { type: 'spring', visualDuration: 0.35, bounce: 0.2 };
+
+const gridVariants: Variants = {
+  hidden: {},
+  show: { transition: { delayChildren: stagger(0.05) } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, transform: 'translateY(14px)' },
+  show: {
+    opacity: 1,
+    transform: 'translateY(0px)',
+    transition: {
+      default: { type: 'spring', visualDuration: 0.5, bounce: 0.15 },
+      opacity: { duration: 0.3, ease: 'easeOut' },
+    },
+  },
+};
+
+const fadeInVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
+};
+
+const liftVariants: Variants = {
+  rest: { transform: 'translateY(0px) scale(1)' },
+  hover: { transform: 'translateY(-4px) scale(1)' },
+  press: { transform: 'translateY(-1px) scale(0.985)' },
+};
+
+const tileVariants: Variants = {
+  rest: { transform: 'rotate(0deg) scale(1)' },
+  hover: { transform: 'rotate(-6deg) scale(1.08)' },
+};
+
+const glowVariants: Variants = {
+  rest: { opacity: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+  hover: { opacity: 1, transition: { duration: 0.2, ease: 'easeOut' } },
+};
+
+// The arrow flies out of its circle top-right while a twin slides in from the
+// bottom-left — the circle clips both, so it reads as one arrow looping through.
+const arrowOutVariants: Variants = {
+  rest: { transform: 'translate(0px, 0px)' },
+  hover: { transform: 'translate(16px, -16px)' },
+};
+const arrowInVariants: Variants = {
+  rest: { transform: 'translate(-16px, 16px)' },
+  hover: { transform: 'translate(0px, 0px)' },
+};
+
+// Paints only a 1px ring of the element's background, so the spotlight
+// gradient lights up the border nearest the cursor.
+const RING_MASK = {
+  padding: 1,
+  WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+  mask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+  WebkitMaskComposite: 'xor',
+  maskComposite: 'exclude',
+} as const;
+
+const MotionLink = motion.create(Link);
 
 /** Red pulse marking a league whose auction is being run right this minute. */
 function LivePill() {
@@ -41,73 +129,177 @@ function LivePill() {
   );
 }
 
-function LeagueCard({ league, index, live = false }: { league: League; index: number; live?: boolean }) {
-  const router = useRouter();
-  const pal = palette(league.name);
+/** The league's logo when it has one, its initial otherwise — and the initial again if the logo fails to load. */
+function LeagueMark({ league, tint, still }: { league: League; tint: string; still: boolean }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const hasLogo = Boolean(league.logoUrl) && !logoFailed;
 
   return (
-    <div
-      className="group card-premium cursor-pointer animate-fade-in-up"
-      style={{ animationDelay: `${index * 0.06}s` }}
-      onClick={() => router.push(`/leagues/${league.id}`)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && router.push(`/leagues/${league.id}`)}
+    <motion.div
+      variants={still ? undefined : tileVariants}
+      transition={SPRING}
+      className={`shrink-0 grid place-items-center size-12 rounded-xl ring-1 ring-inset select-none overflow-hidden ${hasLogo ? 'bg-white ring-border' : `${tint} text-base font-black`
+        }`}
     >
-      <div className="p-5">
-        {/* Header row: avatar + name + player count */}
-        <div className="flex items-start gap-3.5 mb-4">
-          <div
-            className={`shrink-0 w-11 h-11 rounded-xl bg-linear-to-br ${pal.bg} border ${pal.border} flex items-center justify-center text-sm font-black ${pal.text} select-none`}
-          >
-            {league.name.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0 pt-0.5">
-            <h3 className="font-bold text-[15px] leading-snug text-foreground group-hover:text-primary transition-colors duration-200 line-clamp-2">
+      {hasLogo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={cloudinaryImage(league.logoUrl, { w: 96, h: 96, mode: 'fit' })}
+          alt=""
+          className="size-full object-contain p-1.5"
+          onError={() => setLogoFailed(true)}
+        />
+      ) : (
+        league.name.charAt(0).toUpperCase()
+      )}
+    </motion.div>
+  );
+}
+
+function MetaChip({ icon, children, className = 'bg-muted/70 text-muted-foreground ring-border/60' }: {
+  icon: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset ${className}`}>
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+function LeagueCard({ league, live = false }: { league: League; live?: boolean }) {
+  const { tint, tone } = accent(league.name);
+  const still = Boolean(useReducedMotion());
+
+  // Pointer position inside the card, fed straight into the gradients as motion
+  // values — the spotlight tracks the cursor without re-rendering the card.
+  const pointerX = useMotionValue(-400);
+  const pointerY = useMotionValue(-400);
+  const glow = useMotionTemplate`radial-gradient(280px circle at ${pointerX}px ${pointerY}px, oklch(${tone} / 0.11), transparent 70%)`;
+  const ring = useMotionTemplate`radial-gradient(200px circle at ${pointerX}px ${pointerY}px, oklch(${tone} / 0.7), transparent 70%)`;
+
+  function trackPointer(e: PointerEvent<HTMLAnchorElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    pointerX.set(e.clientX - rect.left);
+    pointerY.set(e.clientY - rect.top);
+  }
+
+  const created = new Date(league.createdAt);
+
+  return (
+    <motion.li variants={still ? fadeInVariants : itemVariants} className="list-none">
+      <MotionLink
+        href={`/leagues/${league.id}`}
+        variants={still ? undefined : liftVariants}
+        transition={SPRING}
+        initial="rest"
+        animate="rest"
+        whileHover="hover"
+        whileFocus="hover"
+        whileTap="press"
+        onPointerMove={trackPointer}
+        className="group relative flex h-full flex-col rounded-md border border-border bg-card p-5 shadow-[0_1px_2px_oklch(0_0_0/0.04)] outline-none transition-shadow duration-300 hover:shadow-[0_18px_40px_-18px_oklch(0_0_0/0.22)] dark:hover:shadow-[0_18px_48px_-16px_oklch(0_0_0/0.7)] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {/* Cursor spotlight: a soft wash over the card and a brighter ring on the border */}
+        <motion.span
+          aria-hidden="true"
+          variants={glowVariants}
+          className="pointer-events-none absolute inset-0 rounded-[inherit]"
+          style={{ background: glow }}
+        />
+        <motion.span
+          aria-hidden="true"
+          variants={glowVariants}
+          className="pointer-events-none absolute -inset-px rounded-[inherit]"
+          style={{ ...RING_MASK, background: ring }}
+        />
+
+        <div className="relative flex items-start gap-3.5">
+          <LeagueMark league={league} tint={tint} still={still} />
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h3 className="line-clamp-2 text-[15px] font-bold leading-snug tracking-tight text-foreground">
               {league.name}
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              by {league.conductedBy}
-            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">by {league.conductedBy}</p>
           </div>
-          <div className="shrink-0 flex flex-col items-end gap-1.5">
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-linear-to-br ${pal.bg} ${pal.text} border ${pal.border}`}>
-              <Users className="w-3 h-3" />
-              {league.totalPlayers}
-            </span>
-            {live && <LivePill />}
-          </div>
+          {live && <LivePill />}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-3.5 border-t border-border/50">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-            <Calendar className="w-3 h-3" />
-            {new Date(league.createdAt).toLocaleDateString('en-GB', {
-              day: 'numeric', month: 'short', year: 'numeric',
-            })}
-          </span>
-          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground/50 group-hover:text-primary transition-colors duration-200">
-            Open <ArrowRight className="w-3 h-3" />
+        <div className="relative mt-4 mb-4 flex flex-wrap items-center gap-1.5">
+          <MetaChip icon={<Users className="size-3" />} className={tint}>
+            <span className="font-bold tabular-nums">{league.totalPlayers}</span> players
+          </MetaChip>
+          <MetaChip icon={league.isPublic ? <Globe className="size-3" /> : <Lock className="size-3" />}>
+            {league.isPublic ? 'Public' : 'Private'}
+          </MetaChip>
+          {league.registrationClosed && (
+            <MetaChip icon={<UserX className="size-3" />}>Registration closed</MetaChip>
+          )}
+        </div>
+
+        <div className="relative mt-auto flex items-center justify-between border-t border-border/60 pt-3.5">
+          <time
+            dateTime={league.createdAt}
+            title={`Created ${created.toLocaleString('en-GB')}`}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            <Calendar className="size-3" />
+            {created.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </time>
+          <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors duration-300 group-hover:text-foreground group-focus-visible:text-foreground">
+            Open
+            <span className="relative grid size-7 place-items-center overflow-hidden rounded-full border border-border bg-background transition-colors duration-300 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground group-focus-visible:border-primary group-focus-visible:bg-primary group-focus-visible:text-primary-foreground">
+              <motion.span variants={still ? undefined : arrowOutVariants} transition={SPRING} className="absolute">
+                <ArrowUpRight className="size-3.5" />
+              </motion.span>
+              {!still && (
+                <motion.span variants={arrowInVariants} transition={SPRING} className="absolute" aria-hidden="true">
+                  <ArrowUpRight className="size-3.5" />
+                </motion.span>
+              )}
+            </span>
           </span>
         </div>
-      </div>
-    </div>
+      </MotionLink>
+    </motion.li>
+  );
+}
+
+function LeagueGrid({ leagues, liveIds }: { leagues: League[]; liveIds: Set<string> }) {
+  return (
+    <motion.ul
+      variants={gridVariants}
+      initial="hidden"
+      animate="show"
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+    >
+      {leagues.map((league) => (
+        <LeagueCard key={league.id} league={league} live={liveIds.has(league.id)} />
+      ))}
+    </motion.ul>
   );
 }
 
 function SkeletonCard() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-4 shimmer">
-      <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl bg-muted" />
+    <div className="rounded-2xl border border-border bg-card p-5 shimmer">
+      <div className="flex items-start gap-3.5">
+        <div className="size-12 rounded-xl bg-muted" />
         <div className="flex-1 space-y-2 pt-1">
           <div className="h-4 bg-muted rounded-md w-3/4" />
-          <div className="h-3 bg-muted rounded-md w-1/2" />
+          <div className="h-3 bg-muted rounded-md w-1/3" />
         </div>
       </div>
-      <div className="h-px bg-muted" />
-      <div className="h-3 bg-muted rounded-md w-1/3" />
+      <div className="mt-4 mb-4 flex gap-1.5">
+        <div className="h-6 w-20 rounded-md bg-muted" />
+        <div className="h-6 w-16 rounded-md bg-muted" />
+      </div>
+      <div className="flex items-center justify-between border-t border-border/60 pt-3.5">
+        <div className="h-3 w-24 bg-muted rounded-md" />
+        <div className="size-7 rounded-full bg-muted" />
+      </div>
     </div>
   );
 }
@@ -120,7 +312,7 @@ function SectionHeader({ label, count, accent = 'green' }: { label: string; coun
       : 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:text-blue-400';
 
   return (
-    <div className="flex items-center gap-3 mb-5">
+    <div className="flex items-center gap-3 mb-5 animate-fade-in-up">
       <div className="section-label">{label}</div>
       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${countCls}`}>
         {count}
@@ -169,7 +361,7 @@ export default function HomeDashboard() {
         </div>
         <button
           onClick={() => router.push('/leagues/new')}
-          className="btn-premium inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm"
+          className="btn-premium inline-flex items-center gap-2 px-5 py-2.5 rounded-md font-semibold text-xs sm:text-sm"
         >
           <Plus className="w-4 h-4" />
           New
@@ -210,37 +402,25 @@ export default function HomeDashboard() {
 
       {/* Created leagues */}
       {!loading && sections.created.length > 0 && (
-        <section className="mb-10 animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+        <section className="mb-10">
           <SectionHeader label="Created by you" count={sections.created.length} accent="green" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {sections.created.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
-            ))}
-          </div>
+          <LeagueGrid leagues={sections.created} liveIds={liveIds} />
         </section>
       )}
 
       {/* Leagues the user helps run as a co-organizer */}
       {!loading && sections.coOrganizing.length > 0 && (
-        <section className="mb-10 animate-fade-in-up" style={{ animationDelay: '0.08s' }}>
+        <section className="mb-10">
           <SectionHeader label="Co-organizing" count={sections.coOrganizing.length} accent="violet" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {sections.coOrganizing.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
-            ))}
-          </div>
+          <LeagueGrid leagues={sections.coOrganizing} liveIds={liveIds} />
         </section>
       )}
 
       {/* Joined leagues */}
       {!loading && sections.joined.length > 0 && (
-        <section className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+        <section>
           <SectionHeader label="Joined" count={sections.joined.length} accent="blue" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {sections.joined.map((league, i) => (
-              <LeagueCard key={league.id} league={league} index={i} live={liveIds.has(league.id)} />
-            ))}
-          </div>
+          <LeagueGrid leagues={sections.joined} liveIds={liveIds} />
         </section>
       )}
     </div>
