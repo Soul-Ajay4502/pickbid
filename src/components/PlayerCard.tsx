@@ -82,7 +82,7 @@ export default function PlayerCard({
     >
       {/* Full-bleed photo */}
       {hasPhoto && (
-        // No `loading="lazy"`: DownloadPDFButton renders these cards in a portal
+        // No `loading="lazy"`: DownloadPDFButton renders these cards in a container
         // parked off-screen, where a lazy image never loads and would rasterise
         // into a blank PDF.
         // eslint-disable-next-line @next/next/no-img-element

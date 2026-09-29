@@ -251,7 +251,7 @@ unchanged. Pass *device* pixels — `PlayerCard` asks for twice its CSS size
 because `DownloadPDFButton` rasterises it at `scale: 2`, and requesting less
 makes the exported PDF soft.
 
-Cards rendered for a PDF live in a portal parked off-screen, so **never put
+Cards rendered for a PDF live in a container parked off-screen, so **never put
 `loading="lazy"` on an image inside `PlayerCard`** — a lazy image there never
 loads and rasterises into a blank card.
 
