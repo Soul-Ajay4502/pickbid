@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { getPublicLeagueView } from '@/lib/store';
+import { getProfile, getPublicLeagueView } from '@/lib/store';
+import { getLeagueView } from '@/lib/leagueView';
+import { isAdmin } from '@/lib/adminAuth';
 import { SITE_NAME } from '@/lib/seo';
 import { JsonLd, sportsEventSchema } from '@/lib/jsonLd';
 import PublicLeagueView from '@/components/league/PublicLeagueView';
@@ -9,7 +11,7 @@ import LeagueWorkspace from './LeagueWorkspace';
 /**
  * A league URL serves two audiences, and this component picks between them:
  *
- *   signed in                  → the interactive workspace, exactly as before
+ *   signed in                  → the interactive workspace, server-rendered with its data
  *   signed out + public league → a server-rendered public page (indexable)
  *   signed out + private league → sign in, as before
  *
@@ -36,7 +38,29 @@ export default async function LeaguePage({
   const session = await auth();
 
   if (session?.user) {
-    return <LeagueWorkspace />;
+    // The workspace used to fetch all of this after hydration, which put four
+    // steps — HTML, JS, the league GET, then the card photos — between a visitor
+    // and the first card. Rendering it here puts the cards in the HTML, so the
+    // photos start downloading as the document parses. `getLeagueView` is the
+    // same function the GET uses, so nothing reaches this page that the API
+    // would have withheld from this viewer.
+    const userId = session.user.id;
+    const platformAdmin = await isAdmin();
+    const [view, profile] = await Promise.all([
+      // `undefined` on failure, not null: a database hiccup should fall back to
+      // the workspace loading its own data, not bounce the visitor off a league
+      // that exists.
+      getLeagueView(id, { userId, platformAdmin }).catch((error) => {
+        console.error('Error rendering league workspace:', error);
+        return undefined;
+      }),
+      userId ? getProfile(userId).catch(() => null) : null,
+    ]);
+    // What the client-rendered workspace did on a 404 from the league GET.
+    if (view === null) redirect('/');
+    // Keyed on the league so moving between two leagues can never carry one
+    // league's state into the other.
+    return <LeagueWorkspace key={id} initialData={view ?? null} initialProfile={profile} />;
   }
 
   // Returns null for a league that doesn't exist *or* isn't public, so this one

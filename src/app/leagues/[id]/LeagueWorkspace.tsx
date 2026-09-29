@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore, memo, startTransition, Suspense } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Separator } from '@/components/ui/separator';
@@ -21,19 +21,124 @@ import {
   UsersRound, Images, UserPlus, Trophy, Sparkles, EyeOff,
 } from 'lucide-react';
 
-function LeaguePageInner() {
+interface WorkspaceProps {
+  /** The league as `getLeagueView` shaped it for this viewer, or null when the server couldn't load it. */
+  initialData: LeagueWithPlayers | null;
+  initialProfile: UserProfile | null;
+}
+
+/**
+ * Set once a workspace has shown the data its page was server-rendered with.
+ *
+ * That first render is fresh by construction — the document request just
+ * produced it. A workspace mounted later in the same visit may not be: Back
+ * and Forward restore pages from the router cache, props and all, so their
+ * `initialData` can predate an edit made a minute ago. Those mounts reload,
+ * which is what every mount did before the page was server-rendered.
+ */
+let serverDataShown = false;
+
+const subscribeNothing = () => () => {};
+
+/**
+ * False while rendering on the server and hydrating, true afterwards. Lets the
+ * first client render match the server HTML exactly, then re-render with
+ * whatever only the browser knows — here, the card tokens in localStorage.
+ */
+function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeNothing, () => true, () => false);
+}
+
+/** Whoever created this card in *this* browser, proven by the stored token. */
+function holdsCardToken(player: Player): boolean {
+  const playerToken = localStorage.getItem(`creator_player_${player.id}`);
+  return !!playerToken && playerToken === player.creatorToken;
+}
+
+interface PlayerGridProps {
+  players: Player[];
+  templateId: string;
+  leagueName: string;
+  conductedBy: string;
+  logoUrl: string;
+  canManage: boolean;
+  playersCanDeleteCards: boolean;
+  /**
+   * Comma-joined ids of the cards this browser holds the token for. A string,
+   * not a Set, so the memo sees "still none" as unchanged — see below.
+   */
+  ownedCardIds: string;
+  onOpen: (player: Player) => void;
+  onEdit: (playerId: string) => void;
+  onDelete: (playerId: string) => void;
+}
+
+/**
+ * The card grid, memoised and fed only stable props. Every card is a deep tree
+ * of inline-styled layers, and a league can hold a hundred of them — so without
+ * this, each keystroke in the search box, each open of the Share menu, each
+ * click that opens a card and each flip of the scroll buttons re-rendered the
+ * whole roster before the browser could paint the response.
+ */
+const PlayerGrid = memo(function PlayerGrid({
+  players, templateId, leagueName, conductedBy, logoUrl,
+  canManage, playersCanDeleteCards, ownedCardIds, onOpen, onEdit, onDelete,
+}: PlayerGridProps) {
+  const owned = useMemo(() => new Set(ownedCardIds.split(',')), [ownedCardIds]);
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
+      {players.map((player, i) => {
+        const ownsCard = owned.has(player.id);
+        // Deleting is the narrower right: the organizers always have it, but
+        // the card's own holder only while the league leaves
+        // `playersCanDeleteCards` on. Mirrors the DELETE handler — this just
+        // keeps the button from offering something the API would refuse.
+        const canDelete = canManage || (playersCanDeleteCards && ownsCard);
+        return (
+          <div
+            key={player.id}
+            // Rises rather than fades: these cards are in the server HTML, and
+            // one of them is usually the page's largest paint. The stagger is
+            // capped so a long roster doesn't hold cards back for seconds.
+            className="animate-rise-in cursor-pointer"
+            style={{ animationDelay: `${Math.min(i, 8) * 0.06}s` }}
+            // Open the full view on click, but let the card's own buttons
+            // (edit, delete, icon badge) act normally
+            onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) onOpen(player); }}
+          >
+            <PlayerCard
+              player={player}
+              templateId={templateId}
+              leagueName={leagueName}
+              conductedBy={conductedBy}
+              logoUrl={logoUrl}
+              // The first row is what's on screen when the page opens
+              priority={i < 3}
+              showEdit={canManage || ownsCard}
+              onEdit={() => onEdit(player.id)}
+              onDelete={canDelete ? () => onDelete(player.id) : undefined}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const isOpen = searchParams.get('open') === 'true';
   const { status: sessionStatus } = useSession();
+  const hydrated = useHydrated();
 
   const leagueRedirectUrl = `/leagues/${id}${isOpen ? '?open=true' : ''}`;
 
-  const [data, setData] = useState<LeagueWithPlayers | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTemplateId, setActiveTemplateId] = useState('');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [data, setData] = useState<LeagueWithPlayers | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
+  const [activeTemplateId, setActiveTemplateId] = useState(initialData?.templateId ?? '');
+  const [profile, setProfile] = useState<UserProfile | null>(initialProfile);
   const [joining, setJoining] = useState(false);
   const [togglingRegistration, setTogglingRegistration] = useState(false);
   // Player shown in the full-view modal (null = closed)
@@ -42,7 +147,7 @@ function LeaguePageInner() {
   const [showPlayers, setShowPlayers] = useState(false);
   // Non-null only while an auction is being run right now. Kept separate from
   // `data` because it's polled on its own — see the interval below.
-  const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(null);
+  const [liveAuction, setLiveAuction] = useState<LiveAuctionSummary | null>(initialData?.liveAuction ?? null);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -66,7 +171,29 @@ function LeaguePageInner() {
   // a reset or a player-access change all happen outside this component, so the
   // rail bumps a revision and this re-reads rather than showing a stale board.
   const leagueRevision = useLeagueRevision();
-  useEffect(() => { fetchLeague(); }, [fetchLeague, leagueRevision]);
+  // The revision the data on screen belongs to; null until the first load.
+  const loadedRevision = useRef<number | null>(null);
+  useEffect(() => {
+    if (loadedRevision.current === leagueRevision) return;
+    const mounting = loadedRevision.current === null;
+    loadedRevision.current = leagueRevision;
+    // The page's own server render is already on screen — nothing to reload.
+    if (mounting && initialData && !serverDataShown) {
+      serverDataShown = true;
+      return;
+    }
+    fetchLeague();
+    // A remount may be a router-cache restore, whose profile is as old as its
+    // league — so reload that too, once.
+    if (mounting) {
+      fetch('/api/profile')
+        .then((r) => (r.ok ? r.json() : null))
+        // An error body is an object too, and only a real profile carries a
+        // userId — taking `{ error }` for one offers Join with nothing to prefill.
+        .then((d) => { if (d?.userId) setProfile(d); })
+        .catch(() => { });
+    }
+  }, [fetchLeague, leagueRevision, initialData]);
 
   // An auction can start — or finish — while this page sits open, so re-check
   // the live summary on a timer. It's a single row read, unlike the full league
@@ -80,17 +207,6 @@ function LeaguePageInner() {
     }, 30_000);
     return () => clearInterval(iv);
   }, [id]);
-
-  useEffect(() => {
-    if (sessionStatus !== 'authenticated') return;
-    fetch('/api/profile')
-      .then((r) => (r.ok ? r.json() : null))
-      // An error body is an object too, and only a real profile carries a
-      // userId — taking `{ error }` for one offers Join with nothing to prefill.
-      .then((d) => { if (d?.userId) setProfile(d); })
-      .catch(() => { });
-  }, [sessionStatus]);
-
 
   // Server-computed from the requester's userId, so it's consistent across devices
   const hasJoined = data?.hasJoined ?? false;
@@ -189,34 +305,16 @@ function LeaguePageInner() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    // A transition, so a keystroke landing while the grid re-filters is
+    // handled first rather than queued behind the whole roster's render.
+    const t = setTimeout(() => startTransition(() => setDebouncedQuery(searchQuery.trim())), 300);
     return () => clearTimeout(t);
   }, [searchQuery]);
 
   // ── Player helpers ─────────────────────────────────────────────────────────
-  /** Whoever created this card in *this* browser, proven by the stored token. */
-  function holdsCardToken(playerCreatorToken: string, playerId: string): boolean {
-    if (typeof window === 'undefined') return false;
-    const playerToken = localStorage.getItem(`creator_player_${playerId}`);
-    return !!playerToken && playerToken === playerCreatorToken;
-  }
-
-  function canEditPlayer(playerCreatorToken: string, playerId: string): boolean {
-    return data?.canManage === true || holdsCardToken(playerCreatorToken, playerId);
-  }
-
-  /**
-   * Deleting is the narrower right: the organizers always have it, but the
-   * card's own holder only while the league leaves `playersCanDeleteCards` on.
-   * Mirrors the DELETE handler — this just keeps the button from offering
-   * something the API would refuse.
-   */
-  function canDeletePlayer(playerCreatorToken: string, playerId: string): boolean {
-    if (data?.canManage === true) return true;
-    return (data?.playersCanDeleteCards ?? true) && holdsCardToken(playerCreatorToken, playerId);
-  }
-
-  async function handleDeletePlayer(playerId: string) {
+  // Stable identities, so the memoised grid below only re-renders when the
+  // roster, the filter or the viewer's rights actually change.
+  const handleDeletePlayer = useCallback(async (playerId: string) => {
     if (!confirm('Delete this player card?')) return;
     try {
       // Proves card ownership to the API when the deleter isn't the league creator
@@ -233,7 +331,34 @@ function LeaguePageInner() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete player card');
     }
-  }
+  }, [id, fetchLeague]);
+
+  const handleEditPlayer = useCallback(
+    (playerId: string) => router.push(`/leagues/${id}/players/${playerId}/edit`),
+    [id, router],
+  );
+
+  // Card tokens live in localStorage, which the server render can't see, so
+  // ownership is only known once hydrated. Most viewers hold no token here, and
+  // for them this stays '' across hydration — the grid's props don't change and
+  // it isn't rendered a second time.
+  const roster = data?.players;
+  const ownedCardIds = useMemo(
+    () => (hydrated && roster ? roster.filter(holdsCardToken).map((p) => p.id).join(',') : ''),
+    [hydrated, roster],
+  );
+
+  const filteredPlayers = useMemo(() => {
+    const players = data?.players ?? [];
+    const q = debouncedQuery.toLowerCase();
+    if (!q) return players;
+    return players.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.role.toLowerCase().includes(q) ||
+      p.battingType.toLowerCase().includes(q) ||
+      p.bowlingType.toLowerCase().includes(q)
+    );
+  }, [data?.players, debouncedQuery]);
 
   // ── Share ──────────────────────────────────────────────────────────────────
   function copyLink(url: string, label: string) {
@@ -432,16 +557,6 @@ function LeaguePageInner() {
 
   if (!data) return null;
 
-  const q = debouncedQuery.toLowerCase();
-  const filteredPlayers = q
-    ? data.players.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.role.toLowerCase().includes(q) ||
-      p.battingType.toLowerCase().includes(q) ||
-      p.bowlingType.toLowerCase().includes(q)
-    )
-    : data.players;
-
   const registrationClosed = data.registrationClosed ?? false;
   // The organizer has closed the roster and this viewer isn't one — `players`
   // carries only their own card plus the icons. `registeredPlayers` is still
@@ -486,10 +601,10 @@ function LeaguePageInner() {
     <div className="clay max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       {/* relative z-30: lift the whole header (and its Share & Export dropdown)
-          above the player-card grid. The cards' animate-fade-in-up leaves a
+          above the player-card grid. The cards' animate-rise-in leaves a
           persistent transform, so each card wrapper is its own stacking context;
           without this the dropdown would render beneath them. */}
-      <div className="relative z-30 mb-6 animate-fade-in-up">
+      <div className="relative z-30 mb-6 animate-rise-in">
         {/* The only route back into a running auction from inside the app —
             organizers get the console, everyone else the public watch screen. */}
         {liveAuction && (
@@ -745,7 +860,7 @@ function LeaguePageInner() {
 
       {/* Player grid */}
       {registeredPlayers === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-5 animate-fade-in-up">
+        <div className="flex flex-col items-center justify-center py-24 gap-5 animate-rise-in">
           <div className="relative">
             <div className="absolute inset-0 bg-green-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
             <span className="relative text-6xl animate-float select-none">🏏</span>
@@ -801,7 +916,7 @@ function LeaguePageInner() {
           )}
         </div>
       ) : rosterHidden && data.players.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-5 animate-fade-in-up text-center">
+        <div className="flex flex-col items-center justify-center py-20 gap-5 animate-rise-in text-center">
           <EyeOff className="w-10 h-10 text-muted-foreground/40" />
           <div className="space-y-1.5">
             <h2 className="text-lg font-bold">The player list is hidden</h2>
@@ -812,7 +927,7 @@ function LeaguePageInner() {
           </div>
         </div>
       ) : playersHidden ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-6 animate-fade-in-up text-center">
+        <div className="flex flex-col items-center justify-center py-20 gap-6 animate-rise-in text-center">
           <div className="relative">
             <div className="absolute inset-0 bg-amber-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
             <span className="relative text-6xl select-none">🏆</span>
@@ -839,7 +954,9 @@ function LeaguePageInner() {
             )}
           </div>
           <button
-            onClick={() => setShowPlayers(true)}
+            // Mounting a whole roster of cards takes a while on a phone; as a
+            // transition the click paints its response first instead of freezing.
+            onClick={() => startTransition(() => setShowPlayers(true))}
             className="btn-premium inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold"
           >
             <Images className="w-4 h-4" />View Player Cards
@@ -854,14 +971,14 @@ function LeaguePageInner() {
       ) : (
         <>
           {auctionCompleted && (
-            <div className="flex justify-center mb-6 animate-fade-in-up">
-              <button onClick={() => setShowPlayers(false)} className="toolbar-btn">
+            <div className="flex justify-center mb-6 animate-rise-in">
+              <button onClick={() => startTransition(() => setShowPlayers(false))} className="toolbar-btn">
                 <ArrowUp className="w-3.5 h-3.5" />Hide Player Cards
               </button>
             </div>
           )}
           {rosterHidden && (
-            <p className="flex items-start gap-2 max-w-2xl mx-auto mb-6 text-xs text-muted-foreground bg-muted/50 border border-border rounded-xl px-3.5 py-2.5 animate-fade-in-up">
+            <p className="flex items-start gap-2 max-w-2xl mx-auto mb-6 text-xs text-muted-foreground bg-muted/50 border border-border rounded-xl px-3.5 py-2.5 animate-rise-in">
               <EyeOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
               <span>
                 The organizers have hidden this league&apos;s roster. You can see your own card and
@@ -869,33 +986,19 @@ function LeaguePageInner() {
               </span>
             </p>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
-            {filteredPlayers.map((player, i) => (
-              <div
-                key={player.id}
-                className="animate-fade-in-up cursor-pointer"
-                style={{ animationDelay: `${i * 0.06}s` }}
-                // Open the full view on click, but let the card's own buttons
-                // (edit, delete, icon badge) act normally
-                onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) setViewPlayer(player); }}
-              >
-                <PlayerCard
-                  player={player}
-                  templateId={activeTemplateId}
-                  leagueName={data.name}
-                  conductedBy={data.conductedBy}
-                  logoUrl={data.logoUrl}
-                  showEdit={canEditPlayer(player.creatorToken, player.id)}
-                  onEdit={() => router.push(`/leagues/${id}/players/${player.id}/edit`)}
-                  onDelete={
-                    canDeletePlayer(player.creatorToken, player.id)
-                      ? () => handleDeletePlayer(player.id)
-                      : undefined
-                  }
-                />
-              </div>
-            ))}
-          </div>
+          <PlayerGrid
+            players={filteredPlayers}
+            templateId={activeTemplateId}
+            leagueName={data.name}
+            conductedBy={data.conductedBy}
+            logoUrl={data.logoUrl}
+            canManage={canManage}
+            playersCanDeleteCards={data.playersCanDeleteCards ?? true}
+            ownedCardIds={ownedCardIds}
+            onOpen={setViewPlayer}
+            onEdit={handleEditPlayer}
+            onDelete={handleDeletePlayer}
+          />
         </>
       )}
 
@@ -971,11 +1074,16 @@ function LeaguePageInner() {
  * link to a private league. Logged-out visitors to a *public* league get the
  * server-rendered `PublicLeagueView` instead, so that content is crawlable —
  * see the routing note in `page.tsx`.
+ *
+ * `page.tsx` hands over the league already loaded, so the first render is the
+ * finished page rather than a skeleton. This component still owns every reload
+ * after that: sidebar changes, joins, deletes, and remounts from the router
+ * cache. With `initialData` null it loads the league itself, as it always did.
  */
-export default function LeagueWorkspace() {
+export default function LeagueWorkspace(props: WorkspaceProps) {
   return (
     <Suspense fallback={<div className="max-w-7xl mx-auto px-4 py-10 text-muted-foreground animate-pulse">Loading…</div>}>
-      <LeaguePageInner />
+      <LeaguePageInner {...props} />
     </Suspense>
   );
 }

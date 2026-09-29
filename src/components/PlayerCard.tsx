@@ -31,6 +31,11 @@ interface PlayerCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   pdfMode?: boolean;
+  /**
+   * Fetch the photo ahead of the page's other images. For the cards on screen
+   * when a page opens — one of them is usually its largest paint.
+   */
+  priority?: boolean;
 }
 
 function hasStats(p: Player) {
@@ -47,6 +52,7 @@ export default function PlayerCard({
   onEdit,
   onDelete,
   pdfMode,
+  priority,
 }: PlayerCardProps) {
   const t = getTemplate(templateId);
   const hasPhoto = !!player.photo;
@@ -88,6 +94,7 @@ export default function PlayerCard({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cloudinaryImage(player.photo, { w: CARD_W * ART_DPR, h: CARD_H * ART_DPR })}
           alt={player.name} crossOrigin="anonymous" decoding="async"
+          fetchPriority={priority ? 'high' : undefined}
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
       )}
 

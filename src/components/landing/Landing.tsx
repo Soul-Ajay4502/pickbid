@@ -605,15 +605,19 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
             aria-hidden="true"
           />
 
+          {/* The eyebrow, headline and intro rise in rather than fade: they're
+              the page's largest paint, and text held at opacity 0 doesn't count
+              as painted until its fade starts — see `riseIn` in globals.css.
+              The smaller lines below can afford the fade. */}
           <div className="relative z-10 flex flex-col items-center">
-            <p className="animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+            <p className="animate-rise-in" style={{ animationDelay: '0.05s' }}>
               <AnimatedShinyText className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                 The all-in-one cricket league platform
               </AnimatedShinyText>
             </p>
 
             <h1
-              className="landing-hero-title mt-6 animate-fade-in-up text-5xl font-semibold leading-[1.05] tracking-[-0.02em] sm:text-7xl lg:text-[80px]"
+              className="landing-hero-title mt-6 animate-rise-in text-5xl font-semibold leading-[1.05] tracking-[-0.02em] sm:text-7xl lg:text-[80px]"
               style={{ animationDelay: '0.15s' }}
             >
               Run cricket leagues
@@ -622,7 +626,7 @@ export default function Landing({ stats }: { stats?: PlatformStats | null }) {
             </h1>
 
             <p
-              className="mt-6 max-w-xl animate-fade-in-up text-lg leading-relaxed text-foreground/70 sm:text-xl"
+              className="mt-6 max-w-xl animate-rise-in text-lg leading-relaxed text-foreground/70 sm:text-xl"
               style={{ animationDelay: '0.25s' }}
             >
               Design premium player cards, host real-time auctions, track live leaderboards and share

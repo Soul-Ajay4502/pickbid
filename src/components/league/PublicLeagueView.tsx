@@ -104,7 +104,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
   const topBuys = soldPlayers.slice(0, 10);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 animate-fade-in-up">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 animate-rise-in">
       <nav aria-label="Breadcrumb" className="mb-6">
         <ol className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <li>
@@ -139,7 +139,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
             width={88}
             height={88}
             className="h-22 w-22 rounded-2xl object-cover border border-border/60 shrink-0"
-            priority
+            preload
           />
         ) : null}
         <div className="min-w-0">

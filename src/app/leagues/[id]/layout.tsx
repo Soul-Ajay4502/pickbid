@@ -89,7 +89,7 @@ export default async function LeagueLayout({
           the immersive routes (auction, watch, wrapped, sponsors, reveal) — the
           check lives client-side because a server layout can't read the
           pathname, and it returns `children` untouched there. */}
-      <LeagueChrome leagueId={id}>{children}</LeagueChrome>
+      <LeagueChrome leagueId={id} leagueName={league?.name ?? null}>{children}</LeagueChrome>
     </>
   );
 }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeague, getPlayers, getTeams, getOfficials, getCoOrganizers, hasPublishedLedger, getAuctionLiveSummary, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
+import { getPlayers, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
+import { getLeagueView } from '@/lib/leagueView';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
-import { stripOrganizerFields, visibleRoster } from '@/lib/utils';
 
 export async function GET(
   _request: NextRequest,
@@ -11,58 +11,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const [session, league, platformAdmin] = await Promise.all([auth(), getLeague(id), isAdmin()]);
-    if (!league) {
+    const [session, platformAdmin] = await Promise.all([auth(), isAdmin()]);
+    // Visibility rules (roster trimming, organizer-only fields, co-organizer
+    // emails) live in `getLeagueView`, shared with the server-rendered page.
+    const view = await getLeagueView(id, { userId: session?.user?.id, platformAdmin });
+    if (!view) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
-    const [players, teams, officials, coOrganizers, ledgerPublished, liveAuction] = await Promise.all([
-      getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id), hasPublishedLedger(id),
-      getAuctionLiveSummary(id),
-    ]);
-    const userId = session?.user?.id;
-    const isCreator = userId === league.creatorId;
-    // Creator or co-organizer — either can manage the league and run its
-    // auction. The owner console is folded in here so the owner opening a
-    // league from `/admin` gets the full organizer view of it; `isCreator`
-    // stays strictly true-creator, so the creator-only actions don't move.
-    const canManage = isCreator || platformAdmin || (!!userId && coOrganizers.some((c) => c.userId === userId));
-    // Whether the requester has joined: matched by userId stamped at join time,
-    // so it stays consistent across devices (unlike the old localStorage check)
-    const hasJoined = !!userId && players.some((p) => p.userId === userId);
-    const { creatorId, ...safeLeague } = league;
-    // Resolve each icon player to the team they're pre-assigned to, so cards can show the badge
-    const teamById = new Map(teams.map((tm) => [tm.id, tm]));
-    const withIconTeam = players.map((p) => {
-      const team = p.isIcon && p.teamId ? teamById.get(p.teamId) : null;
-      return {
-        ...p,
-        iconOfTeam: team ? { id: team.id, name: team.name, colorHex: team.colorHex } : null,
-      };
-    });
-    // A league running a closed roster shows a player only their own card and
-    // the icon signings. Computed after `hasJoined` above, which must keep
-    // looking at the whole roster to answer "have I joined?" correctly.
-    const rosterHidden = !canManage && !league.rosterVisibleToPlayers;
-    const roster = rosterHidden ? visibleRoster(withIconTeam, userId) : withIconTeam;
-    // Contact numbers and payment receipts are for the organisers' records only
-    // — never expose them to anyone who isn't running this league
-    const safePlayers = canManage ? roster : roster.map(stripOrganizerFields);
-    const safeOfficials = canManage ? officials : officials.map((o) => ({ ...o, contactNumber: null }));
-    // Co-organizer names/photos are public (they're shown as badges), but their
-    // emails are only the creator's business — they power the manage list
-    const safeCoOrganizers = (isCreator || platformAdmin)
-      ? coOrganizers
-      : coOrganizers.map((c) => ({ ...c, email: null }));
-    // isCreator/canManage/hasJoined first, before the (potentially large) players
-    // array, so they're easy to find in the response rather than buried after it
-    // Only whether a *published* ledger exists — the sheet itself, and the
-    // existence of any draft, stay behind /api/leagues/[id]/ledger
-    // `liveAuction` is non-null only while an auction is actually being run —
-    // it's what puts the LIVE banner (and the only in-app route back into a
-    // running auction) on the league page.
-    // `registeredPlayers` is the true signup count even when `players` has been
-    // trimmed — the slots-filled meter reads it rather than `players.length`.
-    return NextResponse.json({ ...safeLeague, isCreator, canManage, hasJoined, ledgerPublished, liveAuction, registeredPlayers: players.length, rosterHidden, coOrganizers: safeCoOrganizers, players: safePlayers, teams, officials: safeOfficials });
+    return NextResponse.json(view);
   } catch (error) {
     console.error('Error fetching league:', error);
     return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });

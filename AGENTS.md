@@ -105,8 +105,19 @@ world-readable.
 non-manager must blank it exactly like `contactNumber`. Use
 `stripOrganizerFields` ([utils.ts](src/lib/utils.ts)) rather than spreading the
 nulls by hand — it is what keeps the four call sites (the players GET, the
-single-player GET, the league GET and the live-auction broadcast) from drifting
+single-player GET, `getLeagueView` and the live-auction broadcast) from drifting
 apart when a fifth private field appears.
+
+**The signed-in league page is server-rendered with its data.**
+[leagues/[id]/page.tsx](src/app/leagues/[id]/page.tsx) builds the workspace
+payload with `getLeagueView` ([leagueView.ts](src/lib/leagueView.ts)) and hands
+it to `LeagueWorkspace`, so the cards are in the HTML instead of arriving after
+hydration and a second round trip. The league GET calls the same function for
+the page's later reloads — it is the one place the workspace's visibility rules
+(roster trimming, organizer-only fields, co-organizer emails) live, so change
+them there and both paths follow. Anything only the browser knows (card tokens
+in localStorage) must wait until after hydration, or the server and client HTML
+disagree.
 
 `leagues.idProofRequired` and `leagues.paymentProofRequired` are both opt-in and
 default to false, so leagues predating the feature are unaffected. When either
@@ -241,6 +252,12 @@ fallbacks and breaks the layout on mobile. `html2canvas-pro` is used only in
 Player cards animate on entry. Keep `cardDropIn` off the element carrying
 `transform: scale(...)` — stacking both transforms causes a WebKit-only shift on
 mobile.
+
+Don't fade in anything that can be a page's largest paint. Chrome doesn't count
+an element towards LCP while its opacity is 0, so `animate-fade-in-up` on a
+headline or the first row of cards delays LCP until the fade starts. Use
+`animate-rise-in` (transform only) for server-rendered, above-the-fold content,
+and keep the fade for small or below-the-fold elements.
 
 **Never render a Cloudinary URL raw — size it with `cloudinaryImage`**
 ([utils.ts](src/lib/utils.ts)). Uploads are stored untouched, so `player.photo`

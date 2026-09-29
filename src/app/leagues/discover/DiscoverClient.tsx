@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { toast } from 'sonner';
@@ -101,13 +102,14 @@ export default function DiscoverClient({ initialLeagues }: { initialLeagues: Lea
       {filtered.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filtered.map((league, i) => (
-            <div
+            // A real <a href>, not an onClick: crawlers only follow links, and this
+            // page is the one internal path to each public league. The ?open=true
+            // variant canonicalises back to the clean league URL.
+            <Link
               key={league.id}
-              className="group card-premium cursor-pointer animate-fade-in-up"
+              href={`/leagues/${league.id}?open=true`}
+              className="group card-premium block animate-fade-in-up"
               style={{ animationDelay: `${i * 0.05}s` }}
-              onClick={() => router.push(`/leagues/${league.id}?open=true`)}
-              role="button" tabIndex={0}
-              onKeyDown={e => e.key === 'Enter' && router.push(`/leagues/${league.id}?open=true`)}
             >
               <div className="p-5">
                 <div className="flex items-start gap-3 mb-3">
@@ -139,7 +141,7 @@ export default function DiscoverClient({ initialLeagues }: { initialLeagues: Lea
                   </span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

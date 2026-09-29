@@ -41,9 +41,16 @@ export function useLeagueRevision(): number {
  */
 export default function LeagueChrome({
   leagueId,
+  leagueName,
   children,
 }: {
   leagueId: string;
+  /**
+   * The name the layout already read, so the rail's pinned header is in the
+   * server HTML. Waiting for the summary instead made it appear late and push
+   * the whole rail down — a layout shift on every league screen.
+   */
+  leagueName: string | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -86,6 +93,9 @@ export default function LeagueChrome({
 
   if (immersive) return <>{children}</>;
 
+  // The summary is fresher — it follows a rename made from the rail itself.
+  const name = nav?.name ?? leagueName;
+
   const sidebar = nav && (
     <LeagueSidebar
       leagueId={leagueId}
@@ -113,7 +123,7 @@ export default function LeagueChrome({
             Menu
           </button>
           <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
-            {nav?.name ?? ''}
+            {name ?? ''}
           </span>
         </div>
       </div>
@@ -141,9 +151,9 @@ export default function LeagueChrome({
                 <ArrowLeft className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-x-0.5" />
                 All Leagues
               </Link>
-              {nav && (
+              {name && (
                 <p className="px-3 pb-4 mb-1 text-sm font-black tracking-tight text-gradient-green line-clamp-2 border-b border-border/50">
-                  {nav.name}
+                  {name}
                 </p>
               )}
             </div>
@@ -181,7 +191,7 @@ export default function LeagueChrome({
           >
             <div className="shrink-0 flex items-start justify-between gap-2 mb-4">
               <p className="px-3 text-sm font-black tracking-tight text-gradient-green line-clamp-2">
-                {nav?.name ?? 'League'}
+                {name ?? 'League'}
               </p>
               <button
                 onClick={() => setDrawerOpen(false)}

@@ -182,6 +182,17 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* fadeInUp without the fade. Chrome doesn't count an element towards Largest
+   Contentful Paint while its opacity is 0, so fading in the largest thing on
+   screen pushes LCP back by the animation delay — and by however long a main
+   thread busy with hydration takes to start the animation, which on a slow
+   phone is the bigger part. Anything that can be the largest thing above the
+   fold rises in with this instead. */
+@keyframes riseIn {
+  from { transform: translateY(12px); }
+  to   { transform: translateY(0); }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -255,6 +266,10 @@
 @layer utilities {
   .animate-fade-in-up {
     animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  /* For server-rendered, above-the-fold content — see `riseIn`. */
+  .animate-rise-in {
+    animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .animate-fade-in {
     animation: fadeIn 0.4s ease both;

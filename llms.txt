@@ -30,6 +30,7 @@ when features change.
 - [Auth config](src/auth.ts): NextAuth Google setup; token.sub mapped to the DB user id.
 - [Owner console auth](src/lib/adminAuth.ts): super-admin credentials read from `ADMIN_EMAIL`/`ADMIN_PASSWORD` env plus a signed HMAC session cookie. Deliberately separate from Auth.js — no admin row, flag, migration or seed, and a normal Google session never grants admin. The cookie name lives in [adminCookie.ts](src/lib/adminCookie.ts) so `proxy.ts` can read it without importing `next/headers`.
 - [Database connection](src/lib/db.ts): Sequelize + pg, SSL required, pooled across hot reloads.
+- [League workspace view](src/lib/leagueView.ts): `getLeagueView` — the signed-in league page's payload shaped for one viewer (roster trimming, organizer-only fields stripped). Shared by the server-rendered `/leagues/[id]` page and the league GET so the two can't disagree about what a viewer sees.
 - [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
 - [League chrome](src/components/league/LeagueChrome.tsx): frames every `/leagues/[id]/*` screen with the navigation rail — sticky on desktop, a slide-over drawer under `lg` — and publishes `useLeagueRevision()` so a page reloads when the rail changes the league. [LeagueSidebar](src/components/league/LeagueSidebar.tsx) holds the links and the organizer actions; [leagueChrome.ts](src/lib/leagueChrome.ts) is the immersive-route matcher it shares with `NavBar`.
 - [Certificate renderer](src/app/leagues/[id]/certificate/[playerId]/certificate.tsx): server-rendered participation certificate (satori), gated on the league's `certificatesReleasedAt`.
@@ -39,7 +40,7 @@ when features change.
 
 - `auth/[...nextauth]`: NextAuth handlers.
 - `leagues`: list (created/joined) and create leagues.
-- `leagues/[id]`: get/update/delete a league with players, teams, officials.
+- `leagues/[id]`: get/update/delete a league with players, teams, officials. The GET body is `getLeagueView`, which the league page also renders from.
 - `leagues/[id]/players`, `players/[playerId]`: player cards CRUD (anonymous via creatorToken). Contact numbers and payment receipts are blanked with `stripOrganizerFields` for anyone who can't manage the league.
 - `leagues/[id]/teams`, `officials`, `matches`: team, official and match management.
 - `leagues/[id]/auction/live`, `auction/live/summary`, `auction/reset`: live auction state broadcast/poll, the cheap "is an auction running right now" summary behind the LIVE banner, and reset.

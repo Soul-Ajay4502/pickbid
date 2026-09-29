@@ -27,36 +27,55 @@ function GoogleIcon() {
   );
 }
 
-function LoginInner() {
+/**
+ * Where to go once signed in. Only same-site relative callbacks — never an
+ * absolute URL from the query string (open-redirect guard). The proxy always
+ * sets a relative path.
+ *
+ * Read from `location` at the moment it's needed rather than through
+ * `useSearchParams`, which would suspend the whole page during prerendering:
+ * the static HTML was a bare "Loading…" and the sign-in button only appeared
+ * once JavaScript had downloaded and hydrated.
+ */
+function readCallbackUrl(): string {
+  const raw = new URLSearchParams(window.location.search).get('callbackUrl') ?? '/';
+  return raw.startsWith('/') ? raw : '/';
+}
+
+/** Auth.js redirects here with ?error=…; the only part of the page that needs the query. */
+function LoginError() {
+  const errorCode = useSearchParams().get('error');
+  if (!errorCode) return null;
+  return (
+    <div
+      role="alert"
+      className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      {ERROR_MESSAGES[errorCode] ?? 'Unable to sign in. Please try again.'}
+    </div>
+  );
+}
+
+export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
   const { status } = useSession();
   const [loading, setLoading] = useState(false);
 
-  // Only allow same-site relative callbacks — never an absolute URL from the
-  // query string (open-redirect guard). The proxy always sets a relative path.
-  const rawCallback = params.get('callbackUrl') ?? '/';
-  const callbackUrl = rawCallback.startsWith('/') ? rawCallback : '/';
-  const errorCode = params.get('error');
-  const errorMessage = errorCode
-    ? ERROR_MESSAGES[errorCode] ?? 'Unable to sign in. Please try again.'
-    : null;
-
   // Already signed in (e.g. landed here with a live session) → skip the page.
   useEffect(() => {
-    if (status === 'authenticated') router.replace(callbackUrl);
-  }, [status, callbackUrl, router]);
+    if (status === 'authenticated') router.replace(readCallbackUrl());
+  }, [status, router]);
 
   function handleSignIn() {
     setLoading(true);
     // Client-side signIn fetches a fresh CSRF token in the same cycle, so the
     // `__Host-authjs.csrf-token` cookie is guaranteed present for the POST.
-    signIn('google', { callbackUrl });
+    signIn('google', { callbackUrl: readCallbackUrl() });
   }
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm animate-fade-in-up">
+      <div className="w-full max-w-sm animate-rise-in">
 
         {/* Brand mark */}
         <div className="flex flex-col items-center text-center mb-8">
@@ -69,15 +88,11 @@ function LoginInner() {
           </p>
         </div>
 
-        {/* Error banner (Auth.js redirects here with ?error=…) */}
-        {errorMessage && (
-          <div
-            role="alert"
-            className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {errorMessage}
-          </div>
-        )}
+        {/* useSearchParams() needs a Suspense boundary to keep the page
+            prerenderable — kept this narrow so it holds back nothing else. */}
+        <Suspense fallback={null}>
+          <LoginError />
+        </Suspense>
 
         {/* Sign-in card */}
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -108,20 +123,5 @@ function LoginInner() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  // useSearchParams() requires a Suspense boundary to keep the page prerenderable.
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
-          <div className="text-muted-foreground text-sm animate-pulse">Loading…</div>
-        </div>
-      }
-    >
-      <LoginInner />
-    </Suspense>
   );
 }
