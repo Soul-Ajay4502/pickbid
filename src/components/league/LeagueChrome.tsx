@@ -1,7 +1,8 @@
 'use client';
 
 import {
-  createContext, useCallback, useContext, useEffect, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState,
+  type ReactNode,
 } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -24,6 +25,28 @@ const LeagueRevisionContext = createContext(0);
  */
 export function useLeagueRevision(): number {
   return useContext(LeagueRevisionContext);
+}
+
+/** The document's own scroller: what a page outside the league chrome uses. */
+function documentScroller(): HTMLElement {
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+}
+
+const LeagueScrollContext = createContext<() => HTMLElement>(documentScroller);
+
+/**
+ * Returns a getter for the element a league screen scrolls in. From `lg` up
+ * that is the inset panel, which scrolls on its own while the rail and the nav
+ * bar stay put, so `window.scrollY` stays 0 and `window.scrollTo` does
+ * nothing there. Below `lg` the panel is plain flow and the document scrolls
+ * as usual. Call the getter each time rather than caching what it returns:
+ * resizing across the breakpoint swaps one for the other.
+ *
+ * The panel's `scroll` events don't bubble, so to hear both cases listen on
+ * `document` with `capture: true` — see LeagueWorkspace's scroll buttons.
+ */
+export function useLeagueScroller(): () => HTMLElement {
+  return useContext(LeagueScrollContext);
 }
 
 /**
@@ -56,6 +79,7 @@ export default function LeagueChrome({
   const pathname = usePathname();
   const immersive = isImmersiveLeaguePath(pathname);
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const [nav, setNav] = useState<LeagueNavSummary | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -91,6 +115,22 @@ export default function LeagueChrome({
     };
   }, [drawerOpen]);
 
+  // Start each league screen at the top of the panel. Next only scrolls on
+  // navigation when the new page's top is off screen, and it resets the
+  // document, not this panel — so after a short scroll the next screen would
+  // open partway down. A layout effect, so the old offset never paints.
+  useLayoutEffect(() => {
+    panelRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
+
+  // What `useLeagueScroller` hands out. The panel only scrolls from `lg` up —
+  // below that its overflow is `visible` and the document is the scroller.
+  const getScroller = useCallback((): HTMLElement => {
+    const el = panelRef.current;
+    if (el && getComputedStyle(el).overflowY !== 'visible') return el;
+    return documentScroller();
+  }, []);
+
   if (immersive) return <>{children}</>;
 
   // The summary is fresher — it follows a rename made from the rail itself.
@@ -108,6 +148,7 @@ export default function LeagueChrome({
 
   return (
     <LeagueRevisionContext.Provider value={revision}>
+    <LeagueScrollContext.Provider value={getScroller}>
       {/* Mobile league bar. The rail is behind a button under `lg`, so this is
           also where the league's name lives on a phone — the content column
           below is full width. */}
@@ -128,51 +169,77 @@ export default function LeagueChrome({
         </div>
       </div>
 
-      {/* Capped and centred: without a max width the rail would sit against the
-          left edge of an ultrawide monitor while the content drifted away from
-          it. 96rem leaves room for the rail plus the `max-w-7xl` the league
-          page already uses. */}
-      <div className="mx-auto flex w-full max-w-[96rem]">
-        {/* Desktop rail. `top-16` clears the sticky nav bar; it scrolls
-            independently once the groups outrun the viewport. */}
-        <aside className="hidden lg:block w-60 shrink-0 border-r border-border/50">
-          {/* A fixed-height flex column, not a max-height block: the header
-              below has to stay put while only the nav scrolls, and `flex-1`
-              can't size against a max-height. */}
-          <div className="sticky top-16 h-[calc(100vh-4rem)] flex flex-col py-6 pl-4 pr-2 xl:pl-6">
-            {/* Pinned. Which league you're in is the one thing that must never
-                scroll away — it's the only place the name appears once the
-                page header is out of view. */}
-            <div className="shrink-0 pr-2">
-              <Link
-                href="/"
-                className="rail-link mb-3 text-muted-foreground hover:text-foreground group"
-              >
-                <ArrowLeft className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-x-0.5" />
-                All Leagues
-              </Link>
-              {name && (
-                <p className="px-3 pb-4 mb-1 text-sm font-black tracking-tight text-gradient-green line-clamp-2 border-b border-border/50">
-                  {name}
-                </p>
-              )}
-            </div>
+      {/* Inset layout on desktop: the rail sits flat on the `--sidebar` tint
+          and the page is the raised panel beside it. The tint is on this
+          full-width wrapper, not the capped row inside, so an ultrawide
+          monitor shows tint either side instead of a band of page background.
+          Under `lg` there is no rail, so there is no tint and no panel. */}
+      <div className="lg:bg-sidebar">
+        {/* Capped and centred: without a max width the rail would sit against
+            the left edge of an ultrawide monitor while the content drifted
+            away from it. 96rem leaves room for the rail plus the `max-w-7xl`
+            the league page already uses.
 
-            {/* `min-h-0` lets this shrink below its content inside the flex
-                column — without it the box grows and the page scrolls instead. */}
-            <div className="rail-scroll min-h-0 flex-1 pt-3 pr-1">
-              {nav ? sidebar : (
-                <div className="flex flex-col gap-2 px-3" aria-hidden="true">
-                  {[...Array(7)].map((_, i) => (
-                    <div key={i} className="h-7 rounded-lg bg-muted shimmer" />
-                  ))}
-                </div>
-              )}
+            From `lg` up the row is exactly the viewport below the nav bar, so
+            the document never scrolls; the panel does instead. The height is
+            the nav bar's `h-16` plus its 1px `border-b` — a pixel short and
+            the window grows a scrollbar for that one pixel. */}
+        <div className="mx-auto flex w-full max-w-[96rem] lg:h-[calc(100dvh-4rem-1px)]">
+          {/* Desktop rail. It fills the fixed-height row, so it stays put
+              without being sticky, and scrolls on its own once the groups
+              outrun the viewport. */}
+          <aside className="hidden lg:block w-60 shrink-0">
+            {/* A fixed-height flex column, not a max-height block: the header
+                below has to stay put while only the nav scrolls, and `flex-1`
+                can't size against a max-height. */}
+            <div className="h-full flex flex-col py-6 pl-4 pr-2 xl:pl-6">
+              {/* Pinned. Which league you're in is the one thing that must
+                  never scroll away — it's the only place the name appears once
+                  the page header is out of view. */}
+              <div className="shrink-0 pr-2">
+                <Link
+                  href="/"
+                  className="rail-link mb-3 text-muted-foreground hover:text-foreground group"
+                >
+                  <ArrowLeft className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-x-0.5" />
+                  All Leagues
+                </Link>
+                {name && (
+                  <p className="px-3 pb-4 mb-1 text-sm font-black tracking-tight text-gradient-green line-clamp-2 border-b border-border/50">
+                    {name}
+                  </p>
+                )}
+              </div>
+
+              {/* `min-h-0` lets this shrink below its content inside the flex
+                  column — without it the box grows and the page scrolls instead. */}
+              <div className="rail-scroll min-h-0 flex-1 pt-3 pr-1">
+                {nav ? sidebar : (
+                  <div className="flex flex-col gap-2 px-3" aria-hidden="true">
+                    {[...Array(7)].map((_, i) => (
+                      <div key={i} className="h-7 rounded-lg bg-sidebar-accent shimmer" />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+          </aside>
+
+          {/* The inset panel, and from `lg` up the page's scroller: only this
+              box scrolls, inside its rounded frame, while the rail and the nav
+              bar stay put. Two consequences for pages rendered in it. A
+              `position: sticky` offset beneath it is measured from the panel's
+              top edge, not the viewport's. And `window.scrollTo` no longer
+              reaches the page — go through `useLeagueScroller`. Its background
+              is `--background` rather than `--card`, so every page's own cards
+              keep the contrast they were designed with. */}
+          <div
+            ref={panelRef}
+            className="inset-scroll min-w-0 flex-1 lg:my-2 lg:mr-2 lg:overflow-y-auto lg:rounded-xl lg:border lg:border-sidebar-border/60 lg:bg-background lg:shadow-sm"
+          >
+            {children}
           </div>
-        </aside>
-
-        <div className="min-w-0 flex-1">{children}</div>
+        </div>
       </div>
 
       {/* Mobile drawer */}
@@ -213,6 +280,7 @@ export default function LeagueChrome({
           </div>
         </div>
       )}
+    </LeagueScrollContext.Provider>
     </LeagueRevisionContext.Provider>
   );
 }

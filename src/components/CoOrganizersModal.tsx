@@ -115,7 +115,7 @@ export default function CoOrganizersModal({ leagueId, onClose }: {
   //
   // `position: fixed` only escapes the page when nothing above it has opened a
   // stacking context, and this modal is opened from the league sidebar, whose
-  // rail is `position: sticky` — that alone creates one, so `z-60` was being
+  // rail was `position: sticky` — that alone creates one, so `z-60` was being
   // resolved *inside* the rail and the dialog painted under the player cards
   // (which are stacking contexts of their own, courtesy of the transform
   // `cardDropIn` leaves behind). The other dialogs here are built on Base UI's

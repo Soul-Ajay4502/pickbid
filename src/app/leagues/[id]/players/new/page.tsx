@@ -8,6 +8,7 @@ import PlayerSearchPicker from '@/components/PlayerSearchPicker';
 import { generateToken, sanitizeFolder, uploadFile } from '@/lib/utils';
 import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
 import { toast } from 'sonner';
+import { useLeagueScroller } from '@/components/league/LeagueChrome';
 import { ArrowLeft, Check, Sparkles, UserPlus, Users, ShieldCheck } from 'lucide-react';
 
 /** Lets the header's action button submit the form it sits outside of. */
@@ -24,6 +25,8 @@ const SkeletonFallback = () => (
 
 function NewPlayerPageInner() {
   const router = useRouter();
+  // The league chrome's inset panel on desktop, the window on a phone.
+  const getScroller = useLeagueScroller();
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const { status } = useSession();
@@ -127,7 +130,7 @@ function NewPlayerPageInner() {
         setAddedCount((c) => c + 1);
         setSearchSelection(null);
         setFormKey((k) => k + 1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        getScroller().scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         toast.success('Player card added!');
         router.push(`/leagues/${id}`);

@@ -213,6 +213,16 @@ Because the rail's actions edit the league the page is rendering, it publishes
 change puts that number in its fetch effect's dependencies — see
 [LeagueWorkspace](src/app/leagues/[id]/LeagueWorkspace.tsx).
 
+On desktop the chrome is an *inset* layout: the rail sits flat on the
+`--sidebar` tint and the page is a rounded panel beside it, sized to the
+viewport. **That panel is the scroller, not the window** — from `lg` up
+`window.scrollY` stays 0 and `window.scrollTo` does nothing on a league
+screen. Scroll and measure through `useLeagueScroller()`, which returns the
+panel on desktop and the document under `lg`, and listen for its `scroll`
+events on `document` with `capture: true`, since an element's don't bubble.
+A `position: sticky` offset inside a league screen is measured from the
+panel's top edge, so it no longer needs to clear the nav bar.
+
 `isImmersiveLeaguePath` ([leagueChrome.ts](src/lib/leagueChrome.ts)) is the one
 list of screens that run with no chrome — auction, watch, wrapped, sponsors,
 squad reveal. `NavBar` and `LeagueChrome` both read it so they can't disagree,
@@ -263,8 +273,10 @@ and keep the fade for small or below-the-fold elements.
 ([utils.ts](src/lib/utils.ts)). Uploads are stored untouched, so `player.photo`
 is whatever came off the phone: an 8MB original, shipped once per card. The
 helper asks Cloudinary for the rendered size in WebP/AVIF instead, and returns
-anything already transformed (or not on Cloudinary, like a Google avatar)
-unchanged. Pass *device* pixels — `PlayerCard` asks for twice its CSS size
+anything already transformed unchanged. It also sizes Google avatars, which is
+what `player.photo` holds when a player never uploads one: Auth.js stores them
+as `…=s96-c`, a 96px square, so the helper rewrites that suffix to the rendered
+size. Any other URL passes through. Pass *device* pixels — `PlayerCard` asks for twice its CSS size
 because `DownloadPDFButton` rasterises it at `scale: 2`, and requesting less
 makes the exported PDF soft.
 

@@ -438,7 +438,7 @@ export default function CloneLeaguePage() {
         </div>
 
         {/* ── Live preview ── */}
-        <div className="flex flex-col items-center gap-3 lg:sticky lg:top-24 animate-fade-in-up" style={{ animationDelay: '0.12s' }}>
+        <div className="flex flex-col items-center gap-3 lg:sticky lg:top-6 animate-fade-in-up" style={{ animationDelay: '0.12s' }}>
           <div className="flex items-center gap-2 self-start">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">

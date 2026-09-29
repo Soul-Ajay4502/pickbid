@@ -104,9 +104,9 @@ export default function AddPlayerFromAccountModal({ leagueId, onClose }: {
   const close = () => onClose(addedCount > 0);
 
   // Portalled to the body for the same reason CoOrganizersModal is: this opens
-  // from the league sidebar, whose rail is `position: sticky` and therefore a
-  // stacking context of its own — a plain `fixed` overlay would resolve its
-  // z-index inside the rail and paint under the player cards.
+  // from inside the league chrome, and a plain `fixed` overlay resolves its
+  // z-index inside any stacking context above it (the rail used to be
+  // `position: sticky`, which is one) and paints under the player cards.
   //
   // Never server-rendered — it only mounts on a click — so there is no SSR
   // pass for this guard to mismatch against.

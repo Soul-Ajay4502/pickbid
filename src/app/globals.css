@@ -96,11 +96,11 @@
   --chart-4: oklch(0.50 0.20 290);
   --chart-5: oklch(0.55 0.18 30);
   --radius: 0.75rem;
-  --sidebar: oklch(0.975 0.003 240);
+  --sidebar: oklch(0.962 0.004 240);
   --sidebar-foreground: oklch(0.13 0.012 260);
   --sidebar-primary: oklch(0.52 0.18 150);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.955 0.005 240);
+  --sidebar-accent: oklch(0.93 0.006 240);
   --sidebar-accent-foreground: oklch(0.22 0.01 260);
   --sidebar-border: oklch(0.885 0.005 240);
   --sidebar-ring: oklch(0.52 0.18 150);
@@ -643,8 +643,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
+/* The sidebar accent, not `--muted`: on desktop the rail sits on the
+   `--sidebar` tint, which `--muted` is too close to for a hover to show. */
 .rail-link:hover {
-  background: var(--muted);
+  background: var(--sidebar-accent);
   color: var(--foreground);
 }
 .rail-link:disabled {
@@ -723,6 +725,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 .dark .rail-scroll::-webkit-scrollbar-thumb:hover {
   background: oklch(0.75 0.17 150 / 0.6);
+}
+
+/* ─── League inset panel scroll ──────────────────────────────────── */
+/* From `lg` up the inset panel beside the league rail is the page's scroller
+   (see LeagueChrome), so it gets a thin bar in the rail's colour rather than a
+   chunky platform one running down its rounded edge. Unlike the rail's, this
+   one stays visible: it is the main page, and its thumb is how you tell how
+   long the page is. `scrollbar-gutter: stable` keeps a short page and a long
+   one the same width, so content doesn't jump sideways between screens.
+   Harmless below `lg`, where the panel doesn't scroll and has no bar. */
+.inset-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.62 0.19 150 / 0.3) transparent;
+  scrollbar-gutter: stable;
+}
+.dark .inset-scroll {
+  scrollbar-color: oklch(0.72 0.17 150 / 0.3) transparent;
 }
 
 /* ─── Animated capacity / progress bar ───────────────────────────── */

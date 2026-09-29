@@ -10,7 +10,7 @@ import DownloadPDFButton from '@/components/DownloadPDFButton';
 import CertificateDownloadButtons from '@/components/CertificateDownloadButtons';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
-import { useLeagueRevision } from '@/components/league/LeagueChrome';
+import { useLeagueRevision, useLeagueScroller } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
@@ -38,7 +38,7 @@ interface WorkspaceProps {
  */
 let serverDataShown = false;
 
-const subscribeNothing = () => () => {};
+const subscribeNothing = () => () => { };
 
 /**
  * False while rendering on the server and hydrating, true afterwards. Lets the
@@ -288,17 +288,29 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
   // ── Scroll buttons ─────────────────────────────────────────────────────────
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // On desktop the page scrolls inside the league chrome's inset panel, not
+  // the window — so measure and move whichever one is scrolling right now.
+  const getScroller = useLeagueScroller();
 
   useEffect(() => {
     function onScroll() {
-      const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+      const el = getScroller();
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       setShowScrollBottom(distFromBottom > 200);
-      setShowScrollTop(window.scrollY > 200);
+      setShowScrollTop(el.scrollTop > 200);
     }
-    window.addEventListener('scroll', onScroll, { passive: true });
+    // Capture on the document hears the window's scroll and the panel's alike;
+    // an element's `scroll` event doesn't bubble. Resize, because crossing the
+    // `lg` breakpoint swaps which of the two is doing the scrolling.
+    const opts = { capture: true, passive: true } as const;
+    document.addEventListener('scroll', onScroll, opts);
+    window.addEventListener('resize', onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    return () => {
+      document.removeEventListener('scroll', onScroll, opts);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [getScroller]);
 
   // ── Search ─────────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -927,7 +939,7 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
           </div>
         </div>
       ) : playersHidden ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-6 animate-rise-in text-center">
+        <div className="flex flex-col items-center justify-center py-0 gap-4 animate-rise-in text-center">
           <div className="relative">
             <div className="absolute inset-0 bg-amber-400/15 rounded-full blur-3xl scale-[2.5]" aria-hidden="true" />
             <span className="relative text-6xl select-none">🏆</span>
@@ -1044,7 +1056,7 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 animate-scale-in">
           {showScrollTop && (
             <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              onClick={() => getScroller().scrollTo({ top: 0, behavior: 'smooth' })}
               className="flex items-center justify-center w-11 h-11 rounded-full bg-background/90 backdrop-blur border border-border/70 shadow-xl text-muted-foreground hover:text-foreground hover:bg-background hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
               aria-label="Scroll to top"
             >
@@ -1053,7 +1065,10 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
           )}
           {showScrollBottom && (
             <button
-              onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}
+              onClick={() => {
+                const el = getScroller();
+                el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+              }}
               className="flex items-center justify-center w-11 h-11 rounded-full bg-background/90 backdrop-blur border border-border/70 shadow-xl text-muted-foreground hover:text-foreground hover:bg-background hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200"
               aria-label="Scroll to bottom"
             >
