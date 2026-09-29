@@ -9,9 +9,12 @@ import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
 import type { LeagueWithPlayers, Team, Player, TeamOfficial } from '@/lib/types';
 
+// No reds or blacks: new teams cycle through this in order, so neighbours are
+// kept visually distinct.
 const TEAM_COLORS = [
-  '#22c55e', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
-  '#06b6d4', '#ec4899', '#f97316', '#84cc16', '#6366f1',
+  '#22c55e', '#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899',
+  '#f97316', '#84cc16', '#6366f1', '#14b8a6', '#d946ef', '#0ea5e9',
+  '#eab308', '#10b981', '#1e40af', '#b45309', '#0f766e', '#64748b',
 ];
 
 function fmt(n: number) {
