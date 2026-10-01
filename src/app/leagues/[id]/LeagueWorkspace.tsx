@@ -772,7 +772,10 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
               `flex-wrap`, so the button's own x-position depends on how the
               pills happen to wrap — anchoring a fixed-width panel to it pushed
               the panel off the left edge of the viewport on phones. From `sm`
-              up there's room, so it goes back to being button-anchored. */}
+              up there's room, so it goes back to being button-anchored — by
+              its *left* edge. The button opens the toolbar's row, so a
+              right-anchored panel grows leftward past the header and gets
+              clipped by the league chrome's inset scroller on desktop. */}
           <div className="static sm:relative" ref={shareRef}>
             <button onClick={() => setShareOpen((v) => !v)} className="toolbar-btn" aria-expanded={shareOpen} aria-haspopup="menu">
               <Share2 className="w-3.5 h-3.5" />
@@ -781,7 +784,7 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
             </button>
             {shareOpen && (
               <div
-                className="menu-panel absolute top-full mt-2 right-0 left-0 w-auto sm:left-auto sm:w-64 max-h-[70vh] overflow-y-auto p-1.5 z-50"
+                className="menu-panel absolute top-full mt-2 right-0 left-0 w-auto sm:right-auto sm:w-64 max-h-[70vh] overflow-y-auto p-1.5 z-50"
                 role="menu"
               >
                 <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Share</p>
