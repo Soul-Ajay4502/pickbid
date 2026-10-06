@@ -27,11 +27,6 @@ function batShort(t: Player['battingType']): string {
   return t === 'Right-Hand Bat' ? 'RHB' : 'LHB';
 }
 
-/** Ask Cloudinary for a small face-cropped square instead of the full upload */
-function thumbUrl(url: string): string {
-  return cloudinaryImage(url, { w: 400, h: 400 });
-}
-
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -40,54 +35,6 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = url;
   });
-}
-
-/**
- * Returns a circular avatar as a PNG data URL — the player photo
- * cover-fitted into a circle, or team-coloured initials as fallback.
- */
-async function makeAvatar(photo: string, name: string, colorHex: string, px = 256): Promise<string> {
-  if (photo) {
-    try {
-      const img = await loadImage(thumbUrl(photo));
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = px;
-      const ctx = canvas.getContext('2d')!;
-      ctx.beginPath();
-      ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      const s = Math.max(px / img.width, px / img.height);
-      const w = img.width * s;
-      const h = img.height * s;
-      ctx.drawImage(img, (px - w) / 2, (px - h) / 2, w, h);
-      return canvas.toDataURL('image/png'); // throws if canvas got tainted → initials fallback
-    } catch {
-      /* fall through to initials */
-    }
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = px;
-  const ctx = canvas.getContext('2d')!;
-  ctx.beginPath();
-  ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
-  ctx.fillStyle = colorHex;
-  ctx.fillRect(0, 0, px, px);
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.font = `bold ${Math.round(px * 0.4)}px Helvetica, Arial, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || '?';
-  ctx.fillText(initials, px / 2, px / 2 + px * 0.02);
-  return canvas.toDataURL('image/png');
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -247,19 +194,45 @@ export async function downloadTeamwiseRoster(league: LeagueInfo, teams: Team[], 
 
 /* ────────────────────────────────────────────────────────────────────
  * Squad posters — exactly one A4 page per team, premium dark theme.
- * Player cards on a deep navy background with team-colour accents.
  *
- * Reading order top→bottom: TEAM OFFICIALS (silver leadership band) →
- * ICON PLAYERS (gold hero cards with a star badge) → PLAYERS (team-colour).
- * Each group is its own labelled section with a count chip.
+ * Photo-first: every person is a 3:4 portrait tile with the photo running
+ * edge to edge and the name plate laid over a dark fade at its foot. Phone
+ * photos are portrait, so the tile keeps a whole head and shoulders where a
+ * circular avatar shrank the face to a thumbnail.
  *
- * The grid auto-scales so a whole squad (plus officials) always fits on a
- * single page — large squads shrink rather than spilling to a second page.
+ * Reading order top→bottom: TEAM OFFICIALS (silver) → ICON PLAYERS (gold
+ * frame and ICON chip) → PLAYERS (team colour), each a labelled section
+ * with a count chip.
+ *
+ * The grid picks its column count per page — whichever of 3–6 gives the
+ * largest tiles that still fit — and centres short rows, so a squad is never
+ * split across pages. Only pixels are rasterised (photos, fades, backdrop);
+ * every word is vector text, so nothing depends on the device's fonts.
  * No bid prices — this is a presentation piece, not a ledger.
  * ──────────────────────────────────────────────────────────────────── */
 
+type RGB = [number, number, number];
+
+const DARK_BG: RGB = [13, 15, 23];
+const CARD_BORDER: RGB = [42, 46, 64];
+const TEXT_WHITE: RGB = [245, 246, 250];
+const TEXT_SOFT: RGB = [200, 205, 218];
+const TEXT_GRAY: RGB = [128, 134, 152];
+/** Gold for icon (star) players, silver for the officials' leadership band */
+const GOLD: RGB = [234, 179, 8];
+const SILVER: RGB = [156, 168, 188];
+
+/** 3:4 — the shape phone photos are taken in */
+const TILE_ASPECT = 4 / 3;
+const TILE_PX_W = 480;
+const TILE_PX_H = 640;
+/** Corner radius as a fraction of the tile width */
+const TILE_RADIUS = 0.06;
+/** Millimetres per typographic point */
+const PT = 0.3528;
+
 /** Blend a colour towards the dark page background (t = how much colour survives) */
-function dim(rgb: [number, number, number], t: number): [number, number, number] {
+function dim(rgb: RGB, t: number): RGB {
   const bg = DARK_BG;
   return [
     Math.round(bg[0] + (rgb[0] - bg[0]) * t),
@@ -268,19 +241,130 @@ function dim(rgb: [number, number, number], t: number): [number, number, number]
   ];
 }
 
-const DARK_BG: [number, number, number] = [13, 15, 23];
-const CARD_BG: [number, number, number] = [23, 26, 40];
-const CARD_BORDER: [number, number, number] = [42, 46, 64];
-const TEXT_WHITE: [number, number, number] = [245, 246, 250];
-const TEXT_GRAY: [number, number, number] = [128, 134, 152];
-/** Gold for icon (star) players, silver for the officials' leadership band */
-const GOLD: [number, number, number] = [234, 179, 8];
-const SILVER: [number, number, number] = [156, 168, 188];
-
 /** Pick a legible text colour (near-black or near-white) for a filled chip */
-function textOn(c: [number, number, number]): [number, number, number] {
+function textOn(c: RGB): RGB {
   const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
   return lum > 140 ? DARK_BG : TEXT_WHITE;
+}
+
+/** Lift a dark team colour towards white until it reads on the dark fade */
+function legible(c: RGB): RGB {
+  const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  if (lum >= 150) return c;
+  const t = (150 - lum) / (255 - lum);
+  return [
+    Math.round(c[0] + (255 - c[0]) * t),
+    Math.round(c[1] + (255 - c[1]) * t),
+    Math.round(c[2] + (255 - c[2]) * t),
+  ];
+}
+
+function css(c: RGB, alpha = 1): string {
+  return `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?';
+}
+
+/** Ask for a subject-cropped 3:4 portrait instead of the full upload */
+function portraitUrl(url: string): string {
+  // Google avatars are stored as a 96px square (`…=s96-c`); request one the tile can use
+  if (url.includes('googleusercontent.com')) return url.replace(/=s\d+(-c)?$/, `=s${TILE_PX_H}-c`);
+  return cloudinaryImage(url, { w: TILE_PX_W, h: TILE_PX_H });
+}
+
+interface Portrait {
+  /** JPEG data URL — the photo (or a tinted placeholder) with its fade and accent bar baked in */
+  src: string;
+  /** False for a placeholder, which gets the person's initials drawn over it */
+  hasPhoto: boolean;
+}
+
+async function makePortrait(photo: string, accent: RGB): Promise<Portrait> {
+  let img: HTMLImageElement | null = null;
+  if (photo) {
+    try {
+      img = await loadImage(portraitUrl(photo));
+    } catch {
+      /* fall through to the placeholder */
+    }
+  }
+  const W = TILE_PX_W;
+  const H = TILE_PX_H;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  if (img) {
+    // Cover-fit; a photo taller than 3:4 keeps its top, where the head is
+    const s = Math.max(W / img.width, H / img.height);
+    const w = img.width * s;
+    const h = img.height * s;
+    ctx.drawImage(img, (W - w) / 2, (H - h) * 0.3, w, h);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, css(dim(accent, 0.55)));
+    g.addColorStop(1, css(dim(accent, 0.2)));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  // Dark fade under the name plate, so white text reads over any photo
+  const fade = ctx.createLinearGradient(0, H * 0.45, 0, H);
+  fade.addColorStop(0, css(DARK_BG, 0));
+  fade.addColorStop(0.5, css(DARK_BG, 0.7));
+  fade.addColorStop(1, css(DARK_BG, 0.95));
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, H * 0.45, W, H * 0.55);
+  // Accent bar along the foot
+  const bar = Math.round(H * 0.016);
+  ctx.fillStyle = css(accent);
+  ctx.fillRect(0, H - bar, W, bar);
+  try {
+    return { src: canvas.toDataURL('image/jpeg', 0.88), hasPhoto: !!img };
+  } catch (err) {
+    // A photo host without CORS taints the canvas — fall back to the placeholder
+    if (!img) throw err;
+    return makePortrait('', accent);
+  }
+}
+
+/** Page background: the dark base with a soft team-colour glow off the top-right corner */
+function makeBackdrop(rgb: RGB): string {
+  // 3px per mm — a soft gradient has no detail to lose
+  const W = 630;
+  const H = 891;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = css(DARK_BG);
+  ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W * 0.88, 0, 0, W * 0.88, 0, W * 0.95);
+  glow.addColorStop(0, css(rgb, 0.3));
+  glow.addColorStop(0.5, css(rgb, 0.09));
+  glow.addColorStop(1, css(rgb, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+interface Tile {
+  name: string;
+  /** Playing role for players, title for officials */
+  role: string;
+  /** Batting / bowling style — players only */
+  skill?: string;
+  accent: RGB;
+  kind: 'official' | 'icon' | 'player';
+  wk?: boolean;
+  portrait: Portrait;
 }
 
 export async function downloadSquadPosters(
@@ -298,41 +382,52 @@ export async function downloadSquadPosters(
   const pageW = 210;
   const pageH = 297;
 
-  const COLS = 3;
-  const CELL_H = 62;
   const GRID_X = 14;
-  const CELL_W = (pageW - GRID_X * 2) / COLS;
+  const GRID_W = pageW - GRID_X * 2;
+  /** Lowest the grid may reach — the footer rule sits at pageH - 13 */
+  const GRID_BOTTOM = pageH - 18;
+  const GAP = 3.5;
+  const LABEL_H = 8;
+  const SECTION_GAP = 5;
 
   let firstPage = true;
+
+  /**
+   * Sets the largest font size from `size` down to `min` at which `text` fits
+   * `maxW`, and returns the text — truncated if it overflows even at `min`.
+   * The font face must already be set.
+   */
+  function fitText(text: string, maxW: number, size: number, min: number, charSpace = 0): string {
+    const width = (s: string) => doc.getTextWidth(s) + charSpace * Math.max(0, s.length - 1);
+    let fs = size;
+    doc.setFontSize(fs);
+    while (fs > min && width(text) > maxW) {
+      fs = Math.max(min, fs - 0.25);
+      doc.setFontSize(fs);
+    }
+    if (width(text) <= maxW) return text;
+    let cut = text;
+    while (cut.length > 1 && width(cut + '…') > maxW) cut = cut.slice(0, -1);
+    return cut.trimEnd() + '…';
+  }
 
   function drawTeamHeader(team: Team, squad: Player[], officialCount: number): number {
     const rgb = hexToRgb(team.colorHex);
 
-    // Full-page dark background
-    doc.setFillColor(...DARK_BG);
-    doc.rect(0, 0, pageW, pageH, 'F');
+    doc.addImage(makeBackdrop(rgb), 'JPEG', 0, 0, pageW, pageH);
 
     // Team-colour accent bar across the very top
     doc.setFillColor(...rgb);
     doc.rect(0, 0, pageW, 2.2, 'F');
 
-    // Giant watermark initial, dimmed into the background
-    doc.setTextColor(...dim(rgb, 0.16));
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(150);
-    doc.text(team.name.charAt(0).toUpperCase(), pageW - 14, 52, { align: 'right' });
-
     // Eyebrow: league name in team colour
-    doc.setTextColor(...dim(rgb, 0.9));
+    doc.setTextColor(...legible(rgb));
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(league.name.toUpperCase(), GRID_X, 19, { charSpace: 0.8 });
+    doc.text(fitText(league.name.toUpperCase(), GRID_W, 9, 7, 0.8), GRID_X, 17, { charSpace: 0.8 });
 
     // Team name — the hero
     doc.setTextColor(...TEXT_WHITE);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(30);
-    doc.text(team.name.toUpperCase(), GRID_X, 32);
+    doc.text(fitText(team.name.toUpperCase(), GRID_W, 30, 16), GRID_X, 30);
 
     // Squad meta — same order as the sections below
     const iconCount = squad.filter((p) => p.isIcon).length;
@@ -342,17 +437,14 @@ export async function downloadSquadPosters(
     metaParts.push(`${squad.length} PLAYER${squad.length !== 1 ? 'S' : ''}`);
     doc.setTextColor(...TEXT_GRAY);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(
-      `OFFICIAL SQUAD   ·   ${metaParts.join('   ·   ')}`,
-      GRID_X, 40, { charSpace: 0.5 }
-    );
+    doc.setFontSize(8.5);
+    doc.text(`OFFICIAL SQUAD   ·   ${metaParts.join('   ·   ')}`, GRID_X, 37.5, { charSpace: 0.5 });
 
     // Accent underline
     doc.setFillColor(...rgb);
-    doc.roundedRect(GRID_X, 44, 26, 1.2, 0.6, 0.6, 'F');
+    doc.roundedRect(GRID_X, 41, 26, 1.2, 0.6, 0.6, 'F');
 
-    return 52;
+    return 48;
   }
 
   function drawFooter() {
@@ -369,11 +461,8 @@ export async function downloadSquadPosters(
     );
   }
 
-  // ── Card renderers ──────────────────────────────────────────────────────
-  const OFFICIAL_CELL_H = 52;
-
   /** Filled 5-point star centred at (cx, cy) with the given outer radius. */
-  function drawStar(cx: number, cy: number, r: number, color: [number, number, number]) {
+  function drawStar(cx: number, cy: number, r: number, color: RGB) {
     const inner = r * 0.42;
     const pts: [number, number][] = [];
     for (let i = 0; i < 10; i++) {
@@ -386,136 +475,117 @@ export async function downloadSquadPosters(
     doc.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
   }
 
-  function drawPlayerCard(player: Player, avatar: string, cellX: number, top: number, rgb: [number, number, number], s: number) {
-    const icon = player.isIcon;
-    const accent = icon ? GOLD : rgb;
-    const cx = cellX + CELL_W / 2;
-    const cardX = cellX + 2;
-    const cardW = CELL_W - 4;
-    const cardH = (CELL_H - 5) * s;
-    // Card body — icons get a subtle warm tint and a brighter gold border
-    doc.setFillColor(...(icon ? dim(GOLD, 0.12) : CARD_BG));
-    doc.setDrawColor(...(icon ? dim(GOLD, 0.85) : CARD_BORDER));
-    doc.setLineWidth(icon ? 0.6 : 0.3);
-    doc.roundedRect(cardX, top, cardW, cardH, 3, 3, 'FD');
-    // Accent strip along the card top
-    doc.setFillColor(...accent);
-    doc.roundedRect(cardX + cardW / 2 - 7, top, 14, 1.1, 0.55, 0.55, 'F');
-    // Star badge in the top-right corner for icon players
-    if (icon) drawStar(cardX + cardW - 5 * s, top + 5 * s, 2.7 * s, GOLD);
-
-    // Avatar with accent ring (thicker + double ring for icons)
-    const AV = 24 * s;
-    const avY = top + 5 * s;
-    doc.setDrawColor(...accent);
-    doc.setLineWidth(icon ? 1.2 : 0.9);
-    doc.circle(cx, avY + AV / 2, AV / 2 + 1.3 * s, 'S');
-    if (icon) {
-      doc.setLineWidth(0.4);
-      doc.circle(cx, avY + AV / 2, AV / 2 + 2.6 * s, 'S');
-    }
-    doc.addImage(avatar, 'PNG', cx - AV / 2, avY, AV, AV);
-
-    // Name (+ WK tag)
-    let textY = avY + AV + 7.5 * s;
-    doc.setTextColor(...TEXT_WHITE);
+  /** Pill badge in a tile corner; `x` is its left edge, or its right edge when `alignRight` */
+  function drawChip(label: string, x: number, y: number, k: number, fill: RGB, alignRight: boolean, star = false) {
+    const fs = 5.8 * k;
+    const h = 4.2 * k;
+    const padX = 1.6 * k;
+    const starW = star ? 2.9 * k : 0;
+    const cs = 0.3 * k;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10 * s);
-    const displayName = player.name.length > 20 ? player.name.slice(0, 19) + '…' : player.name;
-    doc.text(displayName + (player.isWicketKeeper ? '  (WK)' : ''), cx, textY, { align: 'center' });
+    doc.setFontSize(fs);
+    const w = padX * 2 + starW + doc.getTextWidth(label) + cs * (label.length - 1);
+    const left = alignRight ? x - w : x;
+    doc.setFillColor(...fill);
+    doc.roundedRect(left, y, w, h, h / 2, h / 2, 'F');
+    const ink = textOn(fill);
+    if (star) drawStar(left + padX + 1.1 * k, y + h / 2 + 0.1 * k, 1.35 * k, ink);
+    doc.setTextColor(...ink);
+    doc.text(label, left + padX + starW, y + h / 2 + (fs * PT * 0.72) / 2, { charSpace: cs });
+  }
 
-    // Role in accent colour
-    textY += 4.8 * s;
-    doc.setTextColor(...dim(accent, 0.95));
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7 * s);
-    doc.text(player.role.toUpperCase(), cx, textY, { align: 'center', charSpace: 0.4 });
+  function drawTile(t: Tile, x: number, y: number, w: number) {
+    const h = w * TILE_ASPECT;
+    const r = w * TILE_RADIUS;
+    const k = w / 42; // type is tuned for a 42mm tile and scales with it
+    const cx = x + w / 2;
+    const icon = t.kind === 'icon';
 
-    // Batting / bowling
-    textY += 4.4 * s;
-    doc.setTextColor(...TEXT_GRAY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.8 * s);
-    const skill = player.bowlingType === 'N/A'
-      ? batShort(player.battingType)
-      : `${batShort(player.battingType)} · ${player.bowlingType}`;
-    doc.text(skill, cx, textY, { align: 'center' });
+    // Photo, clipped to the rounded tile
+    doc.saveGraphicsState();
+    doc.roundedRect(x, y, w, h, r, r, null);
+    doc.clip();
+    doc.discardPath();
+    doc.addImage(t.portrait.src, 'JPEG', x, y, w, h);
+    doc.restoreGraphicsState();
 
-    // Gold "ICON" chip (no bid prices on the poster)
-    if (icon) {
-      textY += 6.2 * s;
-      const label = 'ICON';
+    if (!t.portrait.hasPhoto) {
+      doc.setTextColor(...TEXT_WHITE);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5 * s);
-      const tw = doc.getTextWidth(label);
-      doc.setFillColor(...GOLD);
-      doc.roundedRect(cx - tw / 2 - 4, textY - 3.4 * s, tw + 8, 5 * s, 2.5 * s, 2.5 * s, 'F');
-      doc.setTextColor(...DARK_BG);
-      doc.text(label, cx, textY, { align: 'center', charSpace: 0.3 });
+      doc.setFontSize((w * 0.32) / PT);
+      doc.text(initialsOf(t.name), cx, y + h * 0.38, { align: 'center', baseline: 'middle' });
     }
-  }
 
-  function drawOfficialCard(official: TeamOfficial, avatar: string, cellX: number, top: number, accent: [number, number, number], s: number) {
-    const cx = cellX + CELL_W / 2;
-    const cardX = cellX + 2;
-    const cardW = CELL_W - 4;
-    const cardH = (OFFICIAL_CELL_H - 5) * s;
-    doc.setFillColor(...CARD_BG);
-    doc.setDrawColor(...CARD_BORDER);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(cardX, top, cardW, cardH, 3, 3, 'FD');
-    // Silver accent strip — sets the leadership band apart from the players
-    doc.setFillColor(...dim(accent, 0.7));
-    doc.roundedRect(cardX + cardW / 2 - 7, top, 14, 1.1, 0.55, 0.55, 'F');
+    doc.setDrawColor(...(icon ? GOLD : dim(t.accent, 0.5)));
+    doc.setLineWidth(icon ? 0.7 : 0.3);
+    doc.roundedRect(x, y, w, h, r, r, 'S');
 
-    const AV = 22 * s;
-    const avY = top + 5 * s;
-    doc.setDrawColor(...dim(accent, 0.9));
-    doc.setLineWidth(0.8);
-    doc.circle(cx, avY + AV / 2, AV / 2 + 1.2 * s, 'S');
-    doc.addImage(avatar, 'PNG', cx - AV / 2, avY, AV, AV);
-
-    let textY = avY + AV + 7 * s;
+    // Name plate over the fade, built bottom-up
+    const maxW = w - 4 * k;
+    let baseY = y + h - 3.6 * k;
+    if (t.skill) {
+      doc.setTextColor(...TEXT_SOFT);
+      doc.setFont('helvetica', 'normal');
+      doc.text(fitText(t.skill, maxW, 6 * k, 4), cx, baseY, { align: 'center' });
+      baseY -= 3.8 * k;
+    }
+    const roleCs = 0.35 * k;
+    doc.setTextColor(...legible(t.accent));
+    doc.setFont('helvetica', 'bold');
+    const role = fitText(t.role.toUpperCase(), maxW, 6.2 * k, 4, roleCs);
+    // jsPDF centres on the unspaced width, so letter-spaced text is centred by hand
+    const roleW = doc.getTextWidth(role) + roleCs * (role.length - 1);
+    doc.text(role, cx - roleW / 2, baseY, { charSpace: roleCs });
+    baseY -= 4.6 * k;
     doc.setTextColor(...TEXT_WHITE);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5 * s);
-    const displayName = official.name.length > 20 ? official.name.slice(0, 19) + '…' : official.name;
-    doc.text(displayName, cx, textY, { align: 'center' });
+    doc.text(fitText(t.name, maxW, 10.5 * k, 5.5), cx, baseY, { align: 'center' });
 
-    // Role — the headline info for an official (no contact number on the poster)
-    textY += 4.6 * s;
-    doc.setTextColor(...accent);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7 * s);
-    const role = (official.role || 'Official').toUpperCase();
-    doc.text(role.length > 26 ? role.slice(0, 25) + '…' : role, cx, textY, { align: 'center', charSpace: 0.4 });
+    const inset = 2 * k;
+    if (icon) drawChip('ICON', x + inset, y + inset, k, GOLD, false, true);
+    if (t.wk) drawChip('WK', x + w - inset, y + inset, k, t.accent, true);
   }
 
-  function drawSectionLabel(label: string, color: [number, number, number], count: number, y: number, s: number) {
-    const fs = Math.max(7.5, 10.5 * s);
+  function drawSectionLabel(label: string, color: RGB, count: number, y: number, left: number, right: number) {
+    const base = y + 4.6;
     // Leading colour bar
     doc.setFillColor(...color);
-    doc.roundedRect(GRID_X, y - 3.2, 2.6, 4.8, 0.9, 0.9, 'F');
+    doc.roundedRect(left, base - 3.3, 2.4, 4.4, 0.8, 0.8, 'F');
     // Label
     doc.setTextColor(...TEXT_WHITE);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(fs);
-    doc.text(label, GRID_X + 5.5, y, { charSpace: 0.9 });
+    doc.setFontSize(8.5);
+    doc.text(label, left + 5, base, { charSpace: 0.9 });
     const labelW = doc.getTextWidth(label) + label.length * 0.9;
     // Count chip pinned to the right edge
     const chip = String(count);
-    doc.setFontSize(Math.max(6.5, 7.5 * s));
-    const chipH = Math.max(4.6, 5.2 * s);
-    const cw = doc.getTextWidth(chip) + 5.5;
-    const chipX = pageW - GRID_X - cw;
+    doc.setFontSize(7);
+    const chipH = 4.6;
+    const cw = Math.max(chipH + 1.4, doc.getTextWidth(chip) + 4.4);
+    const chipX = right - cw;
     doc.setFillColor(...color);
-    doc.roundedRect(chipX, y - chipH + 1.4, cw, chipH, chipH / 2, chipH / 2, 'F');
+    doc.roundedRect(chipX, base - 3.4, cw, chipH, chipH / 2, chipH / 2, 'F');
     doc.setTextColor(...textOn(color));
-    doc.text(chip, chipX + cw / 2, y, { align: 'center' });
-    // Divider between label and chip
+    doc.text(chip, chipX + cw / 2, base - 0.2, { align: 'center' });
+    // Rule between label and chip
     doc.setDrawColor(...CARD_BORDER);
     doc.setLineWidth(0.25);
-    doc.line(GRID_X + 9.5 + labelW, y - 1.4, chipX - 3, y - 1.4);
+    doc.line(left + 8 + labelW, base - 1.1, chipX - 3, base - 1.1);
+  }
+
+  /** The column count (3–6) giving the widest tiles at which every section still fits */
+  function planGrid(counts: number[], availH: number): { cols: number; tileW: number } {
+    let best = { cols: 3, tileW: 0 };
+    for (let cols = 3; cols <= 6; cols++) {
+      const totalRows = counts.reduce((n, c) => n + Math.ceil(c / cols), 0);
+      const fixedH =
+        counts.length * LABEL_H + (counts.length - 1) * SECTION_GAP + (totalRows - counts.length) * GAP;
+      const tileW = Math.min(
+        (GRID_W - (cols - 1) * GAP) / cols,
+        (availH - fixedH) / (totalRows * TILE_ASPECT)
+      );
+      if (tileW > best.tileW) best = { cols, tileW };
+    }
+    return best;
   }
 
   for (const team of targetTeams) {
@@ -540,55 +610,63 @@ export async function downloadSquadPosters(
     const icons = squad.filter((p) => p.isIcon);
     const others = squad.filter((p) => !p.isIcon);
 
-    // Pre-render avatars in parallel — photo fetch is the slow part
-    const [iconAvatars, otherAvatars, officialAvatars] = await Promise.all([
-      Promise.all(icons.map((p) => makeAvatar(p.photo, p.name, team.colorHex))),
-      Promise.all(others.map((p) => makeAvatar(p.photo, p.name, team.colorHex))),
-      Promise.all(teamOfficials.map((o) => makeAvatar(o.photo, o.name, team.colorHex))),
+    // Pre-render portraits in parallel — photo fetch is the slow part
+    const [officialPortraits, iconPortraits, otherPortraits] = await Promise.all([
+      Promise.all(teamOfficials.map((o) => makePortrait(o.photo, SILVER))),
+      Promise.all(icons.map((p) => makePortrait(p.photo, GOLD))),
+      Promise.all(others.map((p) => makePortrait(p.photo, rgb))),
     ]);
+
+    const playerTile = (p: Player, kind: Tile['kind'], accent: RGB, portrait: Portrait): Tile => ({
+      name: p.name,
+      role: p.role,
+      skill: p.bowlingType === 'N/A' ? batShort(p.battingType) : `${batShort(p.battingType)} · ${p.bowlingType}`,
+      accent,
+      kind,
+      wk: p.isWicketKeeper,
+      portrait,
+    });
 
     // Reading order: officials (silver) → icons (gold) → other players (team colour)
     const sections = [
       {
-        items: teamOfficials, label: 'TEAM OFFICIALS', color: SILVER, cellH: OFFICIAL_CELL_H,
-        draw: (i: number, x: number, y: number, sc: number) =>
-          drawOfficialCard(teamOfficials[i], officialAvatars[i], x, y, SILVER, sc),
+        label: 'TEAM OFFICIALS', color: SILVER,
+        tiles: teamOfficials.map((o, i): Tile => ({
+          name: o.name, role: o.role || 'Official', accent: SILVER, kind: 'official', portrait: officialPortraits[i],
+        })),
       },
-      {
-        items: icons, label: 'ICON PLAYERS', color: GOLD, cellH: CELL_H,
-        draw: (i: number, x: number, y: number, sc: number) =>
-          drawPlayerCard(icons[i], iconAvatars[i], x, y, rgb, sc),
-      },
-      {
-        items: others, label: 'PLAYERS', color: rgb, cellH: CELL_H,
-        draw: (i: number, x: number, y: number, sc: number) =>
-          drawPlayerCard(others[i], otherAvatars[i], x, y, rgb, sc),
-      },
-    ].filter((sec) => sec.items.length > 0);
+      { label: 'ICON PLAYERS', color: GOLD, tiles: icons.map((p, i) => playerTile(p, 'icon', GOLD, iconPortraits[i])) },
+      { label: 'PLAYERS', color: rgb, tiles: others.map((p, i) => playerTile(p, 'player', rgb, otherPortraits[i])) },
+    ].filter((sec) => sec.tiles.length > 0);
 
-    // Scale everything so the present sections fit on this one page. Cards keep
-    // their natural size for small squads (s capped at 1) and shrink uniformly
-    // for large ones, so a poster is never split across pages.
-    const SECTION_GAP = 5, LABEL_H = 9;
-    const naturalH =
-      sections.reduce((h, sec) => h + LABEL_H + Math.ceil(sec.items.length / COLS) * sec.cellH, 0) +
-      SECTION_GAP * Math.max(0, sections.length - 1);
-    const available = (pageH - 18) - gridTop;
-    const s = Math.min(1, available / naturalH);
+    const availH = GRID_BOTTOM - gridTop;
+    const { cols, tileW } = planGrid(sections.map((sec) => sec.tiles.length), availH);
+    const tileH = tileW * TILE_ASPECT;
+    const totalRows = sections.reduce((n, sec) => n + Math.ceil(sec.tiles.length / cols), 0);
+    const usedH =
+      sections.length * LABEL_H + (sections.length - 1) * SECTION_GAP +
+      totalRows * tileH + (totalRows - sections.length) * GAP;
+    // Labels line up with the grid's outer edges, which move in when height is what limits the tiles
+    const gridW = cols * tileW + (cols - 1) * GAP;
+    const left = GRID_X + (GRID_W - gridW) / 2;
 
-    // Render each section: label, then its card grid
-    let curY = gridTop;
+    // A small squad sits a little lower rather than hugging the header
+    let curY = gridTop + Math.min(14, (availH - usedH) / 2);
     sections.forEach((sec, si) => {
-      if (si > 0) curY += SECTION_GAP * s;
-      drawSectionLabel(sec.label, sec.color, sec.items.length, curY + 4 * s, s);
-      curY += LABEL_H * s;
-      const cellH = sec.cellH * s;
-      for (let i = 0; i < sec.items.length; i++) {
-        const col = i % COLS;
-        sec.draw(i, GRID_X + col * CELL_W, curY, s);
-        if (col === COLS - 1) curY += cellH;
+      if (si > 0) curY += SECTION_GAP;
+      drawSectionLabel(sec.label, sec.color, sec.tiles.length, curY, left, left + gridW);
+      curY += LABEL_H;
+      for (let i = 0; i < sec.tiles.length; i += cols) {
+        const row = sec.tiles.slice(i, i + cols);
+        // Short rows are centred, so a lone icon or a part-filled last row stays balanced
+        let x = GRID_X + (GRID_W - (row.length * tileW + (row.length - 1) * GAP)) / 2;
+        for (const tile of row) {
+          drawTile(tile, x, curY, tileW);
+          x += tileW + GAP;
+        }
+        curY += tileH + GAP;
       }
-      if (sec.items.length % COLS !== 0) curY += cellH;
+      curY -= GAP;
     });
   }
 
