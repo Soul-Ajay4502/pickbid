@@ -633,7 +633,7 @@ export default function AuctionPage() {
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-foreground/40 uppercase tracking-wide">Sold To</label>
                           <div className="grid grid-cols-2 gap-2">
-                            {teams.map(t => {
+                            {[...teams].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })).map(t => {
                               const st = teamStats(t, soldPlayers, basePrice);
                               const full = st.slotsLeft === 0;
                               return (
