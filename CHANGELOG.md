@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.12.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.11.0...v0.12.0) (2026-10-07)
+
+
+### Features
+
+* add player from existing accounts functionality in league sidebar ([c487257](https://github.com/Soul-Ajay4502/pickbid/commit/c487257ced4b9bf8cedc47a85804f2fa539b348b))
+* enhance league workspace with server-rendered data and improved animations ([58298fc](https://github.com/Soul-Ajay4502/pickbid/commit/58298fc020a1ef34ef3aaea1c4b4eaad45e7a483))
+* enhance NavBar with improved accessibility and dynamic menu handling ([bbbf60f](https://github.com/Soul-Ajay4502/pickbid/commit/bbbf60f7d8d76073b0b335e070837f2ce8af333c))
+* implement image upload size validation and update related components ([5f96d0d](https://github.com/Soul-Ajay4502/pickbid/commit/5f96d0da6e034b8439ffd6eae6bc9462ef0f3e7f))
+* implement league chrome scrolling behavior and enhance layout for desktop ([aa4298d](https://github.com/Soul-Ajay4502/pickbid/commit/aa4298d62cec354f71b049cbec897b799c40f99b))
+* implement league navigation rail and sidebar ([695b6de](https://github.com/Soul-Ajay4502/pickbid/commit/695b6ded5234fb5a51b6622bbb6b0eb9ea23c74b))
+* sort teams by name for improved display in auction page ([09c75b6](https://github.com/Soul-Ajay4502/pickbid/commit/09c75b61ddf75fddb065656563e4750bc8719cdc))
+
+
+### Bug Fixes
+
+* adjust positioning of share panel for better alignment on desktop ([8fe3f10](https://github.com/Soul-Ajay4502/pickbid/commit/8fe3f10534dbffbcfc5d70fe0ee4e669adee22c2))
+* conditionally render player registration progress based on roster visibility ([10e9fc9](https://github.com/Soul-Ajay4502/pickbid/commit/10e9fc98d009f29646c2dd65a0e204358e771450))
+* update comments for clarity on PDF rendering process and lazy loading ([d86b10f](https://github.com/Soul-Ajay4502/pickbid/commit/d86b10ff0e23261d00d8a9bdbf8e803878f2e84a))
+* update team colors to ensure visual distinction among new teams ([497aa7a](https://github.com/Soul-Ajay4502/pickbid/commit/497aa7a9410bd77415dfb9b30e5364b38dee413a))
+
+
+### Code Refactoring
+
+* streamline avatar and portrait handling for squad posters ([e5f2e88](https://github.com/Soul-Ajay4502/pickbid/commit/e5f2e88284a4b2fa1568275c59dd16e8e4864e65))
+
 ## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-09-14)
 
 
