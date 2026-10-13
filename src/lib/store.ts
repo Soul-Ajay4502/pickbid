@@ -183,6 +183,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
     statsWickets:   p.statsWickets ?? null,
     statsAverage:   p.statsAverage ?? null,
     statsSR:        p.statsSR ?? null,
+    createdAt:      p.createdAt,
   });
 
   const officialsByTeam = new Map<string, PublicTeam['officials']>();

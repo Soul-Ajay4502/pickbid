@@ -113,7 +113,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
         className="sticky top-0 z-40 border-b border-border/50 bg-background/75 backdrop-blur-2xl transition-[box-shadow,background-color] duration-300 data-scrolled:bg-background/90 data-scrolled:shadow-[0_10px_30px_-20px_oklch(0.2_0.02_260/0.45)] dark:data-scrolled:shadow-[0_12px_32px_-18px_oklch(0_0_0/0.85)]"
       >
         <div
-          className="absolute inset-x-0 bottom-0 h-px"
+          className="site-header-rule absolute inset-x-0 bottom-0 h-px"
           style={{ background: 'linear-gradient(90deg, transparent 0%, oklch(0.62 0.19 150 / 0.35) 40%, oklch(0.58 0.18 220 / 0.2) 70%, transparent 100%)' }}
           aria-hidden="true"
         />

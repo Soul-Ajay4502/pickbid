@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 import { getPlatformStats } from '@/lib/store';
+import { getLandingShowcase } from '@/lib/landingShowcase';
 import Landing from '@/components/landing/Landing';
 
 export const metadata: Metadata = {
@@ -25,10 +26,19 @@ const getCachedPlatformStats = unstable_cache(getPlatformStats, ['platform-stats
   revalidate: 3600,
 });
 
+// The real cards and results the landing shows, from public leagues only. A
+// handful of league views per build, so it shares the stats' hourly cache.
+const getCachedLandingShowcase = unstable_cache(getLandingShowcase, ['landing-showcase'], {
+  revalidate: 3600,
+});
+
 export default async function HomePage() {
-  // The stats strip is decorative — never let it take the landing page down.
-  // `Landing` hides the strip entirely when stats are missing, so a failed
-  // query costs a section rather than the page.
-  const stats = await getCachedPlatformStats().catch(() => null);
-  return <Landing stats={stats} />;
+  // Both are decorative — never let them take the landing page down. `Landing`
+  // hides the stats strip when stats are missing and falls back to sample
+  // pictures without a showcase, so a failed query costs a section, not the page.
+  const [stats, showcase] = await Promise.all([
+    getCachedPlatformStats().catch(() => null),
+    getCachedLandingShowcase().catch(() => null),
+  ]);
+  return <Landing stats={stats} showcase={showcase} />;
 }

@@ -1056,162 +1056,355 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 
 /* ─── Landing (marketing) scope ──────────────────────────────────────
-   The signed-out landing carries its own quieter art direction, inspired
-   by onlook.cam: warm near-black with cream type in dark mode, warm paper
-   with soft ink in light mode. Scoped token overrides re-theme everything
-   inside the wrapper (footer included) without touching the app theme. */
+   The signed-out landing has its own classic art direction: ivory paper,
+   pavilion-green ink and antique gold by day; a night-match green-black with
+   ivory type after dark. The palette is lifted from the default "Classic
+   Green" player card (`templates.ts`), so the page looks like what it sells.
+
+   The tokens sit on `:root:has(.landing-scope)` rather than on the wrapper so
+   the sticky NavBar and the overscroll area behind the page pick them up too —
+   the header blends into the page instead of sitting on the app's cooler
+   tone. They only match while the landing is mounted; the app theme is
+   untouched. `.dark` needs the extra class to outrank the light block. */
+:root:has(.landing-scope) {
+  --background: #f5f1e6;
+  --foreground: #15211a;
+  --card: #fbf8f1;
+  --card-foreground: #15211a;
+  --popover: #fbf8f1;
+  --popover-foreground: #15211a;
+  --primary: #1d4a35;
+  --primary-foreground: #f8f4ea;
+  --muted: #ece6d7;
+  --muted-foreground: #58625b;
+  --border: rgb(21 33 26 / 0.13);
+  --ring: #1d4a35;
+
+  --lp-accent: #1d4a35;  /* pavilion green — ticks, active states, hovers */
+  --lp-gold: #94701a;    /* antique gold — numerals, rules, icons */
+  --lp-ball: #b3122b;    /* cricket-ball red — the live dot, nothing else */
+  --lp-em: #1d4a35;      /* the italic phrase in each headline */
+  --lp-cta: #1d4a35;
+  --lp-cta-fg: #f8f4ea;
+  --lp-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 2px 6px -2px rgb(21 33 26 / 0.08),
+    0 28px 56px -36px rgb(21 33 26 / 0.4);
+}
+:root.dark:has(.landing-scope) {
+  --background: #0b100d;
+  --foreground: #efe9db;
+  --card: #121915;
+  --card-foreground: #efe9db;
+  --popover: #121915;
+  --popover-foreground: #efe9db;
+  --primary: #d1ad5a;
+  --primary-foreground: #0b100d;
+  --muted: #19221d;
+  --muted-foreground: #9aa29c;
+  --border: rgb(239 233 219 / 0.1);
+  --ring: #d1ad5a;
+
+  --lp-accent: #93c4a5;
+  --lp-gold: #d1ad5a;
+  --lp-ball: #f05252;
+  --lp-em: #d1ad5a;
+  --lp-cta: #efe9db;
+  --lp-cta-fg: #0b100d;
+  --lp-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 30px 60px -32px rgb(0 0 0 / 0.8);
+}
+
+/* The header's emerald hairline and gradient button belong to the app; on the
+   landing the bar wears the page's own quieter CTA. Unlayered and more
+   specific than `.btn-premium`, which also uses !important for colour. */
+:root:has(.landing-scope) .site-header-rule { display: none; }
+:root:has(.landing-scope) header .btn-premium {
+  background: var(--lp-cta);
+  color: var(--lp-cta-fg) !important;
+  border-color: transparent !important;
+  box-shadow: none;
+}
+:root:has(.landing-scope) header .btn-premium:hover {
+  transform: none;
+  opacity: 0.88;
+}
+
 .landing-scope {
-  --background: oklch(0.978 0.006 85);
-  --foreground: oklch(0.26 0.018 250);
-  --card: oklch(0.995 0.004 85);
-  --card-foreground: oklch(0.26 0.018 250);
-  --muted: oklch(0.94 0.008 85);
-  --muted-foreground: oklch(0.48 0.012 250);
-  --border: oklch(0.26 0.018 250 / 12%);
   background: var(--background);
   color: var(--foreground);
-  /* Own stacking context so the negative-z ambient aura (below) paints above
-     this scope's background but behind the content the glass surfaces refract. */
-  isolation: isolate;
 }
-.dark .landing-scope {
-  --background: #101112;
-  --foreground: #f2e8d0;
-  --card: #17191b;
-  --card-foreground: #eaebec;
-  --muted: #1d2124;
-  --muted-foreground: #888c90;
-  --border: oklch(1 0 0 / 8%);
+/* Unlayered, so it beats the body's green `selection:` utilities, whose pale
+   text is unreadable on ivory. */
+.landing-scope ::selection {
+  background: color-mix(in srgb, var(--lp-gold) 30%, transparent);
+  color: var(--foreground);
 }
 
-/* Hero headline — a barely-there vertical gradient, not a color effect */
-.landing-hero-title {
-  background: linear-gradient(180deg, oklch(0.34 0.02 250) 0%, oklch(0.17 0.016 250) 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-.dark .landing-hero-title {
-  background: linear-gradient(180deg, #ffffff 0%, #e1dedb 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-/* Solid, quiet primary button: cream on dark, ink on light */
-.landing-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  height: 2.75rem;
-  padding: 0 1.375rem;
-  border-radius: 0.625rem;
-  background: var(--foreground);
-  color: var(--background);
-  font-size: 0.875rem;
-  font-weight: 550;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  cursor: pointer;
-}
-.landing-btn:hover { opacity: 0.88; }
-.landing-btn:active { transform: scale(0.98); }
-
-/* ─── Glassmorphism (landing) ────────────────────────────────────────
-   Frosted-glass surfaces for the marketing sections. The ambient aura
-   (.landing-ambient) behind the page gives the blur something to refract;
-   where backdrop-filter is unsupported the translucent card background is
-   a graceful fallback. Kept quiet — a thin top highlight and soft shadow —
-   to stay in the onlook.cam-inspired art direction, not a neon glass gimmick.
-
-   BUDGET THE BLUR. `.landing-scope` is `isolation: isolate`, so it — not the
-   viewport — is the backdrop root every `backdrop-filter` here samples, and
-   this page scrolls for several thousand pixels. Each blurred element makes
-   Blink snapshot that full-page root into its own texture, so blur cost scales
-   with page height × number of blurred elements, not with element size. Stack
-   enough of them and a phone-class GPU runs out of memory; Chrome kills the
-   renderer and Android shows "This page couldn't load". Keep the count low:
-   only the few large surfaces below get a real blur, and only from tablet up. */
-.landing-scope .glass {
-  /* Mobile / no-blur baseline: more opaque, since nothing is refracting. */
-  background: color-mix(in oklch, var(--card) 82%, transparent);
-  border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
-  box-shadow:
-    inset 0 1px 0 0 oklch(1 0 0 / 0.5),
-    0 12px 34px -16px oklch(0.2 0.03 250 / 0.28);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.landing-scope .glass:hover {
-  border-color: color-mix(in oklch, var(--foreground) 20%, transparent);
-}
-.dark .landing-scope .glass {
-  background: color-mix(in oklch, var(--card) 74%, transparent);
-  border-color: oklch(1 0 0 / 0.09);
-  box-shadow:
-    inset 0 1px 0 0 oklch(1 0 0 / 0.07),
-    0 16px 44px -18px oklch(0 0 0 / 0.6);
-}
-.dark .landing-scope .glass:hover {
-  border-color: oklch(1 0 0 / 0.18);
-}
-
-/* The frosted look itself — tablet and up, where the GPU has the headroom.
-   At phone width an 18px backdrop blur behind a full-bleed card is nearly
-   indistinguishable from the translucent fallback above anyway. */
-@media (min-width: 768px) {
-  .landing-scope .glass {
-    background: color-mix(in oklch, var(--card) 60%, transparent);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    backdrop-filter: blur(18px) saturate(150%);
+/* Layered as components so Tailwind utilities on the same element (sizes,
+   widths, leading) still win. */
+@layer components {
+  .lp-display {
+    font-family: var(--font-display), ui-serif, Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    line-height: 1.02;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
   }
-  .dark .landing-scope .glass {
-    background: color-mix(in oklch, var(--card) 48%, transparent);
+  .lp-display em {
+    font-style: italic;
+    color: var(--lp-em);
   }
-}
 
-/* Respect an explicit OS request for less transparency (Chrome 118+,
-   Safari 17+). Declared after the block above so it wins. */
-@media (prefers-reduced-transparency: reduce) {
-  .landing-scope .glass {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+  .lp-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .lp-eyebrow::before {
+    content: '';
+    width: 1.75rem;
+    height: 1px;
+    background: var(--lp-gold);
+  }
+
+  .lp-link {
+    font-weight: 500;
+    color: var(--foreground);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--lp-gold) 60%, transparent);
+    text-underline-offset: 4px;
+    transition: color 0.2s ease;
+  }
+  .lp-link:hover { color: var(--lp-accent); }
+
+  /* Buttons — a solid pill and an outlined companion, same height */
+  .lp-btn,
+  .lp-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;
+    padding: 0 1.5rem;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+  .lp-btn {
+    background: var(--lp-cta);
+    color: var(--lp-cta-fg);
+    font-weight: 550;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 10px 24px -14px color-mix(in srgb, var(--lp-cta) 80%, transparent);
+  }
+  .lp-btn:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 16px 30px -14px color-mix(in srgb, var(--lp-cta) 85%, transparent);
+  }
+  .lp-btn:active { transform: translateY(0) scale(0.99); }
+  .lp-btn svg { transition: transform 0.2s ease; }
+  .lp-btn:hover svg { transform: translateX(2px); }
+
+  .lp-btn-ghost {
+    color: var(--foreground);
+    font-weight: 500;
+    border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
+  }
+  .lp-btn-ghost:hover {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 40%, transparent);
+  }
+
+  /* Surfaces */
+  .lp-hero {
+    background:
+      radial-gradient(60rem 34rem at 80% -5%, color-mix(in srgb, var(--lp-gold) 10%, transparent), transparent 70%),
+      radial-gradient(48rem 30rem at 5% 0%, color-mix(in srgb, var(--lp-accent) 7%, transparent), transparent 70%);
+  }
+  .lp-surface {
     background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--lp-shadow);
+    color: var(--foreground);
+  }
+  .lp-panel {
+    background: color-mix(in srgb, var(--card) 55%, var(--muted));
+    border: 1px solid var(--border);
+  }
+  .lp-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--lp-accent);
+  }
+
+  .lp-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 1.625rem;
+    padding: 0 0.625rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .lp-chip-active {
+    background: var(--lp-cta);
+    color: var(--lp-cta-fg);
+    border-color: transparent;
+  }
+  .lp-chip-accent {
+    color: var(--lp-accent);
+    border-color: color-mix(in srgb, var(--lp-accent) 35%, transparent);
+    background: color-mix(in srgb, var(--lp-accent) 8%, transparent);
+  }
+
+  /* The real-cards row: scrolls sideways, fades out at the far edge to say so. */
+  .lp-scroll-row {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+    -webkit-mask-image: linear-gradient(to right, #000 82%, transparent);
+    mask-image: linear-gradient(to right, #000 82%, transparent);
+  }
+
+  .lp-live-dot {
+    position: relative;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--lp-ball);
+  }
+  .lp-live-dot::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 999px;
+    border: 1px solid var(--lp-ball);
+    opacity: 0;
+    animation: lpPing 2s ease-out infinite;
+  }
+
+  .lp-monogram {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    background: #0d2218;
+    color: #f0c040;
+    font-family: var(--font-display), Georgia, serif;
+    font-style: italic;
+    font-size: 15px;
+    box-shadow: inset 0 0 0 1px rgb(212 160 23 / 0.5);
+  }
+
+  /* The sample player card — the "Classic Green" template's colours with a
+     double gold rule, the way the real card is framed. */
+  .lp-card-mock {
+    background: #0d2218;
+    border: 2px solid #d4a017;
+    box-shadow:
+      inset 0 0 0 3px #0d2218,
+      inset 0 0 0 4px rgb(212 160 23 / 0.35),
+      0 10px 20px -10px rgb(8 20 14 / 0.35),
+      0 40px 70px -30px rgb(8 20 14 / 0.6);
+  }
+  /* Mown-outfield stripes under a soft floodlight */
+  .lp-card-portrait {
+    background:
+      radial-gradient(80% 70% at 50% 35%, rgb(212 160 23 / 0.16), transparent 70%),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.035) 0 12.5%, transparent 12.5% 25%),
+      #10291d;
+    border: 1px solid rgb(212 160 23 / 0.22);
+  }
+
+  /* Paper in both themes — the real certificate is made to be printed. */
+  .lp-certificate {
+    background: #fbf8ef;
+    box-shadow:
+      inset 0 0 0 2px rgb(184 144 42 / 0.75),
+      0 24px 40px -20px rgb(0 0 0 / 0.45);
+  }
+
+  /* The closing band: the card's pitch green, mown stripes and a gold
+     double rule, the same in both themes. */
+  .lp-pitch {
+    background:
+      radial-gradient(50rem 26rem at 50% -10%, rgb(212 160 23 / 0.16), transparent 70%),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.022) 0 64px, transparent 64px 128px),
+      #0d2218;
+    box-shadow: inset 0 0 0 1px rgb(212 160 23 / 0.3);
+    color: #f3ecdc;
+  }
+  .lp-pitch::before {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border-radius: 20px;
+    border: 1px solid rgb(212 160 23 / 0.16);
+    pointer-events: none;
+  }
+  .lp-pitch .lp-display em { color: #e2bd62; }
+  .lp-eyebrow-on-pitch { color: rgb(243 236 220 / 0.65); }
+  .lp-eyebrow-on-pitch::before { background: #d4a017; }
+  .lp-btn-on-pitch {
+    background: #f3ecdc;
+    color: #0d2218;
+    box-shadow: 0 12px 30px -14px rgb(0 0 0 / 0.7);
+  }
+  .lp-btn-on-pitch:hover { box-shadow: 0 16px 34px -14px rgb(0 0 0 / 0.8); }
+  .lp-btn-ghost-on-pitch {
+    color: #f3ecdc;
+    border-color: rgb(243 236 220 / 0.28);
+  }
+  .lp-btn-ghost-on-pitch:hover {
+    background: rgb(243 236 220 / 0.08);
+    border-color: rgb(243 236 220 / 0.5);
   }
 }
 
-/* Lighter chip — for the small square icon holders. Deliberately *not*
-   blurred: there are a dozen-plus of these on the page, and each one would
-   cost a full-page backdrop snapshot (see note above) to produce a blur no
-   one can see inside a 40px box. Translucent fill only. */
-.landing-scope .glass-chip {
-  background: color-mix(in oklch, var(--card) 78%, transparent);
-  border: 1px solid color-mix(in oklch, var(--foreground) 12%, transparent);
-  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.4);
-}
-.dark .landing-scope .glass-chip {
-  background: color-mix(in oklch, var(--card) 70%, transparent);
-  border-color: oklch(1 0 0 / 0.1);
-  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.06);
+@keyframes lpPing {
+  0%   { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.7); opacity: 0; }
 }
 
-/* Full-height ambient colour fields the frosted surfaces refract as they
-   scroll over them. Faint by design — a whisper of brand green with cool
-   accents, never a saturated wash. Sits at -z-10 inside the isolated scope. */
-.landing-scope .landing-ambient {
-  background:
-    radial-gradient(38rem 30rem at 12% 18%, oklch(0.62 0.19 150 / 0.08), transparent 60%),
-    radial-gradient(44rem 34rem at 88% 40%, oklch(0.58 0.15 220 / 0.07), transparent 62%),
-    radial-gradient(42rem 32rem at 18% 70%, oklch(0.62 0.19 150 / 0.07), transparent 60%),
-    radial-gradient(40rem 30rem at 84% 90%, oklch(0.60 0.14 300 / 0.06), transparent 62%);
+/* Sections settle in as they scroll into view. A CSS scroll-driven animation,
+   so it costs no JavaScript and runs off the main thread; browsers without
+   `animation-timeline` just show the content. Never put `.lp-reveal` on
+   anything above the fold — it starts at opacity 0, which holds back LCP. */
+@keyframes lpReveal {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: none; }
 }
-.dark .landing-scope .landing-ambient {
-  background:
-    radial-gradient(38rem 30rem at 12% 18%, oklch(0.62 0.19 150 / 0.16), transparent 60%),
-    radial-gradient(44rem 34rem at 88% 40%, oklch(0.62 0.17 220 / 0.14), transparent 62%),
-    radial-gradient(42rem 32rem at 18% 70%, oklch(0.62 0.19 150 / 0.13), transparent 60%),
-    radial-gradient(40rem 30rem at 84% 90%, oklch(0.62 0.16 300 / 0.12), transparent 62%);
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-scope .lp-reveal {
+      animation: lpReveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
+    }
+  }
 }

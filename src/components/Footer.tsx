@@ -56,32 +56,33 @@ export default function Footer() {
   ) return null;
 
   return (
-    <footer className="border-t border-border/60 bg-card/40 mt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
-          {/* Brand */}
-          <div className="max-w-xs space-y-2">
-            <p className="font-black text-sm tracking-tight text-gradient-green">Pickbid</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Premium cricket player cards, live auctions and leaderboards for
-              your league — shared with one link. Free to start.
+    <footer className="border-t border-border">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
+          {/* Brand. `lp-display` is the landing's serif — the footer only
+              renders inside `.landing-scope`, which is where that font loads. */}
+          <div className="max-w-xs">
+            <p className="lp-display text-3xl">Pickbid</p>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+              Player cards, live auctions and league tables for cricket leagues
+              of every size — shared with one link. Free to start.
             </p>
           </div>
 
           {/* Link columns — a grid rather than a row, so four columns wrap on
               narrow screens instead of scrolling the page sideways. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-10 lg:gap-14">
+          <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-10">
             {LINK_GROUPS.map((group) => (
               <div key={group.heading}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground mb-4">
                   {group.heading}
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {group.links.map((link) => (
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="text-xs text-muted-foreground/80 hover:text-foreground transition-colors duration-200"
+                        className="text-[13px] text-foreground/75 hover:text-foreground transition-colors duration-200"
                       >
                         {link.label}
                       </Link>
@@ -93,9 +94,10 @@ export default function Footer() {
           </div>
         </div>
 
-        <p className="mt-10 pt-6 border-t border-border/40 text-[11px] text-muted-foreground/60">
-          © {new Date().getFullYear()} Pickbid. Made for cricket lovers everywhere.
-        </p>
+        <div className="mt-14 pt-6 border-t border-border flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-xs text-muted-foreground">
+          <p>© {new Date().getFullYear()} Pickbid</p>
+          <p>Made for cricket lovers everywhere.</p>
+        </div>
       </div>
     </footer>
   );

@@ -459,6 +459,8 @@ export interface PublicPlayer {
   statsWickets: number | null;
   statsAverage: number | null;
   statsSR: number | null;
+  /** When the card was made — printed on the card as its date and season. */
+  createdAt: string;
 }
 
 /** A team with its public squad. `spent` is derived from the sold prices. */
