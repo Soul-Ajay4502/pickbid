@@ -53,8 +53,8 @@ shared with a single link. It runs in any modern browser with no app install.
   profile once, and attach an entry-fee receipt when they register. Organizers
   can require either before a player joins, and see both on one page, where they
   also tick off each entry fee as it lands and export paid / unpaid player lists
-  as a PDF. Only a league's organizers can open them; they never appear on cards
-  or downloads.
+  as a PDF — flat, or grouped team by team with each squad's paid count. Only a
+  league's organizers can open them; they never appear on cards or downloads.
 - **Participation certificates** — organizers release certificates for a league
   in one click, and every player downloads their own as a print-ready PNG or PDF
   from their profile.

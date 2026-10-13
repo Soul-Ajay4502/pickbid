@@ -8,7 +8,7 @@
 // or PDF.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getLeagueDocuments } from '@/lib/store';
+import { getLeagueDocuments, getTeams } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
 import type { LeagueDocumentsResponse } from '@/lib/types';
 
@@ -23,13 +23,14 @@ export async function GET(
     const { error, status, league } = await requireLeagueManager(id);
     if (error !== null) return NextResponse.json({ error }, { status, headers: PRIVATE });
 
-    const players = await getLeagueDocuments(id);
+    const [players, teams] = await Promise.all([getLeagueDocuments(id), getTeams(id)]);
     return NextResponse.json<LeagueDocumentsResponse>(
       {
         leagueName: league.name,
         idRequired: league.idProofRequired,
         paymentRequired: league.paymentProofRequired,
         players,
+        teams: teams.map((t) => ({ id: t.id, name: t.name, colorHex: t.colorHex })),
       },
       { headers: PRIVATE }
     );

@@ -1511,7 +1511,7 @@ export async function hasIdentityProof(userId: string | null | undefined): Promi
 export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocuments[]> {
   const players = await PlayerModel.findAll({
     where: { leagueId },
-    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl', 'paymentReceived'],
+    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl', 'paymentReceived', 'teamId'],
     order: [['createdAt', 'ASC']],
   });
   if (players.length === 0) return [];
@@ -1537,6 +1537,7 @@ export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocume
       idSubmittedAt:  owner?.idProofUrl ? (owner.updatedAt?.toISOString() ?? null) : null,
       paymentProofUrl: p.paymentProofUrl || null,
       paymentReceived: p.paymentReceived,
+      teamId:         p.teamId ?? null,
     };
   });
 }

@@ -244,6 +244,8 @@ export interface PlayerDocuments {
    * register, never through the player PATCH a card holder can call.
    */
   paymentReceived: boolean;
+  /** The team this card is in — bought at auction or pre-assigned as an icon. Null while it has none. */
+  teamId: string | null;
 }
 
 /** GET /api/leagues/[id]/identity — the organizer's document register. */
@@ -254,6 +256,8 @@ export interface LeagueDocumentsResponse {
   /** Whether this league makes a payment receipt mandatory for self-registration. */
   paymentRequired: boolean;
   players: PlayerDocuments[];
+  /** Just enough of each team to group the register's team-wise payment lists. */
+  teams: Pick<Team, 'id' | 'name' | 'colorHex'>[];
 }
 
 export interface Match {

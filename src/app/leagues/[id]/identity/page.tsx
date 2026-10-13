@@ -11,16 +11,17 @@
 // `requireLeagueManager`; a 403 here means "you don't run this league", which
 // is worth its own message rather than a redirect.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, ShieldCheck, ShieldAlert, UserX, FileText, Lock, Search,
   Maximize2, Minimize2, ExternalLink, ReceiptIndianRupee,
-  ArrowUpDown, BadgeCheck, Circle, FileDown, IndianRupee, Loader2,
+  ArrowUpDown, BadgeCheck, Circle, Download, ChevronDown, IndianRupee, Loader2,
+  UsersRound, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { downloadPaymentListPdf, partitionByPayment, type PaymentScope } from '@/lib/paymentPdf';
+import { downloadPaymentListPdf, downloadTeamPaymentPdf, partitionByPayment } from '@/lib/paymentPdf';
 import type { LeagueDocumentsResponse, PlayerDocuments } from '@/lib/types';
 import { cloudinaryImage } from '@/lib/utils';
 
@@ -39,6 +40,22 @@ const SORT_LABELS: Record<SortKey, string> = {
   unpaid: 'Unpaid first',
   paid: 'Paid first',
 };
+
+/**
+ * One entry in the Download menu. `build` closes over the register, so the menu
+ * can list every PDF the same way whatever arguments each builder takes.
+ */
+interface DownloadOption {
+  key: string;
+  label: string;
+  hint: string;
+  /** How many names the PDF will carry, shown beside the label. */
+  count: number;
+  icon: LucideIcon;
+  /** Tailwind colour classes for the icon. */
+  tone: string;
+  build: () => Promise<void>;
+}
 
 /** What's open in the viewer — which player, and which of their two documents. */
 interface Viewing {
@@ -165,7 +182,10 @@ export default function LeagueDocumentsPage() {
   const [sort, setSort] = useState<SortKey>('added');
   /** Card ids with a payment toggle in flight, so only that row shows a spinner. */
   const [marking, setMarking] = useState<string[]>([]);
-  const [downloading, setDownloading] = useState<PaymentScope | null>(null);
+  /** `DownloadOption.key` of the PDF being built, so only that row spins. */
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadsOpen, setDownloadsOpen] = useState(false);
+  const downloadsRef = useRef<HTMLDivElement>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [zoomed, setZoomed] = useState(false);
 
@@ -178,6 +198,22 @@ export default function LeagueDocumentsPage() {
   }, [id, router]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!downloadsOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (downloadsRef.current && !downloadsRef.current.contains(e.target as Node)) setDownloadsOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setDownloadsOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [downloadsOpen]);
 
   /** Both switches are the same PATCH on the league, so they share a handler. */
   async function handleToggle(field: 'idProofRequired' | 'paymentProofRequired', next: boolean) {
@@ -234,15 +270,17 @@ export default function LeagueDocumentsPage() {
   }
 
   /**
-   * The chase list, as a PDF. Always built from the whole register rather than
-   * from `shown` — a search box the organizer forgot to clear must not quietly
-   * hand them a short list of who still owes money.
+   * Build one of the menu's PDFs. The menu stays open with that row spinning
+   * until the file is saved, then closes — the same rhythm as the league
+   * page's Share & Export menu.
    */
-  async function handleDownloadList(scope: PaymentScope) {
-    if (!data) return;
-    setDownloading(scope);
+  async function handleDownload(option: DownloadOption) {
+    if (downloading) return;
+    setDownloading(option.key);
     try {
-      await downloadPaymentListPdf(data.leagueName, partitionByPayment(data.players, scope), scope);
+      await option.build();
+      setDownloadsOpen(false);
+      toast.success(`${option.label} downloaded`);
     } catch (err) {
       console.error('Failed to build payment PDF:', err);
       toast.error(err instanceof Error ? err.message : 'Could not build the PDF');
@@ -323,6 +361,64 @@ export default function LeagueDocumentsPage() {
     },
   ];
 
+  // Every list is built from the whole register rather than from `shown` — a
+  // search box the organizer forgot to clear must not quietly hand them a short
+  // list of who still owes money. The menu's footnote says as much.
+  const { leagueName, players, teams } = data;
+  const unpaidCount = total - paidCount;
+  const flatLists: DownloadOption[] = [
+    {
+      key: 'paid', label: 'Paid players', hint: 'Everyone marked paid',
+      count: paidCount, icon: BadgeCheck, tone: 'text-green-600 dark:text-green-400',
+      build: () => downloadPaymentListPdf(leagueName, partitionByPayment(players, 'paid'), 'paid'),
+    },
+    {
+      key: 'unpaid', label: 'Unpaid players', hint: 'Who still owes the entry fee',
+      count: unpaidCount, icon: Circle, tone: 'text-amber-600 dark:text-amber-400',
+      build: () => downloadPaymentListPdf(leagueName, partitionByPayment(players, 'unpaid'), 'unpaid'),
+    },
+  ];
+  const teamLists: DownloadOption[] = [
+    {
+      key: 'team-all', label: 'All players by team', hint: 'Every squad, each player marked paid or unpaid',
+      count: total, icon: UsersRound, tone: 'text-muted-foreground',
+      build: () => downloadTeamPaymentPdf(leagueName, teams, players, 'all'),
+    },
+    {
+      key: 'team-paid', label: 'Paid, by team', hint: 'Settled players under their team',
+      count: paidCount, icon: BadgeCheck, tone: 'text-green-600 dark:text-green-400',
+      build: () => downloadTeamPaymentPdf(leagueName, teams, players, 'paid'),
+    },
+    {
+      key: 'team-unpaid', label: 'Unpaid, by team', hint: 'Who owes, per team — handy for captains',
+      count: unpaidCount, icon: Circle, tone: 'text-amber-600 dark:text-amber-400',
+      build: () => downloadTeamPaymentPdf(leagueName, teams, players, 'unpaid'),
+    },
+  ];
+
+  const renderOption = (option: DownloadOption) => {
+    const Icon = option.icon;
+    return (
+      <button
+        key={option.key}
+        type="button"
+        role="menuitem"
+        className="menu-item"
+        disabled={downloading !== null}
+        onClick={() => handleDownload(option)}
+      >
+        {downloading === option.key
+          ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-muted-foreground" />
+          : <Icon className={`w-3.5 h-3.5 shrink-0 ${option.tone}`} />}
+        <span className="flex-1 min-w-0">
+          <span className="block">{option.label}</span>
+          <span className="block text-[11px] text-muted-foreground truncate">{option.hint}</span>
+        </span>
+        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">{option.count}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in-up">
       <button onClick={() => router.push(`/leagues/${id}`)} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
@@ -397,8 +493,11 @@ export default function LeagueDocumentsPage() {
             </span>
           </div>
 
-          {/* Search, sort, and the two chase lists */}
-          <div className="flex flex-wrap items-center gap-2 mt-3">
+          {/* Search, sort, and the downloads. The row is `relative` so that on a
+              phone — where the Download button can wrap onto a line of its own
+              — the menu spans the row instead of hanging off the button and
+              running past the screen's left edge. */}
+          <div className="relative flex flex-wrap items-center gap-2 mt-3">
             <div className="relative min-w-45 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -421,21 +520,43 @@ export default function LeagueDocumentsPage() {
                 ))}
               </select>
             </div>
-            {(['paid', 'unpaid'] as const).map((scope) => (
+            <div className="static sm:relative" ref={downloadsRef}>
               <button
-                key={scope}
                 type="button"
-                onClick={() => handleDownloadList(scope)}
-                disabled={downloading !== null}
+                onClick={() => setDownloadsOpen((v) => !v)}
                 className="toolbar-btn"
-                title={scope === 'paid' ? 'Download the list of players marked paid' : 'Download the list of players who still owe the entry fee'}
+                aria-expanded={downloadsOpen}
+                aria-haspopup="menu"
               >
-                {downloading === scope
+                {downloading
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <FileDown className="w-3.5 h-3.5" />}
-                {scope === 'paid' ? 'Paid PDF' : 'Unpaid PDF'}
+                  : <Download className="w-3.5 h-3.5" />}
+                Download
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${downloadsOpen ? 'rotate-180' : ''}`} />
               </button>
-            ))}
+              {downloadsOpen && (
+                <div
+                  role="menu"
+                  aria-label="Download payment lists"
+                  className="menu-panel absolute top-full mt-2 left-0 right-0 sm:left-auto sm:w-80 max-h-[70vh] overflow-y-auto p-1.5 z-50"
+                >
+                  <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Payment lists</p>
+                  {flatLists.map(renderOption)}
+                  <div className="my-1.5 h-px bg-border/70" />
+                  <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Team-wise</p>
+                  {teams.length > 0
+                    ? teamLists.map(renderOption)
+                    : (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        Team-wise lists appear once the league has teams.
+                      </p>
+                    )}
+                  <p className="px-3 pt-2 pb-1 mt-1 border-t border-border/70 text-[10px] text-muted-foreground/70">
+                    PDFs list every player — search and sort don&apos;t apply.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <ul className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border/60 mt-4">
