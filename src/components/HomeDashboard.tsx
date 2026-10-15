@@ -15,6 +15,7 @@ import {
 import { Users, Calendar, ArrowUpRight, Plus, Globe, Lock, UserX } from 'lucide-react';
 import type { League } from '@/lib/types';
 import { cloudinaryImage } from '@/lib/utils';
+import RewardsStrip from './rewards/RewardsStrip';
 
 interface LeagueSections {
   created: League[];
@@ -367,6 +368,9 @@ export default function HomeDashboard() {
           New
         </button>
       </div>
+
+      {/* Streak, badges and the nearest one to earn — from the nav's check-in */}
+      <RewardsStrip />
 
       {/* Loading */}
       {loading && (

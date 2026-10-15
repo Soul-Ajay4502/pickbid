@@ -23,6 +23,7 @@ export default function robots(): MetadataRoute.Robots {
         // it is rewritten to for members.
         '/dashboard',
         '/profile',
+        '/rewards',
         '/login',
 
         // League creation and management.

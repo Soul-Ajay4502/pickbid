@@ -7,9 +7,11 @@ import { usePathname } from 'next/navigation';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import type { Session } from 'next-auth';
 import {
-  ChevronDown, Compass, Gavel, LayoutGrid, LogOut, Menu, Moon, Plus, Sun, Trophy, UserRound, X,
+  Award, ChevronDown, Compass, Gavel, LayoutGrid, LogOut, Menu, Moon, Plus, Sun, Trophy, UserRound, X,
 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import RewardsWatcher from './rewards/RewardsWatcher';
+import StreakChip from './rewards/StreakChip';
 import { isImmersiveLeaguePath } from '@/lib/leagueChrome';
 
 type NavItem = {
@@ -34,6 +36,10 @@ const MY_LEAGUES: NavItem = {
 
 const PROFILE: NavItem = {
   href: '/profile', label: 'Profile', icon: UserRound, isActive: (p) => p === '/profile',
+};
+
+const REWARDS: NavItem = {
+  href: '/rewards', label: 'Rewards', icon: Award, isActive: (p) => p === '/rewards',
 };
 
 // Whether the page has scrolled under the header. The snapshot is a boolean,
@@ -165,6 +171,15 @@ function SiteHeader({ pathname }: { pathname: string }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            {/* Rewards: the watcher sends the throttled check-in, and the chip
+                shows the streak it returns. The chip leads this right-aligned
+                cluster so that appearing after the check-in pushes nothing
+                already on screen. Both live here, not in the root layout,
+                because this header is already absent from the immersive
+                screens — so is the check-in. */}
+            {user && <RewardsWatcher userId={user.id} />}
+            {user && <StreakChip active={REWARDS.isActive(pathname)} />}
+
             {/* Both icons are rendered and CSS picks one off the `dark` class,
                 which the inline script in the root layout sets before paint —
                 reading `theme` here would show the wrong icon to light-mode
@@ -255,6 +270,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
                         <div className="my-1 h-px bg-border" />
                         {panelLink(MY_LEAGUES)}
                         {panelLink(PROFILE)}
+                        {panelLink(REWARDS)}
                       </>
                     )}
 

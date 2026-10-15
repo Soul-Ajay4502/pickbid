@@ -58,6 +58,14 @@ shared with a single link. It runs in any modern browser with no app install.
 - **Participation certificates** — organizers release certificates for a league
   in one click, and every player downloads their own as a print-ready PNG or PDF
   from their profile.
+- **Badges and streaks** — every account has a trophy cabinet of 100 badges,
+  most in bronze, silver and gold, in six groups: career (joining leagues,
+  teammates, playing for different organizers), auction (being bought, by role,
+  record and bargain buys), on the field (wins, big totals, ties, rivalries,
+  points tables, seasons of the year), organizer (creating, filling, staffing,
+  sponsoring, auctioning and completing leagues), streaks (active weeks,
+  auctions picked in a row, wins in a row) and milestones. Badges are private
+  to their owner and never appear on cards or spectator screens.
 - **Auction Wrapped** — a shareable end-of-auction recap, plus holographic
   pack-opening squad reveals and a sponsor marquee display board.
 - **One-link sharing** — every league gets a link; make it public to list it in

@@ -120,5 +120,5 @@ export const config = {
   // then carves out the public exceptions (discover, watch). Static assets, the
   // Auth.js API and `/leaderboard` are never matched, so they stay public.
   // `/` is matched purely for the signed-in dashboard rewrite, never to gate it.
-  matcher: ['/', '/leagues/:path*', '/profile/:path*', '/admin', '/admin/:path*'],
+  matcher: ['/', '/leagues/:path*', '/profile/:path*', '/rewards', '/admin', '/admin/:path*'],
 };

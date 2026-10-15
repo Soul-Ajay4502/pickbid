@@ -12,6 +12,7 @@ import PlayerCard from '@/components/PlayerCard';
 import { sanitizeFolder, uploadFile, checkImageFile, MAX_UPLOAD_LABEL } from '@/lib/utils';
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates';
 import { toast } from 'sonner';
+import { requestRewardsCheck } from '@/components/rewards/rewardsStore';
 import type { Player, PlayerRole } from '@/lib/types';
 import { ArrowLeft, Upload, X, Trophy, Palette, ChevronRight, ListOrdered, ShieldCheck, ReceiptIndianRupee, Eye, Trash2 } from 'lucide-react';
 
@@ -120,6 +121,8 @@ export default function NewLeaguePage() {
 
       const league = await res.json();
       toast.success('League created!');
+      // A first league is the Founder badge — check in now so it lands on the next screen
+      requestRewardsCheck();
       router.push(`/leagues/${league.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong');

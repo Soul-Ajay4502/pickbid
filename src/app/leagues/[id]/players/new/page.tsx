@@ -9,6 +9,7 @@ import { generateToken, sanitizeFolder, uploadFile } from '@/lib/utils';
 import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
 import { toast } from 'sonner';
 import { useLeagueScroller } from '@/components/league/LeagueChrome';
+import { requestRewardsCheck } from '@/components/rewards/rewardsStore';
 import { ArrowLeft, Check, Sparkles, UserPlus, Users, ShieldCheck } from 'lucide-react';
 
 /** Lets the header's action button submit the form it sits outside of. */
@@ -131,8 +132,12 @@ function NewPlayerPageInner() {
         setSearchSelection(null);
         setFormKey((k) => k + 1);
         getScroller().scrollTo({ top: 0, behavior: 'smooth' });
+        // The card that fills the league is the organizer's Full House badge
+        if (league && league.players.length + 1 === league.totalPlayers) requestRewardsCheck();
       } else {
         toast.success('Player card added!');
+        // Their own card may be a Debut or a Journeyman tier — check in now
+        requestRewardsCheck();
         router.push(`/leagues/${id}`);
       }
     } catch (err) {

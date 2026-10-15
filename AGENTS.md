@@ -229,6 +229,31 @@ squad reveal. `NavBar` and `LeagueChrome` both read it so they can't disagree,
 and `LeagueChrome` returns early on a match: that is what keeps the rail's fetch
 off `/watch`, which a whole hall loads at once.
 
+**Badges are derived lazily, never awarded from write paths.**
+`evaluateRewards` ([rewards.ts](src/lib/rewards.ts)) recomputes a user's
+metrics in one query on their own requests — the nav's throttled check-in and
+the `/rewards` page — and inserts every qualifying tier with `ON CONFLICT DO
+NOTHING`. The rows `RETURNING` hands back are the just-unlocked set: that is
+what makes a celebration fire exactly once, even across tabs, so don't replace
+it with a read-then-insert. Don't add award calls to the sale, match or card
+handlers either; the next check-in counts them, and the auction's hot path
+stays untouched. A new badge on an existing metric is one entry in
+[badges.ts](src/lib/badges.ts) and needs no migration. A new SQL metric is a
+key on `StoredRewardMetrics`, the same key in `STORED_METRICS` (the compiler
+holds those two together) and a column aliased to exactly that name in
+`getRewardMetrics`; keep it starting from this user's cards or leagues so the
+query stays per-user. `milestone` badges count other badges, so
+`evaluateRewards` awards them in a second pass — never give one a metric from
+the SQL. Badge ids are
+persisted, so never rename or reuse one, and never delete `user_badges` rows —
+earned stays earned. Rewards are private to their owner: like the documents
+above, they never go on `PlayerCard` or any spectator surface.
+
+The check-in rides on `NavBar`, so it inherits the nav's absence from the
+immersive screens — keep it off `/watch`. `/rewards` writes while it renders,
+which is safe only because its `loading.tsx` stops a `<Link>` prefetch at the
+loading boundary; don't remove that file.
+
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
 `/sponsors` and the OG image routes are public today. The proxy is

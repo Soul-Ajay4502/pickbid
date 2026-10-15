@@ -3,9 +3,10 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
+import { EARLY_ADOPTER_CUTOFF } from './badges';
 import { playerNameKey } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
-import type { IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import type { BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1580,6 +1581,517 @@ export async function cleanupImages(urls: Array<string | null | undefined>): Pro
         await deleteFromCloudinary(url);
       }
     })
+  );
+}
+
+// ── Rewards: streaks and badges ───────────────────────────────────────────────
+// Badges are derived from tables the app already keeps, so nothing on a hot
+// path (a sale, a match result) has to remember to award one. These three
+// functions are the whole database side; `rewards.ts` composes them with the
+// catalog in `badges.ts`.
+
+/** Weeks start on Monday in this zone — the app's players are in India. */
+const STREAK_TIME_ZONE = 'Asia/Kolkata';
+/** Bits of week history kept in `user_streaks.history`. Must stay under 53. */
+const STREAK_HISTORY_WEEKS = 52;
+
+export interface StreakState {
+  current: number;
+  longest: number;
+  /** Week bitmask, bit 0 = this week. */
+  history: number;
+}
+
+/**
+ * Count the current week towards the user's weekly streak, and return it.
+ *
+ * One statement, whatever the history: a visit in the week right after the last
+ * counted one extends the run, a longer gap restarts it at 1, and `history`
+ * shifts left by the gap with bit 0 set. Bits are masked *before* the shift so
+ * nothing ever reaches the sign bit. Repeat visits within a week match the
+ * `WHERE` and write nothing, which is why this is safe to call on every
+ * check-in.
+ *
+ * When that no-op happens the upsert returns no row, so the fallback branch
+ * reads the stored one. Its snapshot predates any concurrent insert, which is
+ * the one case that can come back empty — and a first-ever visit is a
+ * one-week streak anyway.
+ */
+export async function recordWeeklyActivity(userId: string): Promise<StreakState> {
+  const gap = '((EXCLUDED.last_period - s.last_period) / 7)';
+  const rows = await sequelize.query<{ current_count: number; longest_count: number; history: string }>(
+    `WITH this_week AS (
+       SELECT date_trunc('week', now() AT TIME ZONE :tz)::date AS d
+     ),
+     counted AS (
+       INSERT INTO user_streaks AS s (user_id, kind, current_count, longest_count, last_period, history, updated_at)
+       SELECT :userId, 'weekly', 1, 1, d, 1, now() FROM this_week
+       ON CONFLICT (user_id, kind) DO UPDATE SET
+         current_count = CASE WHEN s.last_period = EXCLUDED.last_period - 7 THEN s.current_count + 1 ELSE 1 END,
+         longest_count = GREATEST(
+           s.longest_count,
+           CASE WHEN s.last_period = EXCLUDED.last_period - 7 THEN s.current_count + 1 ELSE 1 END
+         ),
+         history = CASE
+           WHEN ${gap} >= ${STREAK_HISTORY_WEEKS} THEN 1
+           ELSE ((s.history & ((1::bigint << (${STREAK_HISTORY_WEEKS} - ${gap})) - 1)) << ${gap}) | 1
+         END,
+         last_period = EXCLUDED.last_period,
+         updated_at  = now()
+       WHERE s.last_period < EXCLUDED.last_period
+       RETURNING s.current_count, s.longest_count, s.history
+     )
+     SELECT current_count, longest_count, history::text AS history FROM counted
+     UNION ALL
+     SELECT current_count, longest_count, history::text AS history
+       FROM user_streaks
+      WHERE user_id = :userId AND kind = 'weekly' AND NOT EXISTS (SELECT 1 FROM counted)`,
+    { replacements: { userId, tz: STREAK_TIME_ZONE }, type: QueryTypes.SELECT }
+  );
+  const row = rows[0];
+  if (!row) return { current: 1, longest: 1, history: 1 };
+  return {
+    current: Number(row.current_count),
+    longest: Number(row.longest_count),
+    history: Number(row.history),
+  };
+}
+
+/**
+ * Every metric `getRewardMetrics` reads. A `Record` rather than a list so the
+ * compiler rejects a `StoredRewardMetrics` key that the query forgot — each one
+ * must also be a column alias in the SELECT below, spelled the same.
+ */
+const STORED_METRICS: Record<keyof StoredRewardMetrics, true> = {
+  cards: true, profileCompleted: true, idProofOnFile: true, uploadedPhotos: true,
+  feesConfirmed: true, leaguesJoined: true, clubLoyalty: true, earlyBirds: true,
+  playerManager: true, timesBought: true, bestPurseShare: true, recordBuys: true,
+  steals: true, iconPicks: true, matchesPlayed: true, matchWins: true, tableTops: true,
+  invincibles: true, certificates: true,
+  contactOnFile: true, organizersPlayedFor: true, biggestLeagueJoined: true,
+  publicLeaguesJoined: true, lastManIn: true, earlyCards: true, partnerLeagues: true,
+  teammates: true, receiptsAttached: true,
+  franchiseBuys: true, premiumBuys: true, unsoldCount: true, paceBuys: true, spinBuys: true,
+  keeperBuys: true, batterBuys: true, allRounderBuys: true, bowlerBuys: true, leftHandBuys: true,
+  broadcastBuys: true,
+  bestTeamScore: true, bigWins: true, ties: true, runnerUps: true, weekendMatches: true,
+  monsoonMatches: true, winterMatches: true, summerMatches: true, rivalMeetings: true,
+  teamPoints: true,
+  leaguesCreated: true, publicLeagues: true, leaguesWithLogo: true, proofLeagues: true,
+  fullHouses: true, biggestLeague: true, teamsBuilt: true, officialsAdded: true,
+  sponsorsAdded: true, coOrganizersAdded: true, coOrganizing: true, auctionsRun: true,
+  playersSold: true, soldOuts: true, feesConfirmedForLeagues: true, ledgersPublished: true,
+  resultsRecorded: true, certificatesReleased: true,
+  closedRegistrations: true, pickPlans: true, templatesUsed: true, rapidFills: true,
+  fullStrengths: true, fixturesScheduled: true, seasonsCompleted: true, distinctPlayers: true,
+  returningPlayers: true, maxSponsorsInLeague: true, iconsNamed: true, broadcasts: true,
+  biggestAuction: true, allPaidLeagues: true, staffedLeagues: true, leagueAgeDays: true,
+};
+
+/**
+ * Everything a badge can be earned on, for one user, in one round trip.
+ *
+ * Every sub-select starts from this user — their cards (`players.user_id`) or
+ * their leagues (`leagues.creator_id`) — and reaches the rest through
+ * `league_id` indexes, so the cost tracks this user's history rather than the
+ * platform's. The definitions match the rest of the app: a *buy* is a non-icon
+ * card on a team at a price (the bid leaderboard's rule), a match counts once it
+ * has a score or a winner, and the points table is `calcStandings`' — 2 for a
+ * win, 1 each for a tie or no-result.
+ *
+ * Scores are free text an organizer types ("152/6", "152/6 (20)"), so the
+ * scoring badges read only the leading run total and skip anything that has
+ * none. A match's date is its `match_date`, or the day it was recorded.
+ *
+ * Three metrics come back raw for `rewards.ts` to measure:
+ * - `pickSequence` — one character per auction held in a league this user had
+ *   a card in, '1' when they were picked (bought or icon), oldest first. League
+ *   creation date stands in for the auction date, which isn't stored.
+ * - `winSequences` — one run of results per team this user played for, '1' for
+ *   a win, in match order.
+ * - `months` — every 'YYYY-MM' in which a league this user played in started.
+ */
+export async function getRewardMetrics(
+  userId: string
+): Promise<{ metrics: StoredRewardMetrics; pickSequence: string; winSequences: string[]; months: string[] }> {
+  const PLAYED = `(m.winner_team_id IS NOT NULL
+                   OR nullif(m.team1_score, '') IS NOT NULL
+                   OR nullif(m.team2_score, '') IS NOT NULL)`;
+  const [row] = await sequelize.query<Record<string, number | string | null>>(
+    `WITH me AS (
+       SELECT profile_completed, id_proof_url, contact_number FROM users WHERE id = :userId
+     ),
+     cards AS (
+       SELECT p.id,
+              p.league_id,
+              p.team_id,
+              p.is_icon,
+              p.is_unsold,
+              p.sold_price,
+              p.photo,
+              p.role,
+              p.batting_type,
+              p.bowling_type,
+              p.is_wicket_keeper,
+              p.payment_received,
+              p.payment_proof_url,
+              p.created_at,
+              (p.team_id IS NOT NULL AND p.sold_price > 0 AND NOT p.is_icon) AS bought,
+              CASE WHEN p.sold_price > 0 AND t.budget > 0 THEN p.sold_price::float8 / t.budget END AS purse_share,
+              l.creator_id,
+              l.total_players,
+              l.is_public AS league_public,
+              l.created_at AS league_created_at,
+              l.certificates_released_at IS NOT NULL AS certified
+         FROM players p
+         JOIN leagues l ON l.id = p.league_id
+         LEFT JOIN teams t ON t.id = p.team_id
+        WHERE p.user_id = :userId
+     ),
+     auctions AS (
+       SELECT c.league_id,
+              bool_or(c.bought OR (c.is_icon AND c.team_id IS NOT NULL)) AS picked,
+              min(c.league_created_at) AS held_at
+         FROM cards c
+        WHERE EXISTS (
+          SELECT 1 FROM players s
+           WHERE s.league_id = c.league_id AND s.team_id IS NOT NULL AND s.sold_price > 0
+        )
+        GROUP BY c.league_id
+     ),
+     -- Played matches in the leagues where this user is on a team
+     results AS (
+       SELECT m.id, m.league_id, m.team1_id, m.team2_id, m.winner_team_id, m.match_date, m.created_at,
+              substring(m.team1_score FROM '^[[:space:]]*([0-9]+)')::int AS team1_runs,
+              substring(m.team2_score FROM '^[[:space:]]*([0-9]+)')::int AS team2_runs
+         FROM matches m
+        WHERE m.league_id IN (SELECT league_id FROM cards WHERE team_id IS NOT NULL)
+          AND ${PLAYED}
+     ),
+     my_results AS (
+       SELECT c.team_id AS my_team, r.id, r.league_id, r.winner_team_id, r.match_date, r.created_at,
+              CASE WHEN c.team_id = r.team1_id THEN r.team2_id ELSE r.team1_id END AS opponent,
+              CASE WHEN c.team_id = r.team1_id THEN r.team1_runs ELSE r.team2_runs END AS my_runs,
+              CASE WHEN c.team_id = r.team1_id THEN r.team2_runs ELSE r.team1_runs END AS their_runs,
+              coalesce(r.match_date, r.created_at::date) AS played_on
+         FROM cards c
+         JOIN results r ON r.league_id = c.league_id AND c.team_id IN (r.team1_id, r.team2_id)
+     ),
+     -- Every team's row of the points table, in those leagues
+     standings AS (
+       SELECT t.league_id,
+              t.id AS team_id,
+              count(*) AS played,
+              count(*) FILTER (WHERE r.winner_team_id = t.id) AS won,
+              sum(CASE WHEN r.winner_team_id = t.id THEN 2 WHEN r.winner_team_id IS NULL THEN 1 ELSE 0 END) AS points
+         FROM teams t
+         JOIN results r ON r.league_id = t.league_id AND t.id IN (r.team1_id, r.team2_id)
+        GROUP BY t.league_id, t.id
+     ),
+     owned AS (
+       SELECT l.id, l.total_players, l.is_public, l.logo_url, l.id_proof_required,
+              l.payment_proof_required, l.certificates_released_at, l.registration_closed,
+              l.pick_preference, l.template_id, l.created_at,
+              (SELECT count(*) FROM players p WHERE p.league_id = l.id) AS registered
+         FROM leagues l
+        WHERE l.creator_id = :userId
+     )
+     SELECT
+       -- As a player
+       (SELECT count(*) FROM cards)::int AS "cards",
+       (SELECT profile_completed::int FROM me) AS "profileCompleted",
+       (SELECT (coalesce(id_proof_url, '') <> '')::int FROM me) AS "idProofOnFile",
+       (SELECT count(*) FROM cards WHERE photo LIKE 'https://res.cloudinary.com/%')::int AS "uploadedPhotos",
+       (SELECT count(*) FROM cards WHERE payment_received)::int AS "feesConfirmed",
+       (SELECT count(DISTINCT league_id) FROM cards)::int AS "leaguesJoined",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT count(DISTINCT league_id) AS n
+                  FROM cards WHERE creator_id <> :userId GROUP BY creator_id) per_organizer)::int AS "clubLoyalty",
+       (SELECT count(DISTINCT c.league_id)
+          FROM cards c
+         WHERE c.creator_id <> :userId
+           AND (SELECT count(*) FROM players o
+                 WHERE o.league_id = c.league_id AND o.created_at < c.created_at) < 3)::int AS "earlyBirds",
+       (SELECT count(DISTINCT c.league_id)
+          FROM cards c
+         WHERE c.creator_id = :userId
+            OR EXISTS (SELECT 1 FROM league_co_organizers co
+                        WHERE co.league_id = c.league_id AND co.user_id = :userId))::int AS "playerManager",
+       (SELECT count(*) FROM cards WHERE bought)::int AS "timesBought",
+       (SELECT coalesce(max(purse_share), 0) FROM cards WHERE bought)::float8 AS "bestPurseShare",
+       (SELECT count(DISTINCT c.league_id)
+          FROM cards c
+         WHERE c.bought
+           AND c.sold_price = (SELECT max(s.sold_price) FROM players s
+                                WHERE s.league_id = c.league_id AND s.team_id IS NOT NULL
+                                  AND s.sold_price > 0 AND NOT s.is_icon))::int AS "recordBuys",
+       (SELECT count(*) FROM cards WHERE bought AND purse_share <= 0.05)::int AS "steals",
+       (SELECT count(*) FROM cards WHERE is_icon)::int AS "iconPicks",
+       (SELECT count(*) FROM my_results)::int AS "matchesPlayed",
+       (SELECT count(*) FROM my_results WHERE winner_team_id = my_team)::int AS "matchWins",
+       (SELECT count(DISTINCT s.league_id)
+          FROM standings s
+         WHERE s.team_id IN (SELECT team_id FROM cards)
+           AND s.points = (SELECT max(x.points) FROM standings x WHERE x.league_id = s.league_id)
+           AND (SELECT count(*) FROM results r WHERE r.league_id = s.league_id) >= 3)::int AS "tableTops",
+       (SELECT count(DISTINCT s.league_id)
+          FROM standings s
+         WHERE s.team_id IN (SELECT team_id FROM cards)
+           AND s.played >= 3 AND s.won = s.played)::int AS "invincibles",
+       (SELECT count(DISTINCT league_id) FROM cards WHERE certified)::int AS "certificates",
+       (SELECT (coalesce(contact_number, '') <> '')::int FROM me) AS "contactOnFile",
+       (SELECT count(DISTINCT creator_id) FROM cards WHERE creator_id <> :userId)::int AS "organizersPlayedFor",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT DISTINCT c.league_id,
+                       (SELECT count(*) FROM players p WHERE p.league_id = c.league_id) AS n
+                  FROM cards c) joined)::int AS "biggestLeagueJoined",
+       (SELECT count(DISTINCT league_id) FROM cards WHERE league_public)::int AS "publicLeaguesJoined",
+       (SELECT count(DISTINCT c.league_id)
+          FROM cards c
+         WHERE c.total_players > 0
+           AND 1 + (SELECT count(*) FROM players o
+                     WHERE o.league_id = c.league_id
+                       AND (o.created_at < c.created_at
+                            OR (o.created_at = c.created_at AND o.id < c.id))) = c.total_players)::int AS "lastManIn",
+       (SELECT count(*) FROM cards WHERE created_at < :earlyCutoff)::int AS "earlyCards",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT count(DISTINCT c.league_id) AS n
+                  FROM cards c
+                  JOIN players o ON o.team_id = c.team_id AND o.user_id IS NOT NULL AND o.user_id <> :userId
+                 GROUP BY o.user_id) partners)::int AS "partnerLeagues",
+       (SELECT count(DISTINCT o.user_id)
+          FROM cards c
+          JOIN players o ON o.team_id = c.team_id AND o.user_id IS NOT NULL AND o.user_id <> :userId)::int AS "teammates",
+       (SELECT count(*) FROM cards WHERE coalesce(payment_proof_url, '') <> '')::int AS "receiptsAttached",
+
+       -- At auction
+       (SELECT count(*)
+          FROM cards c
+         WHERE c.bought
+           AND c.sold_price = (SELECT max(s.sold_price) FROM players s
+                                WHERE s.team_id = c.team_id AND s.sold_price > 0 AND NOT s.is_icon))::int AS "franchiseBuys",
+       (SELECT count(*)
+          FROM cards c
+         WHERE c.bought
+           AND c.sold_price > (SELECT avg(s.sold_price) FROM players s
+                                WHERE s.league_id = c.league_id AND s.team_id IS NOT NULL
+                                  AND s.sold_price > 0 AND NOT s.is_icon))::int AS "premiumBuys",
+       (SELECT count(*) FROM cards WHERE is_unsold)::int AS "unsoldCount",
+       (SELECT count(*) FROM cards
+         WHERE bought AND bowling_type IN ('Right-Arm Fast', 'Right-Arm Medium', 'Left-Arm Fast', 'Left-Arm Medium'))::int AS "paceBuys",
+       (SELECT count(*) FROM cards
+         WHERE bought AND bowling_type IN ('Right-Arm Off-Spin', 'Right-Arm Leg-Spin', 'Left-Arm Spin'))::int AS "spinBuys",
+       (SELECT count(*) FROM cards WHERE bought AND (is_wicket_keeper OR role = 'Wicket-Keeper Batter'))::int AS "keeperBuys",
+       (SELECT count(*) FROM cards WHERE bought AND role = 'Batter')::int AS "batterBuys",
+       (SELECT count(*) FROM cards WHERE bought AND role = 'All-Rounder')::int AS "allRounderBuys",
+       (SELECT count(*) FROM cards WHERE bought AND role = 'Bowler')::int AS "bowlerBuys",
+       (SELECT count(*) FROM cards WHERE bought AND batting_type = 'Left-Hand Bat')::int AS "leftHandBuys",
+       (SELECT count(*)
+          FROM cards c
+         WHERE c.bought AND EXISTS (SELECT 1 FROM auction_live a WHERE a.league_id = c.league_id))::int AS "broadcastBuys",
+
+       -- On the field
+       (SELECT coalesce(max(my_runs), 0) FROM my_results)::int AS "bestTeamScore",
+       (SELECT count(*) FROM my_results
+         WHERE winner_team_id = my_team AND my_runs - their_runs >= 50)::int AS "bigWins",
+       (SELECT count(*) FROM my_results
+         WHERE winner_team_id IS NULL AND my_runs IS NOT NULL AND my_runs = their_runs)::int AS "ties",
+       (SELECT count(DISTINCT s.league_id)
+          FROM standings s
+         WHERE s.team_id IN (SELECT team_id FROM cards)
+           AND (SELECT count(*) FROM results r WHERE r.league_id = s.league_id) >= 3
+           AND (SELECT count(*) FROM standings x WHERE x.league_id = s.league_id AND x.points > s.points) = 1
+           AND (SELECT count(*) FROM standings x WHERE x.league_id = s.league_id AND x.points = s.points) = 1)::int AS "runnerUps",
+       (SELECT count(*) FROM my_results WHERE extract(isodow FROM played_on) IN (6, 7))::int AS "weekendMatches",
+       (SELECT count(*) FROM my_results WHERE extract(month FROM played_on) IN (6, 7, 8, 9))::int AS "monsoonMatches",
+       (SELECT count(*) FROM my_results WHERE extract(month FROM played_on) IN (11, 12, 1, 2))::int AS "winterMatches",
+       (SELECT count(*) FROM my_results WHERE extract(month FROM played_on) IN (3, 4, 5))::int AS "summerMatches",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT count(*) AS n FROM my_results GROUP BY my_team, opponent) rivals)::int AS "rivalMeetings",
+       (SELECT coalesce(sum(CASE WHEN winner_team_id = my_team THEN 2 WHEN winner_team_id IS NULL THEN 1 ELSE 0 END), 0)
+          FROM my_results)::int AS "teamPoints",
+
+       -- As an organizer
+       (SELECT count(*) FROM owned)::int AS "leaguesCreated",
+       (SELECT count(*) FROM owned WHERE is_public)::int AS "publicLeagues",
+       (SELECT count(*) FROM owned WHERE logo_url <> '')::int AS "leaguesWithLogo",
+       (SELECT count(*) FROM owned WHERE id_proof_required OR payment_proof_required)::int AS "proofLeagues",
+       (SELECT count(*) FROM owned WHERE total_players > 0 AND registered >= total_players)::int AS "fullHouses",
+       (SELECT coalesce(max(registered), 0) FROM owned)::int AS "biggestLeague",
+       (SELECT count(*) FROM teams x JOIN owned o ON o.id = x.league_id)::int AS "teamsBuilt",
+       (SELECT count(*) FROM team_officials x JOIN owned o ON o.id = x.league_id)::int AS "officialsAdded",
+       (SELECT count(*) FROM sponsors x JOIN owned o ON o.id = x.league_id)::int AS "sponsorsAdded",
+       (SELECT count(*) FROM league_co_organizers x JOIN owned o ON o.id = x.league_id)::int AS "coOrganizersAdded",
+       (SELECT count(*) FROM league_co_organizers WHERE user_id = :userId)::int AS "coOrganizing",
+       (SELECT count(*)
+          FROM owned o
+         WHERE EXISTS (SELECT 1 FROM players p
+                        WHERE p.league_id = o.id AND p.team_id IS NOT NULL AND p.sold_price > 0))::int AS "auctionsRun",
+       (SELECT count(*)
+          FROM players p JOIN owned o ON o.id = p.league_id
+         WHERE p.team_id IS NOT NULL AND p.sold_price > 0 AND NOT p.is_icon)::int AS "playersSold",
+       (SELECT count(*)
+          FROM owned o
+         WHERE (SELECT count(*) FROM players p WHERE p.league_id = o.id AND NOT p.is_icon) >= 8
+           AND NOT EXISTS (SELECT 1 FROM players p
+                            WHERE p.league_id = o.id AND NOT p.is_icon
+                              AND NOT (p.team_id IS NOT NULL AND p.sold_price > 0)))::int AS "soldOuts",
+       (SELECT count(*)
+          FROM players p JOIN owned o ON o.id = p.league_id
+         WHERE p.payment_received)::int AS "feesConfirmedForLeagues",
+       (SELECT count(*)
+          FROM league_ledgers x JOIN owned o ON o.id = x.league_id
+         WHERE x.published)::int AS "ledgersPublished",
+       (SELECT count(*) FROM matches m JOIN owned o ON o.id = m.league_id WHERE ${PLAYED})::int AS "resultsRecorded",
+       (SELECT count(*) FROM owned WHERE certificates_released_at IS NOT NULL)::int AS "certificatesReleased",
+       (SELECT count(*) FROM owned WHERE registration_closed)::int AS "closedRegistrations",
+       (SELECT count(*) FROM owned WHERE pick_preference IS NOT NULL)::int AS "pickPlans",
+       (SELECT count(DISTINCT template_id) FROM owned)::int AS "templatesUsed",
+       (SELECT count(*)
+          FROM owned o
+         WHERE o.total_players > 0
+           AND (SELECT count(*) FROM players p
+                 WHERE p.league_id = o.id
+                   AND p.created_at <= o.created_at + interval '7 days') >= o.total_players)::int AS "rapidFills",
+       (SELECT count(*)
+          FROM owned o
+         WHERE (SELECT count(*) FROM teams t WHERE t.league_id = o.id) >= 2
+           AND NOT EXISTS (SELECT 1 FROM teams t
+                            WHERE t.league_id = o.id
+                              AND (SELECT count(*) FROM players p WHERE p.team_id = t.id) < t.max_players))::int AS "fullStrengths",
+       (SELECT count(*) FROM matches m JOIN owned o ON o.id = m.league_id
+         WHERE m.match_date IS NOT NULL)::int AS "fixturesScheduled",
+       (SELECT count(*)
+          FROM owned o
+         WHERE (SELECT count(*) FROM matches m WHERE m.league_id = o.id) >= 5
+           AND NOT EXISTS (SELECT 1 FROM matches m WHERE m.league_id = o.id AND NOT ${PLAYED}))::int AS "seasonsCompleted",
+       (SELECT count(DISTINCT p.user_id) FROM players p JOIN owned o ON o.id = p.league_id
+         WHERE p.user_id IS NOT NULL AND p.user_id <> :userId)::int AS "distinctPlayers",
+       (SELECT count(*)
+          FROM (SELECT p.user_id FROM players p JOIN owned o ON o.id = p.league_id
+                 WHERE p.user_id IS NOT NULL AND p.user_id <> :userId
+                 GROUP BY p.user_id
+                HAVING count(DISTINCT p.league_id) >= 2) regulars)::int AS "returningPlayers",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT count(*) AS n FROM sponsors x JOIN owned o ON o.id = x.league_id
+                 GROUP BY x.league_id) per_league)::int AS "maxSponsorsInLeague",
+       (SELECT count(*) FROM players p JOIN owned o ON o.id = p.league_id WHERE p.is_icon)::int AS "iconsNamed",
+       (SELECT count(*) FROM auction_live a JOIN owned o ON o.id = a.league_id)::int AS "broadcasts",
+       (SELECT coalesce(max(n), 0)
+          FROM (SELECT count(*) AS n FROM players p JOIN owned o ON o.id = p.league_id
+                 WHERE p.team_id IS NOT NULL AND p.sold_price > 0 AND NOT p.is_icon
+                 GROUP BY p.league_id) per_auction)::int AS "biggestAuction",
+       (SELECT count(*)
+          FROM owned o
+         WHERE o.registered >= 8
+           AND NOT EXISTS (SELECT 1 FROM players p WHERE p.league_id = o.id AND NOT p.payment_received))::int AS "allPaidLeagues",
+       (SELECT count(*)
+          FROM owned o
+         WHERE (SELECT count(*) FROM teams t WHERE t.league_id = o.id) >= 2
+           AND NOT EXISTS (SELECT 1 FROM teams t
+                            WHERE t.league_id = o.id
+                              AND NOT EXISTS (SELECT 1 FROM team_officials x WHERE x.team_id = t.id)))::int AS "staffedLeagues",
+       (SELECT coalesce(max(extract(epoch FROM now() - created_at) / 86400), 0) FROM owned)::int AS "leagueAgeDays",
+
+       -- Sequences, measured in rewards.ts
+       (SELECT coalesce(string_agg(CASE WHEN picked THEN '1' ELSE '0' END, '' ORDER BY held_at, league_id), '')
+          FROM auctions) AS "pickSequence",
+       (SELECT coalesce(string_agg(seq, '|'), '')
+          FROM (SELECT string_agg(CASE WHEN winner_team_id = my_team THEN '1' ELSE '0' END, ''
+                                  ORDER BY match_date NULLS LAST, created_at, id) AS seq
+                  FROM my_results
+                 GROUP BY my_team) per_team) AS "winSequences",
+       (SELECT coalesce(string_agg(DISTINCT to_char(league_created_at, 'YYYY-MM'), ','), '')
+          FROM cards) AS "months"`,
+    { replacements: { userId, earlyCutoff: EARLY_ADOPTER_CUTOFF }, type: QueryTypes.SELECT }
+  );
+
+  const metrics = Object.fromEntries(
+    Object.keys(STORED_METRICS).map((key) => [key, Number(row?.[key] ?? 0)])
+  ) as unknown as StoredRewardMetrics;
+  const list = (key: string, separator: string) => {
+    const value = String(row?.[key] ?? '');
+    return value ? value.split(separator) : [];
+  };
+  return {
+    metrics,
+    pickSequence: String(row?.pickSequence ?? ''),
+    winSequences: list('winSequences', '|'),
+    months: list('months', ','),
+  };
+}
+
+/**
+ * Award badge tiers, and return the user's whole cabinet.
+ *
+ * Offers every tier the user qualifies for; `ON CONFLICT DO NOTHING` drops the
+ * ones already held without writing anything, so `RETURNING` yields exactly the
+ * tiers that are new *as of this statement*. That is the "just unlocked" set —
+ * two concurrent check-ins can't both see the same tier as new, so a badge is
+ * celebrated once. The second branch adds the rows that already existed; the
+ * statement's snapshot can't see the ones it just inserted, so nothing is
+ * listed twice.
+ */
+export async function awardBadges(
+  userId: string,
+  candidates: { badgeId: string; tier: BadgeTier }[]
+): Promise<{ earned: EarnedBadge[]; unlocked: EarnedBadge[] }> {
+  type Row = { badge_id: string; tier: number; earned_at: Date; fresh: boolean };
+  const rows = candidates.length
+    ? await sequelize.query<Row>(
+        `WITH awarded AS (
+           INSERT INTO user_badges (user_id, badge_id, tier, earned_at)
+           SELECT :userId, c.badge_id, c.tier, now()
+             FROM unnest(ARRAY[:badgeIds]::varchar[], ARRAY[:tiers]::smallint[]) AS c(badge_id, tier)
+           ON CONFLICT (user_id, badge_id, tier) DO NOTHING
+           RETURNING badge_id, tier, earned_at
+         )
+         SELECT badge_id, tier, earned_at, true AS fresh FROM awarded
+         UNION ALL
+         SELECT badge_id, tier, earned_at, false AS fresh FROM user_badges WHERE user_id = :userId
+         ORDER BY earned_at`,
+        {
+          replacements: {
+            userId,
+            badgeIds: candidates.map((c) => c.badgeId),
+            tiers: candidates.map((c) => c.tier),
+          },
+          type: QueryTypes.SELECT,
+        }
+      )
+    : await sequelize.query<Row>(
+        `SELECT badge_id, tier, earned_at, false AS fresh
+           FROM user_badges WHERE user_id = :userId ORDER BY earned_at`,
+        { replacements: { userId }, type: QueryTypes.SELECT }
+      );
+
+  const earned = rows.map((r) => ({
+    badgeId:  r.badge_id,
+    tier:     Number(r.tier) as BadgeTier,
+    earnedAt: new Date(r.earned_at).toISOString(),
+  }));
+  return { earned, unlocked: earned.filter((_, i) => rows[i].fresh) };
+}
+
+/**
+ * Share of all accounts holding each badge tier, keyed `badgeId:tier`.
+ *
+ * Counts across every user, but returns nothing that identifies one. The
+ * GROUP BY is an index-only scan of `user_badges_badge_tier_idx`; even so it
+ * grows with the platform, so callers cache it (`rewards.ts`) instead of
+ * running it per page view.
+ */
+export async function getBadgeRarity(): Promise<Record<string, number>> {
+  const [holders, accounts] = await Promise.all([
+    sequelize.query<{ badge_id: string; tier: number; holders: number }>(
+      'SELECT badge_id, tier, count(*)::int AS holders FROM user_badges GROUP BY badge_id, tier',
+      { type: QueryTypes.SELECT }
+    ),
+    UserModel.count(),
+  ]);
+  if (accounts === 0) return {};
+  return Object.fromEntries(
+    holders.map((h) => [`${h.badge_id}:${h.tier}`, Number(h.holders) / accounts])
   );
 }
 

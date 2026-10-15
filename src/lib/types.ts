@@ -653,6 +653,311 @@ export interface LiveAuctionSummary {
   updatedAt: string;
 }
 
+// ── Rewards: badges & streaks ─────────────────────────────────────────────────
+// Badges are *derived*: `getRewardMetrics` counts these from the tables the app
+// already keeps (cards, auction results, matches, leagues), and the catalog in
+// `src/lib/badges.ts` turns the numbers into tiers. Everything here is private
+// to the user it describes — none of it belongs on a card, poster or spectator
+// screen.
+
+/**
+ * Every number a badge can be earned on. Adding a badge on an existing metric
+ * is a catalog entry only; a new metric also needs a column in
+ * `getRewardMetrics` and a key here.
+ */
+export interface RewardMetrics extends StoredRewardMetrics, DerivedRewardMetrics {}
+
+/**
+ * The metrics `getRewardMetrics` counts in SQL. "Your leagues" below means
+ * leagues this account *created* — co-organizers have their own badge, but
+ * the organizer counts follow the creator, as `creatorId` does everywhere else.
+ * A match "counts" once it has a score or a winner, as in `calcStandings`; a
+ * "buy" is a non-icon card on a team at a price, as on the bid leaderboard.
+ */
+export interface StoredRewardMetrics {
+  // ── As a player ──
+  /** Player cards linked to this account, across every league. */
+  cards: number;
+  /** 1 once the cricket profile has been saved, else 0. */
+  profileCompleted: number;
+  /** 1 when an identity document is on the profile, else 0. */
+  idProofOnFile: number;
+  /** Cards wearing an uploaded photo rather than the Google avatar. */
+  uploadedPhotos: number;
+  /** Cards whose entry fee an organizer has confirmed. */
+  feesConfirmed: number;
+  /** Distinct leagues this account has a card in. */
+  leaguesJoined: number;
+  /** Most leagues played under any one organizer, not counting this account's own. */
+  clubLoyalty: number;
+  /** Other people's leagues where this account's card was among the first three in. */
+  earlyBirds: number;
+  /** Leagues this account both plays in and helps run. */
+  playerManager: number;
+  /** Cards bought at auction. */
+  timesBought: number;
+  /** Biggest single buy as a share of the buying team's purse, 0–1. */
+  bestPurseShare: number;
+  /** Leagues where this account's buy was the auction's highest (ties count). */
+  recordBuys: number;
+  /** Buys for 5% of the purse or less. */
+  steals: number;
+  /** Cards named an icon player. */
+  iconPicks: number;
+  /** Results recorded for a team this account's card was on. */
+  matchesPlayed: number;
+  /** Matches won by a team this account's card was on. */
+  matchWins: number;
+  /** Leagues (3+ results) where that team tops the points table, ties included. */
+  tableTops: number;
+  /** Leagues where that team won every one of at least three matches. */
+  invincibles: number;
+  /** Leagues that have released this account's participation certificate. */
+  certificates: number;
+  /** 1 when a contact number is on the profile, else 0. */
+  contactOnFile: number;
+  /** Different organizers whose leagues this account has played in (its own excluded). */
+  organizersPlayedFor: number;
+  /** Registrations in the biggest league this account has a card in. */
+  biggestLeagueJoined: number;
+  /** Public leagues this account has a card in. */
+  publicLeaguesJoined: number;
+  /** Leagues where this account's card took the last spot before the player target. */
+  lastManIn: number;
+  /** Cards made before the early-adopter cutoff. */
+  earlyCards: number;
+  /** Most leagues shared a team with any one other player. */
+  partnerLeagues: number;
+  /** Different signed-in players this account has shared a team with. */
+  teammates: number;
+  /** Cards registered with an entry-fee receipt attached. */
+  receiptsAttached: number;
+
+  // ── At auction ──
+  /** Buys that were the most expensive in the buying team. */
+  franchiseBuys: number;
+  /** Buys above the average buy of the same auction. */
+  premiumBuys: number;
+  /** Cards currently marked unsold. */
+  unsoldCount: number;
+  /** Buys registered as a fast or medium bowler. */
+  paceBuys: number;
+  /** Buys registered as a spinner. */
+  spinBuys: number;
+  /** Buys registered as a wicketkeeper. */
+  keeperBuys: number;
+  /** Buys registered as a Batter. */
+  batterBuys: number;
+  /** Buys registered as an All-Rounder. */
+  allRounderBuys: number;
+  /** Buys registered as a Bowler. */
+  bowlerBuys: number;
+  /** Buys registered as a left-hand bat. */
+  leftHandBuys: number;
+  /** Buys in an auction that was broadcast live. */
+  broadcastBuys: number;
+
+  // ── On the field ── (scores are parsed from their leading runs, e.g. "152/6")
+  /** Highest total posted by a team this account was on. */
+  bestTeamScore: number;
+  /** Wins by 50 runs or more. */
+  bigWins: number;
+  /** Results with no winner and level scores. */
+  ties: number;
+  /** Leagues (3+ results) where that team sits alone in second on points. */
+  runnerUps: number;
+  /** Matches played on a Saturday or Sunday. */
+  weekendMatches: number;
+  /** Matches played June–September. */
+  monsoonMatches: number;
+  /** Matches played November–February. */
+  winterMatches: number;
+  /** Matches played March–May. */
+  summerMatches: number;
+  /** Most matches against any one opposing team. */
+  rivalMeetings: number;
+  /** Points-table points earned across every team this account played for. */
+  teamPoints: number;
+  /** Leagues this account created. */
+  leaguesCreated: number;
+  /** Your leagues listed publicly in Discover. */
+  publicLeagues: number;
+  /** Your leagues with a logo. */
+  leaguesWithLogo: number;
+  /** Your leagues that require an ID or entry-fee proof to register. */
+  proofLeagues: number;
+  /** Your leagues that reached their declared player target. */
+  fullHouses: number;
+  /** Registrations in your biggest league. */
+  biggestLeague: number;
+  /** Teams across your leagues. */
+  teamsBuilt: number;
+  /** Team officials across your leagues. */
+  officialsAdded: number;
+  /** Sponsors across your leagues. */
+  sponsorsAdded: number;
+  /** Co-organizers brought into your leagues. */
+  coOrganizersAdded: number;
+  /** Other people's leagues this account co-organizes. */
+  coOrganizing: number;
+  /** Your leagues that have held an auction (at least one buy). */
+  auctionsRun: number;
+  /** Players bought across your auctions. */
+  playersSold: number;
+  /** Your auctions (8+ players) where every non-icon player was bought. */
+  soldOuts: number;
+  /** Entry fees confirmed across your leagues. */
+  feesConfirmedForLeagues: number;
+  /** Your leagues with a published ledger. */
+  ledgersPublished: number;
+  /** Match results recorded across your leagues. */
+  resultsRecorded: number;
+  /** Your leagues that have released certificates. */
+  certificatesReleased: number;
+  /** Your leagues with registration closed. */
+  closedRegistrations: number;
+  /** Your leagues with a pick order set for the auction draw. */
+  pickPlans: number;
+  /** Different card templates across your leagues. */
+  templatesUsed: number;
+  /** Your leagues that reached their player target within a week. */
+  rapidFills: number;
+  /** Your leagues (2+ teams) where every squad is full. */
+  fullStrengths: number;
+  /** Fixtures given a date across your leagues. */
+  fixturesScheduled: number;
+  /** Your leagues (5+ fixtures) with a result for every fixture. */
+  seasonsCompleted: number;
+  /** Different signed-in players across your leagues. */
+  distinctPlayers: number;
+  /** Players who have joined two or more of your leagues. */
+  returningPlayers: number;
+  /** Sponsors in your best-sponsored league. */
+  maxSponsorsInLeague: number;
+  /** Icon players named across your leagues. */
+  iconsNamed: number;
+  /** Your leagues whose auction was broadcast live. */
+  broadcasts: number;
+  /** Players bought in your biggest single auction. */
+  biggestAuction: number;
+  /** Your leagues (8+ players) with every entry fee confirmed. */
+  allPaidLeagues: number;
+  /** Your leagues (2+ teams) where every team has an official. */
+  staffedLeagues: number;
+  /** Days since your first league was created. */
+  leagueAgeDays: number;
+}
+
+/** Metrics worked out in `rewards.ts` from the streak row, sequences and earned badges. */
+export interface DerivedRewardMetrics {
+  /** Longest run of consecutive active weeks. */
+  weeklyStreakLongest: number;
+  /** The run of active weeks ending this week. */
+  weeklyStreakCurrent: number;
+  /** Active weeks among the last 52. */
+  activeWeeks: number;
+  /** Longest run of consecutive auctions this account was picked in. */
+  pickStreakLongest: number;
+  /** The run of picks ending at this account's most recent auction. */
+  pickStreakCurrent: number;
+  /** Longest run of consecutive wins by a team this account was on. */
+  winRunLongest: number;
+  /** The best run of wins still going, across those teams. */
+  winRunCurrent: number;
+  /** Badge levels earned, milestones excluded. */
+  badgeLevels: number;
+  /** Gold levels earned, milestones excluded. */
+  goldMedals: number;
+  /** Silver levels earned, milestones excluded. */
+  silverMedals: number;
+  /** Bronze levels earned, milestones excluded. */
+  bronzeMedals: number;
+  /** Badge groups (milestones aside) with at least one badge earned. */
+  categoriesCovered: number;
+  /** Wins that came straight after a loss. */
+  bounceBacks: number;
+  /** Teams this account was on that won their first three matches. */
+  flyingStarts: number;
+  /** Returns after eight or more quiet weeks, within the last 52. */
+  welcomeBacks: number;
+  /** Different months this account's leagues started in. */
+  monthsPlayed: number;
+  /** Longest run of consecutive months with a league. */
+  monthRunLongest: number;
+  /** The run of months ending at the most recent one. */
+  monthRunCurrent: number;
+  /** Auctions entered, while every one of them was a pick — 0 once passed over. */
+  cleanPickRecord: number;
+}
+
+export type RewardMetric = keyof RewardMetrics;
+
+/** 1 bronze, 2 silver, 3 gold. A one-off badge only ever has tier 1. */
+export type BadgeTier = 1 | 2 | 3;
+
+export interface EarnedBadge {
+  badgeId: string;
+  tier: BadgeTier;
+  earnedAt: string;
+}
+
+/** The weekly activity streak. Weeks run Monday–Sunday, India time. */
+export interface WeeklyStreak {
+  current: number;
+  longest: number;
+  /** One flag per week, oldest first; the last entry is the current week. */
+  weeks: boolean[];
+}
+
+/** Consecutive auctions this account was picked in — bought, or named an icon. */
+export interface PickStreak {
+  current: number;
+  longest: number;
+  /** Auctions held in leagues this account had a card in. */
+  auctions: number;
+}
+
+/** The closest badge tier still to earn — the "next up" nudge. */
+export interface RewardGoal {
+  badgeId: string;
+  tier: BadgeTier;
+  value: number;
+  target: number;
+}
+
+/** Everything the `/rewards` page renders. Built by `getRewardsOverview`. */
+export interface RewardsOverview {
+  metrics: RewardMetrics;
+  earned: EarnedBadge[];
+  /** `badgeId:tier` keys the evaluation behind this payload awarded — the page celebrates these. */
+  justUnlocked: string[];
+  weekly: WeeklyStreak;
+  pickStreak: PickStreak;
+  next: RewardGoal | null;
+  /**
+   * Share of all accounts holding each `badgeId:tier`, 0–1. Cached for an hour,
+   * so a tier earned since can be missing — read a miss as "not counted yet",
+   * never as 0%.
+   */
+  rarity: Record<string, number>;
+  /** When this was evaluated — the page's "now", so recency checks render the same on server and client. */
+  evaluatedAt: string;
+}
+
+/**
+ * POST /api/rewards/check-in — what the app shell needs after counting a visit:
+ * the streak for the nav chip, anything unlocked for the toast, and the
+ * dashboard strip's summary. Deliberately small; the full cabinet is the page.
+ */
+export interface RewardsCheckIn {
+  streak: { current: number; longest: number };
+  /** Tiers awarded by this very check-in. Empty on almost every call. */
+  unlocked: EarnedBadge[];
+  /** Distinct badges with at least one tier earned. */
+  badgesEarned: number;
+  next: RewardGoal | null;
+}
+
 // ── Super-admin dashboard ─────────────────────────────────────────────────────
 // Platform-wide views served only to the env-configured owner account. These
 // intentionally expose cross-league data (creator emails, private leagues) that

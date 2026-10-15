@@ -16,6 +16,7 @@ Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of loca
 | 🔨 **Live auctions** | Put players under the hammer in a real-time bidding room. Budgets, squads and reserve-per-slot limits update instantly. |
 | 📺 **Watch mode** | Broadcast a public link so fans mirror every bid and reveal live — no sign-in required. |
 | 🏆 **Leaderboard** | Standings that recompute the moment a match result lands. |
+| 🏅 **Badges & streaks** | A private trophy cabinet of bronze, silver and gold badges for playing, getting bought, winning and organizing, plus a weekly streak. |
 | 📊 **Analytics** | Squad spend, balance and value at a glance. |
 | 👥 **Teams & officials** | Manage rosters, owners and non-playing team officials (coach, manager) with budget tracking. |
 | 🗓️ **Matches** | Record fixtures, scores and winners. |
@@ -122,8 +123,14 @@ PostgreSQL tables (see [src/lib/models.ts](src/lib/models.ts)):
 - **matches** — fixtures with scores and a winner.
 - **auction_live** — one ephemeral JSON blob per league holding live auction state, written by the creator and polled by spectators.
 - **league_ledgers** — optional markdown income & expense sheet, at most one per league. Organizers write it and publish it explicitly; see the visibility rule below.
+- **user_badges** — one row per badge tier an account has earned (`user_id, badge_id, tier` is the primary key). Badge definitions live in code, in [src/lib/badges.ts](src/lib/badges.ts), not in a table.
+- **user_streaks** — running totals for each streak kind per account (just `weekly` today), with the last 52 weeks packed into a bitmask.
 
 Participation certificates need no table of their own: `leagues.certificates_released_at` is null until an organizer releases them, and the certificate itself is rendered on demand from the player's card.
+
+### Badges and streaks
+
+Badges are **derived, not event-sourced**. Nothing in the auction, match or card code awards them: when a signed-in user opens the app (a throttled `POST /api/rewards/check-in`) or their `/rewards` page, one query counts their cards, buys, wins and leagues, and every tier those numbers reach is inserted with `ON CONFLICT DO NOTHING`. The rows that come back from that insert are the ones to celebrate, so each unlock is shown exactly once, and accounts that predate the feature are backfilled on their first visit. Earned badges are never revoked. The weekly streak is a single upsert per visit; weeks run Monday to Sunday, India time.
 
 ### Certificate release
 

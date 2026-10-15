@@ -25,7 +25,7 @@ when features change.
 
 ## Core source
 
-- [Sequelize models & associations](src/lib/models.ts): users, leagues, teams, players, team_officials, matches, auction_live.
+- [Sequelize models & associations](src/lib/models.ts): users, leagues, teams, players, team_officials, matches, auction_live, user_badges, user_streaks.
 - [Shared types](src/lib/types.ts): League, Player, Team, TeamOfficial, Match, LiveAuctionState, LivePurse.
 - [Auth config](src/auth.ts): NextAuth Google setup; token.sub mapped to the DB user id.
 - [Owner console auth](src/lib/adminAuth.ts): super-admin credentials read from `ADMIN_EMAIL`/`ADMIN_PASSWORD` env plus a signed HMAC session cookie. Deliberately separate from Auth.js — no admin row, flag, migration or seed, and a normal Google session never grants admin. The cookie name lives in [adminCookie.ts](src/lib/adminCookie.ts) so `proxy.ts` can read it without importing `next/headers`.
@@ -35,6 +35,9 @@ when features change.
 - [Card templates](src/lib/templates.ts): 12 colour templates for player cards.
 - [Payment list PDFs](src/lib/paymentPdf.ts): the document register's Download menu — paid / unpaid lists, flat or team-wise (teams by name, teamless cards last, each team's paid count in its heading). Text-only jsPDF; names and receipt-on-file status, never the documents themselves.
 - [League chrome](src/components/league/LeagueChrome.tsx): frames every `/leagues/[id]/*` screen with the navigation rail — an inset layout on desktop, where the page scrolls inside a rounded panel beside the rail, and a slide-over drawer under `lg` — and publishes `useLeagueRevision()` so a page reloads when the rail changes the league, plus `useLeagueScroller()` for scrolling the page (the panel on desktop, the window on a phone). [LeagueSidebar](src/components/league/LeagueSidebar.tsx) holds the links and the organizer actions; [leagueChrome.ts](src/lib/leagueChrome.ts) is the immersive-route matcher it shares with `NavBar`.
+- [Badge catalog](src/lib/badges.ts): all 100 badges in six groups (career, auction, on the field, organizer, streaks, milestones) with their tiers and thresholds, plus the pure progress arithmetic. React-free and server-free, read by both sides. Badge ids are persisted in `user_badges` — never rename or reuse one.
+- [Rewards evaluation](src/lib/rewards.ts): `checkInRewards` and `getRewardsOverview` — count the week towards the streak, read the user's metrics in one query, award new tiers. Lazy by design: badges are derived from existing tables on the user's own requests, never awarded from the write paths. The SQL is in the "Rewards" section of `store.ts`.
+- [Rewards UI](src/components/rewards/): `BadgeMedal` (pure-CSS medal, see "Reward medals" in `globals.css`), the nav's `StreakChip` and throttled `RewardsWatcher`, the dashboard's `RewardsStrip`, the lazily loaded unlock toast, and `rewardsStore` — the client store they share. `requestRewardsCheck()` forces a check-in after an action likely to unlock something.
 - [Certificate renderer](src/app/leagues/[id]/certificate/[playerId]/certificate.tsx): server-rendered participation certificate (satori), gated on the league's `certificatesReleasedAt`.
 - [SEO config](src/lib/seo.ts): single source of truth for metadata, OG images, sitemap, robots.
 
@@ -53,6 +56,7 @@ when features change.
 - `leagues/[id]/clone`: duplicate a league.
 - `profile/certificates`: participation certificates the signed-in user can download, scoped to their own player cards.
 - `leagues/join`, `leagues/public`: join by code; public league directory.
+- `rewards/check-in`: POST — count this week towards the signed-in user's streak, award newly earned badge tiers, return the shell's summary (streak, unlocks, next goal). The `/rewards` page is server-rendered and evaluates on its own, with a `loading.tsx` so link prefetches never run that write.
 - `profile`: user profile, including the optional identity proof (`idProofType` + `idProofUrl`) that leagues with `idProofRequired` check at self-registration. `upload`: Cloudinary image upload. `migrate`: admin-gated Redis→Postgres import.
 - `admin/login`, `admin/logout`: owner console sign-in (env credentials, IP-throttled) and sign-out.
 - `admin/overview`: whole-platform analytics, every league and every user in one payload. `admin/leagues/[id]`: owner overrides on any league — publish, open/close registration, release certificates, reset auction, clear the live broadcast, delete. Both gated by `requireAdmin`. An owner session additionally satisfies `requireLeagueManager` (but never `requireLeagueCreator`), so the owner can open any league's detail pages in full.

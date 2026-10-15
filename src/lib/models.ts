@@ -342,6 +342,62 @@ AuctionLiveModel.init(
   { sequelize, tableName: 'auction_live', timestamps: false, underscored: true }
 );
 
+// ── User Badge ────────────────────────────────────────────────────────────────
+// One row per badge *tier* a user has earned. Definitions live in code
+// (`src/lib/badges.ts`), not in a table — this records only who earned what and
+// when. The composite primary key makes awarding idempotent; earned rows are
+// never deleted, so a badge stays earned even if the stat behind it later drops.
+export class UserBadgeModel extends Model<
+  InferAttributes<UserBadgeModel>,
+  InferCreationAttributes<UserBadgeModel>
+> {
+  declare userId: ForeignKey<UserModel['id']>;
+  declare badgeId: string;
+  declare tier: number;
+  declare earnedAt: CreationOptional<Date>;
+}
+
+UserBadgeModel.init(
+  {
+    userId:   { type: DataTypes.STRING,     primaryKey: true },
+    badgeId:  { type: DataTypes.STRING(48), primaryKey: true },
+    tier:     { type: DataTypes.SMALLINT,   primaryKey: true },
+    earnedAt: { type: DataTypes.DATE,       allowNull: false, defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'user_badges', timestamps: false, underscored: true }
+);
+
+// ── User Streak ───────────────────────────────────────────────────────────────
+// Running totals for one streak kind per user — no activity log. `history` is a
+// bitmask of the last 52 periods, bit 0 being `lastPeriod`. Written only by the
+// single-statement upsert in `recordWeeklyActivity`.
+export class UserStreakModel extends Model<
+  InferAttributes<UserStreakModel>,
+  InferCreationAttributes<UserStreakModel>
+> {
+  declare userId: ForeignKey<UserModel['id']>;
+  declare kind: string;
+  declare currentCount: CreationOptional<number>;
+  declare longestCount: CreationOptional<number>;
+  declare lastPeriod: string;
+  declare history: CreationOptional<string>;
+  declare updatedAt: CreationOptional<Date>;
+}
+
+UserStreakModel.init(
+  {
+    userId:       { type: DataTypes.STRING,     primaryKey: true },
+    kind:         { type: DataTypes.STRING(24), primaryKey: true },
+    currentCount: { type: DataTypes.INTEGER,    allowNull: false, defaultValue: 0 },
+    longestCount: { type: DataTypes.INTEGER,    allowNull: false, defaultValue: 0 },
+    lastPeriod:   { type: DataTypes.DATEONLY,   allowNull: false },
+    // BIGINT arrives from pg as a string; 52 bits fit a JS number exactly
+    history:      { type: DataTypes.BIGINT,     allowNull: false, defaultValue: 0 },
+    updatedAt:    { type: DataTypes.DATE,       allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'user_streaks', timestamps: false, underscored: true }
+);
+
 // ── Associations ──────────────────────────────────────────────────────────────
 UserModel.hasMany(LeagueModel,  { foreignKey: 'creatorId', onDelete: 'CASCADE' });
 LeagueModel.belongsTo(UserModel, { foreignKey: 'creatorId' });
@@ -376,3 +432,9 @@ LeagueLedgerModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });
 // Deleting a user account removes their co-organizer roles with it
 UserModel.hasMany(LeagueCoOrganizerModel,   { foreignKey: 'userId', onDelete: 'CASCADE' });
 LeagueCoOrganizerModel.belongsTo(UserModel, { foreignKey: 'userId' });
+
+// …and their badges and streaks
+UserModel.hasMany(UserBadgeModel,    { foreignKey: 'userId', onDelete: 'CASCADE' });
+UserBadgeModel.belongsTo(UserModel,  { foreignKey: 'userId' });
+UserModel.hasMany(UserStreakModel,   { foreignKey: 'userId', onDelete: 'CASCADE' });
+UserStreakModel.belongsTo(UserModel, { foreignKey: 'userId' });
