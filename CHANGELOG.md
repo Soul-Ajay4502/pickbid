@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.12.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.11.0...v0.12.0) (2026-10-21)
+
+
+### Features
+
+* add landing showcase components and functionality ([252e623](https://github.com/Soul-Ajay4502/pickbid/commit/252e6233adcda9a970cf8c578869f6b30e0260fe))
+* add player from existing accounts functionality in league sidebar ([c487257](https://github.com/Soul-Ajay4502/pickbid/commit/c487257ced4b9bf8cedc47a85804f2fa539b348b))
+* add team-wise payment PDF generation and enhance player document structure ([9a570a2](https://github.com/Soul-Ajay4502/pickbid/commit/9a570a20c4a6a7c7358d4d878919d52f559bbfbf))
+* enhance league workspace with server-rendered data and improved animations ([58298fc](https://github.com/Soul-Ajay4502/pickbid/commit/58298fc020a1ef34ef3aaea1c4b4eaad45e7a483))
+* enhance NavBar with improved accessibility and dynamic menu handling ([bbbf60f](https://github.com/Soul-Ajay4502/pickbid/commit/bbbf60f7d8d76073b0b335e070837f2ce8af333c))
+* implement ball-by-ball scoring system with event logging and match state management ([3884436](https://github.com/Soul-Ajay4502/pickbid/commit/38844360efd508f5f00b00b756c00de9c78e91b1))
+* implement image upload size validation and update related components ([5f96d0d](https://github.com/Soul-Ajay4502/pickbid/commit/5f96d0da6e034b8439ffd6eae6bc9462ef0f3e7f))
+* implement league chrome scrolling behavior and enhance layout for desktop ([aa4298d](https://github.com/Soul-Ajay4502/pickbid/commit/aa4298d62cec354f71b049cbec897b799c40f99b))
+* implement league navigation rail and sidebar ([695b6de](https://github.com/Soul-Ajay4502/pickbid/commit/695b6ded5234fb5a51b6622bbb6b0eb9ea23c74b))
+* implement rewards system with badges and streak tracking ([9753627](https://github.com/Soul-Ajay4502/pickbid/commit/97536275fda3e6edbfcdfeb76bdc0ec2e8ec51fc))
+* implement round-robin fixture generation and scheduling ([483c48c](https://github.com/Soul-Ajay4502/pickbid/commit/483c48c2ee005cd2755339467e3080c3fe1df9e9))
+* sort teams by name for improved display in auction page ([09c75b6](https://github.com/Soul-Ajay4502/pickbid/commit/09c75b61ddf75fddb065656563e4750bc8719cdc))
+
+
+### Bug Fixes
+
+* adjust positioning of share panel for better alignment on desktop ([8fe3f10](https://github.com/Soul-Ajay4502/pickbid/commit/8fe3f10534dbffbcfc5d70fe0ee4e669adee22c2))
+* conditionally render player registration progress based on roster visibility ([10e9fc9](https://github.com/Soul-Ajay4502/pickbid/commit/10e9fc98d009f29646c2dd65a0e204358e771450))
+* update comments for clarity on PDF rendering process and lazy loading ([d86b10f](https://github.com/Soul-Ajay4502/pickbid/commit/d86b10ff0e23261d00d8a9bdbf8e803878f2e84a))
+* update team colors to ensure visual distinction among new teams ([497aa7a](https://github.com/Soul-Ajay4502/pickbid/commit/497aa7a9410bd77415dfb9b30e5364b38dee413a))
+
+
+### Code Refactoring
+
+* streamline avatar and portrait handling for squad posters ([e5f2e88](https://github.com/Soul-Ajay4502/pickbid/commit/e5f2e88284a4b2fa1568275c59dd16e8e4864e65))
+
 ## [0.11.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.10.0...v0.11.0) (2026-09-14)
 
 
