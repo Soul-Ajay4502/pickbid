@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Trophy, Minus } from 'lucide-react';
+import { formatMatchDay } from '@/lib/fixtures';
+import FixturePosterDialog, { type PosterSourceMatch } from '@/components/fixtures/FixturePosterDialog';
+import FixtureGeneratorPanel from './FixtureGeneratorPanel';
 import type { LeagueWithPlayers, Team, Match } from '@/lib/types';
 
 interface Standing {
@@ -20,7 +23,7 @@ function calcStandings(teams: Team[], matches: Match[]): Standing[] {
   teams.forEach(t => { map[t.id] = { team: t, played: 0, won: 0, lost: 0, tied: 0, points: 0 }; });
 
   matches.forEach(m => {
-    if (!m.team1Score && !m.team2Score && !m.winnerTeamId) return; // unplayed
+    if (!isPlayed(m)) return;
     const t1 = map[m.team1Id], t2 = map[m.team2Id];
     if (!t1 || !t2) return;
     t1.played++; t2.played++;
@@ -34,6 +37,42 @@ function calcStandings(teams: Team[], matches: Match[]): Standing[] {
   });
 
   return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
+}
+
+const isPlayed = (m: Match) => !!(m.team1Score || m.team2Score || m.winnerTeamId);
+
+/**
+ * Soonest first: by date with undated last, then in the order they were added —
+ * which for a generated list is round order (see `createMatches`).
+ */
+function byFixtureOrder(a: Match, b: Match): number {
+  if (a.matchDate !== b.matchDate) {
+    if (!a.matchDate) return 1;
+    if (!b.matchDate) return -1;
+    return a.matchDate < b.matchDate ? -1 : 1;
+  }
+  return a.createdAt.localeCompare(b.createdAt);
+}
+
+/**
+ * Saved matches carry no round number, so for the poster regroup upcoming
+ * fixtures the way they'll be played: a new round at each new date, or when a
+ * team would otherwise appear twice in one.
+ */
+function posterRounds(fixtures: Match[]): PosterSourceMatch[] {
+  let round = 0;
+  let date: string | null = null;
+  let busy = new Set<string>();
+  return fixtures.map((m) => {
+    if (round === 0 || m.matchDate !== date || busy.has(m.team1Id) || busy.has(m.team2Id)) {
+      round++;
+      busy = new Set();
+      date = m.matchDate;
+    }
+    busy.add(m.team1Id);
+    busy.add(m.team2Id);
+    return { teamAId: m.team1Id, teamBId: m.team2Id, round, date: m.matchDate };
+  });
 }
 
 export default function MatchesPage() {
@@ -112,6 +151,47 @@ export default function MatchesPage() {
   const standings = calcStandings(teams, matches);
   const teamById = Object.fromEntries(teams.map(t => [t.id, t]));
   const isCreator = data.canManage;
+  const fixtures = matches.filter(m => !isPlayed(m)).sort(byFixtureOrder);
+  const results = matches.filter(isPlayed).sort(byFixtureOrder).reverse();
+
+  const renderMatch = (m: Match, mi: number) => {
+    const t1 = teamById[m.team1Id], t2 = teamById[m.team2Id];
+    if (!t1 || !t2) return null;
+    return (
+      <div key={m.id} className="card-premium p-4 flex items-center gap-4 animate-fade-in-up" style={{ animationDelay: `${Math.min(mi, 8) * 0.04}s` }}>
+        <div className="flex-1 flex items-center gap-3">
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: t1.colorHex }}/>
+              <span className={`font-semibold text-sm ${m.winnerTeamId===t1.id?'text-foreground':'text-muted-foreground'}`}>{t1.name}</span>
+              {m.winnerTeamId===t1.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
+            </div>
+            {m.team1Score && <p className="text-xs text-muted-foreground font-mono">{m.team1Score}</p>}
+          </div>
+          <div className="text-xs text-muted-foreground font-bold"><Minus className="w-3 h-3"/></div>
+          <div className="text-center flex-1">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              {m.winnerTeamId===t2.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: t2.colorHex }}/>
+              <span className={`font-semibold text-sm ${m.winnerTeamId===t2.id?'text-foreground':'text-muted-foreground'}`}>{t2.name}</span>
+            </div>
+            {m.team2Score && <p className="text-xs text-muted-foreground font-mono">{m.team2Score}</p>}
+          </div>
+        </div>
+        <div className="shrink-0 text-right space-y-1">
+          {m.matchDate && <p className="text-xs text-muted-foreground">{formatMatchDay(m.matchDate)}</p>}
+          {!m.winnerTeamId && !m.team1Score && <p className="text-xs text-amber-500">Upcoming</p>}
+          {!m.winnerTeamId && (m.team1Score || m.team2Score) && <p className="text-xs text-muted-foreground">No result</p>}
+        </div>
+        {isCreator && (
+          <button onClick={() => handleDelete(m.id)} title="Delete match"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+            <Trash2 className="w-3.5 h-3.5"/>
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in-up">
@@ -185,49 +265,44 @@ export default function MatchesPage() {
         </div>
       )}
 
-      {/* Match list */}
-      <div className="space-y-2.5 mb-8">
-        <div className="section-label mb-3">Results</div>
-        {matches.length === 0 && <p className="text-muted-foreground text-sm text-center py-6">No matches recorded yet.</p>}
-        {matches.map((m, mi) => {
-          const t1 = teamById[m.team1Id], t2 = teamById[m.team2Id];
-          if (!t1 || !t2) return null;
-          return (
-            <div key={m.id} className="card-premium p-4 flex items-center gap-4 animate-fade-in-up" style={{ animationDelay: `${Math.min(mi, 8) * 0.04}s` }}>
-              <div className="flex-1 flex items-center gap-3">
-                <div className="text-center flex-1">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: t1.colorHex }}/>
-                    <span className={`font-semibold text-sm ${m.winnerTeamId===t1.id?'text-foreground':'text-muted-foreground'}`}>{t1.name}</span>
-                    {m.winnerTeamId===t1.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
-                  </div>
-                  {m.team1Score && <p className="text-xs text-muted-foreground font-mono">{m.team1Score}</p>}
-                </div>
-                <div className="text-xs text-muted-foreground font-bold"><Minus className="w-3 h-3"/></div>
-                <div className="text-center flex-1">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    {m.winnerTeamId===t2.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: t2.colorHex }}/>
-                    <span className={`font-semibold text-sm ${m.winnerTeamId===t2.id?'text-foreground':'text-muted-foreground'}`}>{t2.name}</span>
-                  </div>
-                  {m.team2Score && <p className="text-xs text-muted-foreground font-mono">{m.team2Score}</p>}
-                </div>
-              </div>
-              <div className="shrink-0 text-right space-y-1">
-                {m.matchDate && <p className="text-xs text-muted-foreground">{new Date(m.matchDate).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</p>}
-                {!m.winnerTeamId && !m.team1Score && <p className="text-xs text-amber-500">Upcoming</p>}
-                {!m.winnerTeamId && (m.team1Score || m.team2Score) && <p className="text-xs text-muted-foreground">No result</p>}
-              </div>
-              {isCreator && (
-                <button onClick={() => handleDelete(m.id)} title="Delete match"
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
-                  <Trash2 className="w-3.5 h-3.5"/>
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Match list — fixtures still to play soonest first, then results newest first */}
+      {matches.length === 0 && (
+        <p className="text-muted-foreground text-sm text-center py-6 mb-8">
+          No matches yet.{isCreator && teams.length >= 2 && ' Generate a full fixture list below, or add matches one at a time.'}
+        </p>
+      )}
+      {fixtures.length > 0 && (
+        <div className="space-y-2.5 mb-8">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="section-label">Fixtures</div>
+            <FixturePosterDialog
+              teams={teams.map(t => ({ id: t.id, name: t.name, color: t.colorHex }))}
+              matches={posterRounds(fixtures)}
+              defaultTitle={data.name}
+              defaultSubtitle={data.conductedBy ? `Conducted by ${data.conductedBy}` : ''}
+            />
+          </div>
+          {fixtures.map(renderMatch)}
+        </div>
+      )}
+      {results.length > 0 && (
+        <div className="space-y-2.5 mb-8">
+          <div className="section-label mb-3">Results</div>
+          {results.map(renderMatch)}
+        </div>
+      )}
+
+      {/* Fixture generator (creator only) */}
+      {isCreator && teams.length >= 2 && (
+        <FixtureGeneratorPanel
+          leagueId={id}
+          leagueName={data.name}
+          conductedBy={data.conductedBy}
+          teams={teams}
+          existingMatches={matches.length}
+          onCreated={(created) => setMatches(prev => [...prev, ...created])}
+        />
+      )}
 
       {/* Add match form (creator only) */}
       {isCreator && teams.length >= 2 && (

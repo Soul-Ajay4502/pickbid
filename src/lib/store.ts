@@ -1415,6 +1415,27 @@ export async function createMatch(data: Omit<Match, 'id' | 'createdAt'>): Promis
   return toMatch(row);
 }
 
+/**
+ * Inserts a generated fixture list in one statement. `createdAt` is staggered a
+ * millisecond per fixture, in the order given: undated fixtures have nothing
+ * else to sort on, and identical stamps would shuffle the rounds.
+ */
+export async function createMatches(
+  leagueId: string,
+  fixtures: { team1Id: string; team2Id: string; matchDate: string | null }[],
+): Promise<Match[]> {
+  const base = Date.now();
+  const rows = await MatchModel.bulkCreate(fixtures.map((f, i) => ({
+    id:        uuidv4(),
+    leagueId,
+    team1Id:   f.team1Id,
+    team2Id:   f.team2Id,
+    matchDate: f.matchDate,
+    createdAt: new Date(base + i),
+  })));
+  return rows.map(toMatch);
+}
+
 export async function updateMatch(id: string, data: Partial<Omit<Match, 'id' | 'leagueId' | 'createdAt'>>): Promise<Match | null> {
   const row = await MatchModel.findByPk(id);
   if (!row) return null;

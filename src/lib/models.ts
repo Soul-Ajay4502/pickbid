@@ -186,7 +186,8 @@ PlayerModel.init(
 // ── Match ─────────────────────────────────────────────────────────────────────
 export class MatchModel extends Model<
   InferAttributes<MatchModel>,
-  InferCreationAttributes<MatchModel, { omit: 'createdAt' }>
+  // `createdAt` stays settable: generated fixtures stagger it to keep round order.
+  InferCreationAttributes<MatchModel>
 > {
   declare id: string;
   declare leagueId: ForeignKey<LeagueModel['id']>;

@@ -122,7 +122,7 @@ const SECTIONS: Section[] = [
       {
         title: 'Matches and results',
         body:
-          'Record fixtures, scores and winners so the league table keeps itself up to date.',
+          'Generate a round-robin fixture list in one go, then record scores and winners so the league table keeps itself up to date.',
       },
       {
         title: 'League ledger',

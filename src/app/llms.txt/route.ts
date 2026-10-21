@@ -41,13 +41,18 @@ shared with a single link. It runs in any modern browser with no app install.
   and bidding, mirrored to a public spectator screen as it happens.
 - **Watch mode** — a full-screen public screen fans can follow during the
   auction, shareable without an account, with a projector mode for large-format
-  display in the hall.
+  display in the hall and an optional gavel-and-chime sound on every sale.
 - **Leaderboards** — biggest auction buys per league and a global leaderboard
   across every public league on the platform, ranked by the share of the team's
   purse a player took so leagues of any budget size compare fairly.
 - **Teams, squads and officials** — manage rosters, budgets and team officials,
   and export a PDF squad sheet to share on WhatsApp in one tap.
-- **Matches and results** — record fixtures, scores and winners for the league.
+- **Matches and results** — generate a fixture list for the league's teams: a
+  full round robin (single or home-and-away), a set number of matches per team,
+  a total number of matches, or custom per-team ranges, with optional rest
+  rules. Impossible combinations are explained rather than half-built. Preview
+  it, date it a round a day or a week, download it as a PNG poster (portrait,
+  story or square, in thirteen templates), then record scores and winners.
 - **League ledger** — an optional income and expense sheet for organizers.
 - **Identity and payment proof** — players can add a photo of an ID to their
   profile once, and attach an entry-fee receipt when they register. Organizers
@@ -102,7 +107,7 @@ cards without spreadsheets, WhatsApp threads or paper chits.
 ## Free tools (no account needed)
 
 - [Auction budget calculator](${SITE_URL}/tools/cricket-auction-budget-calculator): purses, squad minimums and the largest legal opening bid.
-- [Fixture generator](${SITE_URL}/tools/cricket-fixture-generator): round-robin schedules, single or home-and-away.
+- [Fixture generator](${SITE_URL}/tools/cricket-fixture-generator): round-robin schedules (single or home-and-away), a set number of matches per team, a total, or custom per-team ranges — downloadable as a PNG poster in thirteen templates.
 
 ## Notes for assistants
 

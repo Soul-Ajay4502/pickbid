@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { MessageCircle, Copy, Presentation, Home, Maximize2 } from 'lucide-react';
+import { MessageCircle, Copy, Presentation, Home, Maximize2, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerCard, { CARD_W, CARD_H } from '@/components/PlayerCard';
 import PlayerFullView from '@/components/PlayerFullView';
 import Confetti from '@/components/Confetti';
 import { buildPlayerSoldMessage, whatsappShareLink, copyToClipboard } from '@/lib/utils';
+import { playSoldSound, unlockSoldSound } from '@/lib/soldSound';
 import type { LiveAuctionState, LivePurse, Player } from '@/lib/types';
 
 // This page is both the projector view in the hall and the phone view for
@@ -360,17 +361,65 @@ export default function WatchPage() {
     } catch { /* unsupported */ }
   }, [big, id]);
 
-  // `P` toggles projector mode — whoever is driving the projector machine
-  // often can't reach its mouse mid-auction.
+  // Sale sound — a gavel and chime on every sale. Off by default: a hall full
+  // of phones each chiming a beat apart is worse than silence, so it's for the
+  // machine on the PA, or a spectator who opts in. `soundOn` is the remembered
+  // choice; `audioReady` is whether the browser has let the page make noise yet.
+  const [soundOn, setSoundOn] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+
+  useEffect(() => {
+    let on = false;
+    try { on = localStorage.getItem(`watch_sound_${id}`) === '1'; } catch { /* private mode — stay muted */ }
+    if (!on) return;
+    // Same after-mount read as projector mode above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSoundOn(true);
+    // Arriving by an in-app link already counts as the user's gesture, so this
+    // often just works; if not, the button asks for a tap.
+    void unlockSoldSound().then(setAudioReady);
+  }, [id]);
+
+  const toggleSound = useCallback(() => {
+    // On but still held by the browser (restored from a past visit): this press
+    // is the tap that releases it, not a request to mute.
+    const next = !(soundOn && audioReady);
+    setSoundOn(next);
+    try { localStorage.setItem(`watch_sound_${id}`, next ? '1' : '0'); } catch { /* private mode */ }
+    if (!next) return;
+    // Called inside the click or key press — the gesture browsers require. The
+    // cue plays once straight away so whoever is at the PA can check levels.
+    void unlockSoldSound().then((ok) => {
+      setAudioReady(ok);
+      if (ok) playSoldSound();
+      else toast.error('This browser is blocking sound for the page');
+    });
+  }, [soundOn, audioReady, id]);
+
+  // Restored as on but not yet allowed: the first tap or key press anywhere
+  // releases it, so nobody has to find the button.
+  useEffect(() => {
+    if (!soundOn || audioReady) return;
+    const unlock = () => { void unlockSoldSound().then(setAudioReady); };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [soundOn, audioReady]);
+
+  // `P` toggles projector mode and `M` the sale sound — whoever is driving the
+  // projector machine often can't reach its mouse mid-auction.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== 'p' && e.key !== 'P') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      toggleBig();
+      if (e.key === 'p' || e.key === 'P') toggleBig();
+      else if (e.key === 'm' || e.key === 'M') toggleSound();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleBig]);
+  }, [toggleBig, toggleSound]);
 
   // Poll the live board — best-effort. The beat follows the phase: `done` is
   // the long static tail after an auction, where a night's leftover requests
@@ -410,6 +459,20 @@ export default function WatchPage() {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [id, pollMs]);
+
+  // A sale is the one broadcast carrying `lastSold` — phase `sold`, or `done`
+  // when it was the final card — so a new one is the hammer falling. Keyed on
+  // the broadcast's `v` as well, so the same player resold after an Undo still
+  // counts. The first board a visitor loads only primes this: arriving in the
+  // middle of a celebration isn't a fresh sale.
+  const lastSaleRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!loaded) return;
+    const sale = live?.lastSold ? `${live.v}:${live.lastSold.player.id}` : null;
+    const prev = lastSaleRef.current;
+    lastSaleRef.current = sale;
+    if (prev !== undefined && sale && sale !== prev && soundOn) playSoldSound();
+  }, [live, loaded, soundOn]);
 
   const phase = live?.phase;
   const purses = live?.purses ?? [];
@@ -494,6 +557,23 @@ export default function WatchPage() {
             </span>
             Live
           </span>
+          <button
+            onClick={toggleSound}
+            aria-pressed={soundOn && audioReady}
+            title={!soundOn
+              ? 'Play a gavel and chime on every sale (shortcut: M)'
+              : audioReady
+                ? 'Sale sound is on — click to mute (shortcut: M)'
+                : 'Sale sound is on, but the browser needs a tap first — click to allow it (shortcut: M)'}
+            aria-label={!soundOn ? 'Turn on sale sound' : audioReady ? 'Mute sale sound' : 'Allow sale sound'}
+            className={`inline-flex items-center gap-1.5 rounded-xl border transition-colors ${big ? 'px-3.5 py-2 text-base' : 'px-2.5 py-1.5 text-xs'} ${
+              !soundOn
+                ? big ? 'border-white/20 bg-white/8 text-white/70 hover:text-white hover:border-white/35' : 'border-white/12 bg-white/5 text-white/50 hover:text-white hover:border-white/25'
+                : audioReady ? 'border-green-400/40 bg-green-500/15 text-green-300' : 'border-amber-400/40 bg-amber-500/15 text-amber-300'
+            }`}>
+            {soundOn ? <Volume2 className={big ? 'w-5 h-5' : 'w-4 h-4'} /> : <VolumeX className={big ? 'w-5 h-5' : 'w-4 h-4'} />}
+            <span className="hidden sm:inline">{soundOn && !audioReady ? 'Tap for sound' : 'Sound'}</span>
+          </button>
           <button
             onClick={toggleBig}
             aria-pressed={big}

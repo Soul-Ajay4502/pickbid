@@ -99,7 +99,10 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
   } = league;
 
   const playedMatches = matches.filter((m) => m.played);
-  const upcomingMatches = matches.filter((m) => !m.played);
+  // `getMatches` is newest first, which suits results; a fixture list reads
+  // soonest first (undated last, then in the order added — round order for a
+  // generated list), which is that same order reversed.
+  const upcomingMatches = matches.filter((m) => !m.played).reverse();
   const hasTable = standings.some((s) => s.played > 0);
   const topBuys = soldPlayers.slice(0, 10);
 

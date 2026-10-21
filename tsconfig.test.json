@@ -1,0 +1,17 @@
+{
+  // Compiles the dependency-free modules that have unit tests to plain Node
+  // CommonJS for `npm test` (node:test). Only src/lib/fixtures today: anything
+  // added here must use relative imports, since the `@/` alias doesn't survive
+  // to Node.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-build",
+    "rootDir": "src/lib/fixtures",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "incremental": false,
+    "plugins": []
+  },
+  "include": ["src/lib/fixtures/**/*.ts"]
+}

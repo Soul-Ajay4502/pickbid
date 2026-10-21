@@ -14,12 +14,12 @@ Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of loca
 | --- | --- |
 | 🎴 **Player cards** | Upload a photo, add stats and ratings, and get gorgeous cards rendered from 12 colour templates. |
 | 🔨 **Live auctions** | Put players under the hammer in a real-time bidding room. Budgets, squads and reserve-per-slot limits update instantly. |
-| 📺 **Watch mode** | Broadcast a public link so fans mirror every bid and reveal live — no sign-in required. |
+| 📺 **Watch mode** | Broadcast a public link so fans mirror every bid and reveal live — no sign-in required. Optional gavel sound on every sale. |
 | 🏆 **Leaderboard** | Standings that recompute the moment a match result lands. |
 | 🏅 **Badges & streaks** | A private trophy cabinet of bronze, silver and gold badges for playing, getting bought, winning and organizing, plus a weekly streak. |
 | 📊 **Analytics** | Squad spend, balance and value at a glance. |
 | 👥 **Teams & officials** | Manage rosters, owners and non-playing team officials (coach, manager) with budget tracking. |
-| 🗓️ **Matches** | Record fixtures, scores and winners. |
+| 🗓️ **Matches** | Generate fixtures — full round robin, a set number of matches per team, a total, or custom per-team ranges — preview them, download them as a PNG poster in thirteen templates, then record scores and winners. |
 | 📄 **Export & share** | One-tap PDF squad sheets and WhatsApp sharing for cards, results and links. |
 | 🌍 **Discover** | A public directory of leagues that opt in. |
 | 🌓 **Polish** | Installable PWA, light/dark themes, Google sign-in, full SEO/OG image support. |
@@ -82,6 +82,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build. |
 | `npm run start` | Serve the production build. |
 | `npm run lint` | Run ESLint. |
+| `npm test` | Fixture engine unit tests (Node's built-in runner, compiled with `tsc`). |
 
 ## Project structure
 

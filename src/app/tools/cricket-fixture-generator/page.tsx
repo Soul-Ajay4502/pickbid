@@ -11,7 +11,8 @@ import FixtureGenerator from './FixtureGenerator';
 const PAGE_TITLE = 'Cricket Fixture Generator';
 const PAGE_DESCRIPTION =
   'Free cricket fixture generator — paste your team names and get a round-robin ' +
-  'schedule, single or home-and-away, with each team playing at most once per round.';
+  'schedule, single or home-and-away, or a shorter league where every team plays a ' +
+  'set number of matches, with each team playing at most once per round.';
 
 export const metadata = buildPageMetadata({
   title: PAGE_TITLE,
@@ -35,11 +36,22 @@ const FAQS = [
       'generator shows which team is resting so you can plan the ground bookings.',
   },
   {
+    question: 'Can each team play just a few matches instead of everyone?',
+    answer:
+      'Yes. Choose Matches Per Team and every team plays exactly that many — six ' +
+      'teams playing two each is six matches, not fifteen. Total Matches spreads a set ' +
+      'number of matches as evenly as possible, and Custom lets you give each team its ' +
+      'own minimum and maximum. If a combination cannot work — five teams cannot each ' +
+      'play three, because every match uses two teams — the generator says so instead ' +
+      'of producing a broken schedule.',
+  },
+  {
     question: 'Can a team end up playing twice in a row?',
     answer:
-      'No. The schedule is built with the circle method, which guarantees each team ' +
-      'appears at most once per round. Run the rounds in the order given and no side ' +
-      'plays back-to-back matches.',
+      'Not within a round: every format here puts each team in at most one match per ' +
+      'round. To also keep a team from playing back-to-back matches across rounds, set ' +
+      'a rest rule — the generator then orders the matches so every team sits out at ' +
+      'least that many between its own.',
   },
   {
     question: 'Can I use this for a knockout tournament?',
@@ -105,9 +117,10 @@ export default function FixtureGeneratorPage() {
           Cricket Fixture Generator
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-          Paste your team names and get a complete round-robin schedule. Every team
-          plays every other, and no team plays twice in the same round — which is what
-          makes the list usable for a one-day or one-weekend tournament.
+          Paste your team names and get a complete round-robin schedule — or a shorter
+          league where every team plays a set number of matches. No team plays twice in
+          the same round, which is what makes the list usable for a one-day or
+          one-weekend tournament.
         </p>
       </header>
 
@@ -133,6 +146,12 @@ export default function FixtureGeneratorPage() {
           Which side is listed first alternates between rounds, so if you are using the
           first-named team as the home side or the one batting first, that duty is
           shared out rather than always falling to the same teams.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+          The shorter formats first work out exactly how many matches each team needs,
+          check that those numbers can add up — every match uses two teams, and without
+          rematches nobody can play more opponents than there are — and only then choose
+          the pairings, so every team lands on its count with no pair meeting twice.
         </p>
       </section>
 
