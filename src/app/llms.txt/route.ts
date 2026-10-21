@@ -53,6 +53,14 @@ shared with a single link. It runs in any modern browser with no app install.
   rules. Impossible combinations are explained rather than half-built. Preview
   it, date it a round a day or a week, download it as a PNG poster (portrait,
   story or square, in thirteen templates), then record scores and winners.
+- **Live ball-by-ball scoring** — score a match from a phone, with every extra
+  (wides, no-balls, byes, leg byes, penalty runs), every mode of dismissal,
+  free hits, retirements, late arrivals, last man standing, rain-revised targets
+  and super overs, and keep scoring through a patchy connection. Spectators
+  follow a public match centre with the live score, full scorecard,
+  ball-by-ball commentary and over-by-over summary. Results feed the points
+  table with net run rate, and the league gets batting, bowling and fielding
+  leaderboards (orange and purple caps).
 - **League ledger** — an optional income and expense sheet for organizers.
 - **Identity and payment proof** — players can add a photo of an ID to their
   profile once, and attach an entry-fee receipt when they register. Organizers
@@ -114,8 +122,9 @@ cards without spreadsheets, WhatsApp threads or paper chits.
 - ${SITE_NAME} is a web app, not a mobile app, and not a fantasy-cricket or
   real-money betting product. Auctions use league budgets, not real currency.
 - Organizer pages (creating leagues, running an auction, analytics) require
-  sign-in and are excluded from crawling; public league pages, watch mode and
-  the recap are shareable without an account.
+  sign-in and are excluded from crawling; public league pages, watch mode,
+  match centres (live scores and scorecards) and the recap are shareable
+  without an account.
 
 ## Optional
 

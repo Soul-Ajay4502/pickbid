@@ -37,6 +37,6 @@ export async function DELETE(
 
   const { matchId } = await request.json();
   if (!matchId) return NextResponse.json({ error: 'matchId required' }, { status: 400 });
-  await deleteMatch(matchId);
+  await deleteMatch(id, matchId);
   return NextResponse.json({ success: true });
 }

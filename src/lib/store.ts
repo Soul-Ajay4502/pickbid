@@ -1,12 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from './db';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, MatchScorecardModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
 import { EARLY_ADOPTER_CUTOFF } from './badges';
 import { playerNameKey } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
-import type { BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import type { MatchScoreSummary, MatchSetup, PlayerMatchLine, ScoredMatchLines, ScoringEvent } from './scoring';
+import type { MatchScorecard, MatchCentre, BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -232,6 +233,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
     winnerTeamName: m.winnerTeamId ? teamNameById.get(m.winnerTeamId) ?? null : null,
     matchDate:      m.matchDate,
     played:         !!(m.team1Score || m.team2Score || m.winnerTeamId),
+    scoring:        m.scoring ?? null,
   }));
 
   const standings: PublicStanding[] = calcStandings(teams, matches).map((s) => ({
@@ -243,6 +245,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
     lost:     s.lost,
     tied:     s.tied,
     points:   s.points,
+    nrr:      s.nrr,
   }));
 
   // "Complete" means the auction ran and left nobody waiting to be called.
@@ -1396,9 +1399,24 @@ export async function getLiveLeagueIds(leagueIds: string[]): Promise<string[]> {
 
 // ── Matches ───────────────────────────────────────────────────────────────────
 
+/**
+ * A league's matches, newest first, each with its ball-by-ball summary when it
+ * has a scorecard. The summary is the small cached column, never the event log,
+ * so a long season of scored matches still costs one light query here.
+ */
 export async function getMatches(leagueId: string): Promise<Match[]> {
-  const rows = await MatchModel.findAll({ where: { leagueId }, order: [['matchDate', 'DESC'], ['createdAt', 'DESC']] });
-  return rows.map(toMatch);
+  const [rows, cards] = await Promise.all([
+    MatchModel.findAll({ where: { leagueId }, order: [['matchDate', 'DESC'], ['createdAt', 'DESC']] }),
+    MatchScorecardModel.findAll({ where: { leagueId }, attributes: ['matchId', 'summary'], raw: true }),
+  ]);
+  const summaries = new Map(cards.map((c) => [c.matchId as string, (c.summary as MatchScoreSummary | null) ?? null]));
+  return rows.map((row) => ({ ...toMatch(row), scoring: summaries.get(row.id) ?? null }));
+}
+
+/** One match, only if it belongs to this league. */
+export async function getMatch(leagueId: string, matchId: string): Promise<Match | null> {
+  const row = await MatchModel.findOne({ where: { id: matchId, leagueId } });
+  return row ? toMatch(row) : null;
 }
 
 export async function createMatch(data: Omit<Match, 'id' | 'createdAt'>): Promise<Match> {
@@ -1443,9 +1461,187 @@ export async function updateMatch(id: string, data: Partial<Omit<Match, 'id' | '
   return toMatch(row);
 }
 
-export async function deleteMatch(id: string): Promise<boolean> {
-  const deleted = await MatchModel.destroy({ where: { id } });
+/** Scoped to the league, so a manager of one league can't delete another's match by id. */
+export async function deleteMatch(leagueId: string, id: string): Promise<boolean> {
+  const deleted = await MatchModel.destroy({ where: { id, leagueId } });
   return deleted > 0;
+}
+
+// ── Live scoring ──────────────────────────────────────────────────────────────
+// One scorecard per match: the event log the scoring engine replays. Route
+// handlers validate a write by replaying it *before* it reaches here, and pass
+// in what the replay derived (summary, player lines, the result for the match
+// row) — this layer stores, it doesn't judge cricket.
+
+function toScorecard(row: MatchScorecardModel): MatchScorecard {
+  return {
+    matchId:   row.matchId!,
+    leagueId:  row.leagueId!,
+    setup:     row.setup as MatchSetup,
+    events:    (row.events ?? []) as ScoringEvent[],
+    version:   row.version ?? 0,
+    phase:     (row.phase ?? 'pre') as MatchScorecard['phase'],
+    updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+export async function getScorecard(matchId: string): Promise<MatchScorecard | null> {
+  const row = await MatchScorecardModel.findByPk(matchId);
+  return row ? toScorecard(row) : null;
+}
+
+/**
+ * The match centre payload: the fixture with both teams' names and colours,
+ * plus its scorecard if it has one. Null when the match isn't in this league.
+ */
+export async function getMatchCentre(leagueId: string, matchId: string): Promise<MatchCentre | null> {
+  const [league, match, card] = await Promise.all([
+    getLeague(leagueId),
+    getMatch(leagueId, matchId),
+    MatchScorecardModel.findOne({ where: { matchId, leagueId } }),
+  ]);
+  if (!league || !match) return null;
+  const teams = await TeamModel.findAll({ where: { id: [match.team1Id, match.team2Id] } });
+  const team = (id: string) => {
+    const t = teams.find((x) => x.id === id);
+    return { id, name: t?.name ?? 'Unknown team', colorHex: t?.colorHex ?? '#64748b' };
+  };
+  return {
+    match: {
+      id: match.id,
+      leagueId,
+      leagueName: league.name,
+      matchDate: match.matchDate,
+      team1: team(match.team1Id),
+      team2: team(match.team2Id),
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      winnerTeamId: match.winnerTeamId,
+    },
+    scorecard: card ? toScorecard(card) : null,
+  };
+}
+
+/** What a write derived from the log it is about to store. */
+export interface ScorecardDerived {
+  phase: MatchScorecard['phase'];
+  summary: MatchScoreSummary;
+  playerLines: PlayerMatchLine[];
+  /** The result for the match row; null while unfinished. */
+  matchResult: { team1Score: string | null; team2Score: string | null; winnerTeamId: string | null } | null;
+}
+
+/** The write was built on a version someone else has since replaced. */
+export class ScorecardConflictError extends Error {
+  readonly current: MatchScorecard | null;
+  constructor(current: MatchScorecard | null) {
+    super('The scorecard was updated somewhere else');
+    this.current = current;
+  }
+}
+
+/**
+ * Stores a scorecard's log if it is still at `baseVersion`, and keeps the
+ * match row's result in step: written when the match finishes, cleared again
+ * if an undo un-finishes it. One transaction, so the points table never sees a
+ * result the scorecard doesn't.
+ *
+ * `setup` is the setup the events were replayed under. It is written only
+ * with `writeSetup` — before the first ball, which the handler checks.
+ */
+export async function saveScorecard(input: {
+  leagueId: string;
+  matchId: string;
+  baseVersion: number;
+  setup: MatchSetup;
+  writeSetup: boolean;
+  events: ScoringEvent[];
+  derived: ScorecardDerived;
+  userId: string;
+}): Promise<MatchScorecard> {
+  const { leagueId, matchId, baseVersion, setup, writeSetup, events, derived, userId } = input;
+  return sequelize.transaction(async (t) => {
+    const now = new Date();
+    const values = {
+      events, phase: derived.phase, summary: derived.summary, playerLines: derived.playerLines,
+      updatedBy: userId, updatedAt: now, version: baseVersion + 1,
+      ...(writeSetup ? { setup } : {}),
+    };
+    let wasCompleted = false;
+    if (baseVersion === 0) {
+      // First save: there's no row to version against, so the primary key is
+      // the guard — a second scorer racing to start the same match conflicts.
+      const [, created] = await MatchScorecardModel.findOrCreate({
+        where: { matchId },
+        defaults: { matchId, leagueId, setup, ...values },
+        transaction: t,
+      });
+      if (!created) throw new ScorecardConflictError(await getScorecard(matchId));
+    } else {
+      const before = await MatchScorecardModel.findOne({
+        where: { matchId, leagueId }, attributes: ['phase', 'version'], transaction: t, lock: t.LOCK.UPDATE,
+      });
+      if (!before || before.version !== baseVersion) {
+        throw new ScorecardConflictError(before ? await getScorecard(matchId) : null);
+      }
+      wasCompleted = before.phase === 'completed';
+      await MatchScorecardModel.update(values, { where: { matchId, version: baseVersion }, transaction: t });
+    }
+
+    if (derived.matchResult) {
+      await MatchModel.update(derived.matchResult, { where: { id: matchId, leagueId }, transaction: t });
+    } else if (wasCompleted) {
+      await MatchModel.update(
+        { team1Score: null, team2Score: null, winnerTeamId: null },
+        { where: { id: matchId, leagueId }, transaction: t },
+      );
+    }
+
+    return {
+      matchId, leagueId, setup, events,
+      version: baseVersion + 1,
+      phase: derived.phase,
+      updatedAt: now.toISOString(),
+    };
+  });
+}
+
+/**
+ * Throws a scorecard away. A result it wrote onto the match row goes with it,
+ * so the fixture is back to unplayed rather than keeping a score nobody can
+ * see the balls behind.
+ */
+export async function deleteScorecard(leagueId: string, matchId: string): Promise<boolean> {
+  return sequelize.transaction(async (t) => {
+    const row = await MatchScorecardModel.findOne({ where: { matchId, leagueId }, attributes: ['phase'], transaction: t });
+    if (!row) return false;
+    await MatchScorecardModel.destroy({ where: { matchId, leagueId }, transaction: t });
+    if (row.phase === 'completed') {
+      await MatchModel.update(
+        { team1Score: null, team2Score: null, winnerTeamId: null },
+        { where: { id: matchId, leagueId }, transaction: t },
+      );
+    }
+    return true;
+  });
+}
+
+/**
+ * Every scored match's player lines in a league, for the batting, bowling and
+ * fielding tables. Reads the cached lines, not the logs.
+ */
+export async function getLeagueScoredLines(leagueId: string): Promise<ScoredMatchLines[]> {
+  const rows = await MatchScorecardModel.findAll({
+    where: { leagueId, phase: { [Op.ne]: 'pre' } },
+    attributes: ['summary', 'playerLines'],
+    raw: true,
+  });
+  return rows
+    .filter((r) => Array.isArray(r.playerLines))
+    .map((r) => ({
+      ballsPerOver: (r.summary as MatchScoreSummary | null)?.ballsPerOver ?? 6,
+      lines: r.playerLines as PlayerMatchLine[],
+    }));
 }
 
 // ── User Profiles ─────────────────────────────────────────────────────────────

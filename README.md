@@ -20,6 +20,7 @@ Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of loca
 | 📊 **Analytics** | Squad spend, balance and value at a glance. |
 | 👥 **Teams & officials** | Manage rosters, owners and non-playing team officials (coach, manager) with budget tracking. |
 | 🗓️ **Matches** | Generate fixtures — full round robin, a set number of matches per team, a total, or custom per-team ranges — preview them, download them as a PNG poster in thirteen templates, then record scores and winners. |
+| 🏏 **Live scoring** | Score a match ball by ball from a phone — extras, every mode of dismissal, free hits, retirements, late arrivals, rain revisions and super overs — and works offline. A public match centre shows the live score, scorecard, commentary and overs; the result lands on the points table with net run rate, and batting, bowling and fielding boards build themselves. |
 | 📄 **Export & share** | One-tap PDF squad sheets and WhatsApp sharing for cards, results and links. |
 | 🌍 **Discover** | A public directory of leagues that opt in. |
 | 🌓 **Polish** | Installable PWA, light/dark themes, Google sign-in, full SEO/OG image support. |
@@ -82,7 +83,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build. |
 | `npm run start` | Serve the production build. |
 | `npm run lint` | Run ESLint. |
-| `npm test` | Fixture engine unit tests (Node's built-in runner, compiled with `tsc`). |
+| `npm test` | Fixture and scoring engine unit tests (Node's built-in runner, compiled with `tsc`). |
 
 ## Project structure
 
@@ -122,6 +123,7 @@ PostgreSQL tables (see [src/lib/models.ts](src/lib/models.ts)):
 - **players** — cards within a league; carry batting/bowling type, role, stats, and auction state (team, sold price, icon/unsold flags).
 - **team_officials** — non-playing members (coach, manager, owner).
 - **matches** — fixtures with scores and a winner.
+- **match_scorecards** — one per match scored ball by ball: the match setup (rules, playing squads, toss) and the ordered event log the scoring engine in [src/lib/scoring](src/lib/scoring/index.ts) replays into the score. A `version` column guards concurrent scorers; `summary` and `player_lines` are caches derived on every save for match lists, NRR and league stats.
 - **auction_live** — one ephemeral JSON blob per league holding live auction state, written by the creator and polled by spectators.
 - **league_ledgers** — optional markdown income & expense sheet, at most one per league. Organizers write it and publish it explicitly; see the visibility rule below.
 - **user_badges** — one row per badge tier an account has earned (`user_id, badge_id, tier` is the primary key). Badge definitions live in code, in [src/lib/badges.ts](src/lib/badges.ts), not in a table.

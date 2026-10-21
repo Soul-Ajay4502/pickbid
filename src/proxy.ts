@@ -43,6 +43,9 @@ function isPublicPath(pathname: string): boolean {
   if (leagueRoot && !RESERVED_LEAGUE_SEGMENTS.has(leagueRoot[1])) return true;
   // The live spectator screen for a league is meant to be shared publicly
   if (/^\/leagues\/[^/]+\/watch$/.test(pathname)) return true;
+  // So is a match centre — live score, scorecard and commentary for one match.
+  // Only the match page itself: its `/score` console below stays gated.
+  if (/^\/leagues\/[^/]+\/matches\/[^/]+$/.test(pathname)) return true;
   // The Auction Wrapped recap (and its poster image) is deliberately shareable,
   // like /watch — it shows only what the spectator screen already broadcast
   if (/^\/leagues\/[^/]+\/wrapped(\/poster)?$/.test(pathname)) return true;

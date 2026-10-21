@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node -e \"require('fs').rmSync('.test-build',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node --test .test-build/fixtures.test.js",
+    "test": "node -e \"require('fs').rmSync('.test-build',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node --test .test-build/fixtures/fixtures.test.js .test-build/scoring/scoring.test.js",
     "db:migrate": "npx sequelize-cli db:migrate",
     "db:migrate:undo": "npx sequelize-cli db:migrate:undo",
     "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",

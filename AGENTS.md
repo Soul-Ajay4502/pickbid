@@ -21,13 +21,13 @@ for where something lives.
 npm run dev            # dev server
 npm run build          # production build — the only real typecheck (tsc has noEmit)
 npm run lint           # eslint
-npm test               # fixture engine unit tests (node:test, compiled by tsc)
+npm test               # fixture + scoring engine unit tests (node:test, compiled by tsc)
 npm run db:migrate     # apply sequelize migrations
 npm run db:status      # show migration state
 ```
 
-The only unit tests cover the fixture engine (`npm test`); verify everything
-else with `npm run build` plus the dev server.
+The only unit tests cover the fixture and scoring engines (`npm test`); verify
+everything else with `npm run build` plus the dev server.
 
 ## Next.js 16 specifics that bite
 
@@ -227,7 +227,7 @@ panel's top edge, so it no longer needs to clear the nav bar.
 
 `isImmersiveLeaguePath` ([leagueChrome.ts](src/lib/leagueChrome.ts)) is the one
 list of screens that run with no chrome — auction, watch, wrapped, sponsors,
-squad reveal. `NavBar` and `LeagueChrome` both read it so they can't disagree,
+squad reveal, and the ball-by-ball scorer. `NavBar` and `LeagueChrome` both read it so they can't disagree,
 and `LeagueChrome` returns early on a match: that is what keeps the rail's fetch
 off `/watch`, which a whole hall loads at once.
 
@@ -270,9 +270,50 @@ gets stored. A new format is a new way of setting targets in `plan.ts`, not a
 new generator. The folder uses relative imports only (no `@/`), because
 `npm test` compiles it with plain `tsc`; keep it free of React and server code.
 
+**Live scoring is an event log that every screen replays — never a stored
+score.** [src/lib/scoring/](src/lib/scoring/index.ts) is a pure engine (relative
+imports, no React or server code, tested by `npm test`) whose
+`replay(setup, events)` is the only thing that produces a score, a scorecard,
+who is on strike, who may bowl, or a result. `match_scorecards` stores the
+`setup` (rules, playing squads, toss) and the ordered `events`; undo is
+dropping the last event, and correcting an earlier ball replaces that one event
+— under a fresh id, because the sync diffs logs by id — and replays the rest. A new law or local rule is a change to the engine plus
+a test, never a special case in a screen.
+
+Writes go through
+[api/leagues/[id]/matches/[matchId]/score](src/app/api/leagues/[id]/matches/[matchId]/score/route.ts).
+The POST takes `{ baseVersion, keep, append }`, replays the *whole* resulting
+log and stores it only if every event is legal and the row is still at
+`baseVersion` — so two scorers can't silently overwrite each other. Never store
+a score a client computed; derive it. The setup (PUT) can change only while the
+log is empty; mid-match changes are events (`add_player`, `revise`). The
+console ([useScorecardSync](src/components/scoring/useScorecardSync.ts)) is
+local-first: each tap is replayed and drawn at once, queued in localStorage
+while offline, and synced as a diff. A 409 whose log is a prefix of ours is our
+own lost reply (rebase); anything else means another device scored, and its log
+wins.
+
+`summary` and `player_lines` on the row are caches derived on every save, so
+match lists, NRR and `/stats` read a few hundred bytes per match instead of
+replaying logs — write them nowhere else. The match row's scores and
+`winnerTeamId` are written in the same transaction **only once the match
+completes**, and cleared if an undo un-completes it: `calcStandings` counts any
+match with a score as played, so a live score must never reach the row.
+Scorecard stats are separate from the self-reported `players.stats*` career
+numbers on a card — don't overwrite those from scorecards.
+
+The score GET is public and edge-cached exactly like the auction board
+(`CDN-Cache-Control: s-maxage=1`, no `stale-while-revalidate`), because a
+ground full of phones polls it; the match centre polls with the default cache
+mode. The scorer's console is the one caller that fetches it with
+`cache: 'no-store'`, on purpose — it has to build on the newest version.
+Scorecards carry names and card ids only; keep anything organizer-only out of
+`setup`.
+
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
-`/sponsors` and the OG image routes are public today. The proxy is
+`/sponsors`, match centres (`/leagues/[id]/matches/[matchId]`, not its
+`/score` console) and the OG image routes are public today. The proxy is
 defence-in-depth for navigation only — real enforcement lives in the API
 handlers via `auth()`.
 

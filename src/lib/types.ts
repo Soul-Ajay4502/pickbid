@@ -1,3 +1,5 @@
+import type { MatchScoreSummary, MatchSetup, ScoringEvent } from './scoring';
+
 export type PlayerRole = 'Batter' | 'Bowler' | 'All-Rounder' | 'Wicket-Keeper Batter';
 
 /** Every role a player can have, in the app's canonical display order. */
@@ -270,6 +272,45 @@ export interface Match {
   winnerTeamId: string | null;
   matchDate: string | null;
   createdAt: string;
+  /**
+   * Set when the match is (or was) scored ball by ball: its live score or
+   * result, derived from the scorecard. Attached by `getMatches`; absent on a
+   * match that was only ever entered by hand.
+   */
+  scoring?: MatchScoreSummary | null;
+}
+
+/**
+ * A match's ball-by-ball scorecard as the API serves it: the log the scoring
+ * engine replays, plus the version a scorer's next write must be built on.
+ * Holds names and card ids only — never anything from a player's private
+ * fields — so it is safe on the public match centre.
+ */
+export interface MatchScorecard {
+  matchId: string;
+  leagueId: string;
+  setup: MatchSetup;
+  events: ScoringEvent[];
+  version: number;
+  phase: MatchScoreSummary['phase'];
+  updatedAt: string;
+}
+
+/** Everything the match centre needs, scored or not. */
+export interface MatchCentre {
+  match: {
+    id: string;
+    leagueId: string;
+    leagueName: string;
+    matchDate: string | null;
+    team1: { id: string; name: string; colorHex: string };
+    team2: { id: string; name: string; colorHex: string };
+    team1Score: string | null;
+    team2Score: string | null;
+    winnerTeamId: string | null;
+  };
+  /** Null until an organizer starts scoring it. */
+  scorecard: MatchScorecard | null;
 }
 
 /**
@@ -487,6 +528,8 @@ export interface PublicMatch {
   matchDate: string | null;
   /** False while the match has no scores and no winner recorded. */
   played: boolean;
+  /** Live score or result when the match is scored ball by ball. */
+  scoring: MatchScoreSummary | null;
 }
 
 /** A row of the public points table. */
@@ -499,6 +542,8 @@ export interface PublicStanding {
   lost: number;
   tied: number;
   points: number;
+  /** Net run rate from ball-by-ball scored matches; null when none are. */
+  nrr: number | null;
 }
 
 /**

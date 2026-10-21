@@ -18,6 +18,7 @@ import Image from 'next/image';
 import { Gavel, Users, Trophy, CalendarDays, Handshake, ShieldCheck } from 'lucide-react';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
 import { formatINR } from '@/lib/utils';
+import { formatNrr } from '@/lib/standings';
 import { SITE_NAME } from '@/lib/seo';
 import type { PublicLeagueView, PublicPlayer } from '@/lib/types';
 
@@ -98,12 +99,18 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
     totalSpend,
   } = league;
 
-  const playedMatches = matches.filter((m) => m.played);
+  // Scored ball by ball right now: no result on the row yet, so it would
+  // otherwise sit among the fixtures with no sign it's being played.
+  const isLive = (m: (typeof matches)[number]) => m.scoring?.phase === 'live' || m.scoring?.phase === 'break';
+  const liveMatches = matches.filter(isLive);
+  const playedMatches = matches.filter((m) => m.played && !isLive(m));
   // `getMatches` is newest first, which suits results; a fixture list reads
   // soonest first (undated last, then in the order added — round order for a
   // generated list), which is that same order reversed.
-  const upcomingMatches = matches.filter((m) => !m.played).reverse();
+  const upcomingMatches = matches.filter((m) => !m.played && !isLive(m)).reverse();
   const hasTable = standings.some((s) => s.played > 0);
+  const hasNrr = standings.some((s) => s.nrr !== null);
+  const matchHref = (matchId: string) => `/leagues/${id}/matches/${matchId}`;
   const topBuys = soldPlayers.slice(0, 10);
 
   return (
@@ -242,6 +249,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
             Two points for a win, one each for a tie or no result.
+            {hasNrr ? ' Net run rate comes from matches scored ball by ball.' : ''}
           </p>
           <div className="overflow-x-auto rounded-xl border border-border/60">
             <table className="w-full text-sm">
@@ -255,6 +263,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
                   <th scope="col" className="px-3 py-2.5 text-right font-semibold">W</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-semibold">L</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-semibold">T</th>
+                  {hasNrr && <th scope="col" className="px-3 py-2.5 text-right font-semibold">NRR</th>}
                   <th scope="col" className="px-4 py-2.5 text-right font-semibold">Pts</th>
                 </tr>
               </thead>
@@ -275,6 +284,7 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
                     <td className="px-3 py-2.5 text-right text-muted-foreground">{row.won}</td>
                     <td className="px-3 py-2.5 text-right text-muted-foreground">{row.lost}</td>
                     <td className="px-3 py-2.5 text-right text-muted-foreground">{row.tied}</td>
+                    {hasNrr && <td className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">{formatNrr(row.nrr)}</td>}
                     <td className="px-4 py-2.5 text-right font-bold text-foreground">{row.points}</td>
                   </tr>
                 ))}
@@ -295,25 +305,57 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
             {name} fixtures and results
           </h2>
 
+          {liveMatches.length > 0 && (
+            <>
+              <h3 className="text-sm font-semibold text-foreground/80 mb-3">Live now</h3>
+              <ul className="space-y-2 mb-8">
+                {liveMatches.map((match) => (
+                  <li key={match.id}>
+                    <Link
+                      href={matchHref(match.id)}
+                      className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 transition-colors duration-200 hover:border-red-500/50"
+                    >
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shrink-0">
+                        Live
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">
+                          {match.team1Name} v {match.team2Name}
+                        </span>
+                        <span className="block mt-0.5 text-xs text-muted-foreground">
+                          {match.scoring?.live ? `${match.scoring.live.score} (${match.scoring.live.overs} ov) · ` : ''}
+                          {match.scoring?.statusText}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
           {playedMatches.length > 0 && (
             <>
               <h3 className="text-sm font-semibold text-foreground/80 mb-3">Results</h3>
               <ul className="space-y-2 mb-8">
                 {playedMatches.map((match) => (
-                  <li
-                    key={match.id}
-                    className="rounded-xl border border-border/60 bg-card/40 px-4 py-3"
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {match.team1Name}
-                      {match.team1Score ? ` ${match.team1Score}` : ''} v{' '}
-                      {match.team2Name}
-                      {match.team2Score ? ` ${match.team2Score}` : ''}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {match.winnerTeamName ? `${match.winnerTeamName} won` : 'No result'}
-                      {match.matchDate ? ` · ${match.matchDate}` : ''}
-                    </p>
+                  <li key={match.id}>
+                    <Link
+                      href={matchHref(match.id)}
+                      className="block rounded-xl border border-border/60 bg-card/40 px-4 py-3 transition-colors duration-200 hover:border-primary/30"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {match.team1Name}
+                        {match.team1Score ? ` ${match.team1Score}` : ''} v{' '}
+                        {match.team2Name}
+                        {match.team2Score ? ` ${match.team2Score}` : ''}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {match.scoring?.resultText || (match.winnerTeamName ? `${match.winnerTeamName} won` : 'No result')}
+                        {match.matchDate ? ` · ${match.matchDate}` : ''}
+                        {match.scoring ? ' · Full scorecard' : ''}
+                      </p>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -325,16 +367,18 @@ export default function PublicLeagueView({ league }: { league: PublicLeagueView 
               <h3 className="text-sm font-semibold text-foreground/80 mb-3">Upcoming fixtures</h3>
               <ul className="space-y-2">
                 {upcomingMatches.map((match) => (
-                  <li
-                    key={match.id}
-                    className="rounded-xl border border-border/60 bg-card/40 px-4 py-3"
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {match.team1Name} v {match.team2Name}
-                    </p>
-                    {match.matchDate ? (
-                      <p className="mt-1 text-xs text-muted-foreground">{match.matchDate}</p>
-                    ) : null}
+                  <li key={match.id}>
+                    <Link
+                      href={matchHref(match.id)}
+                      className="block rounded-xl border border-border/60 bg-card/40 px-4 py-3 transition-colors duration-200 hover:border-primary/30"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {match.team1Name} v {match.team2Name}
+                      </p>
+                      {match.matchDate ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{match.matchDate}</p>
+                      ) : null}
+                    </Link>
                   </li>
                 ))}
               </ul>

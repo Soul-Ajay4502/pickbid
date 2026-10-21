@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   LayoutGrid, UserPlus, Users, BarChart2, Activity, Trophy, Handshake, ShieldCheck,
   ReceiptText, Palette, Globe, Lock, CopyPlus, RotateCcw, Award, Eye, EyeOff, Trash2,
-  ChevronDown, Settings2, UserRoundPlus,
+  ChevronDown, Settings2, UserRoundPlus, BarChart3,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
@@ -93,6 +93,10 @@ export default function LeagueSidebar({
         items: [
           { href: `${base}/analytics`, label: 'Analytics', Icon: Activity },
           { href: `${base}/leaderboard`, label: 'Leaderboard', Icon: Trophy },
+          {
+            href: `${base}/stats`, label: 'Player Stats', Icon: BarChart3,
+            title: 'Batting, bowling and fielding boards from matches scored ball by ball',
+          },
         ],
       },
       {
@@ -117,8 +121,10 @@ export default function LeagueSidebar({
           heading: 'Explore',
           items: [
             { href: `${base}/teams`, label: 'Teams', Icon: Users },
+            { href: `${base}/matches`, label: 'Matches', Icon: BarChart2 },
             { href: `${base}/analytics`, label: 'Analytics', Icon: Activity },
             { href: `${base}/leaderboard`, label: 'Leaderboard', Icon: Trophy },
+            { href: `${base}/stats`, label: 'Player Stats', Icon: BarChart3 },
             { href: `${base}/sponsors`, label: 'Sponsors', Icon: Handshake },
           ],
         }]

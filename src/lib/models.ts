@@ -343,6 +343,44 @@ AuctionLiveModel.init(
   { sequelize, tableName: 'auction_live', timestamps: false, underscored: true }
 );
 
+// ── Match Scorecard ───────────────────────────────────────────────────────────
+// One per scored match: the ball-by-ball log (`setup` + `events`) the scoring
+// engine replays. `summary` and `playerLines` are caches derived from the log
+// on every save; `version` guards concurrent scorers. See the migration.
+export class MatchScorecardModel extends Model<
+  InferAttributes<MatchScorecardModel>,
+  InferCreationAttributes<MatchScorecardModel, { omit: 'createdAt' }>
+> {
+  declare matchId: ForeignKey<MatchModel['id']>;
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare setup: object;
+  declare events: CreationOptional<object[]>;
+  declare version: CreationOptional<number>;
+  declare phase: CreationOptional<string>;
+  declare summary: CreationOptional<object | null>;
+  declare playerLines: CreationOptional<object[] | null>;
+  declare updatedBy: CreationOptional<string | null>;
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
+}
+
+MatchScorecardModel.init(
+  {
+    matchId:     { type: DataTypes.STRING,     primaryKey: true },
+    leagueId:    { type: DataTypes.STRING,     allowNull: false },
+    setup:       { type: DataTypes.JSONB,      allowNull: false },
+    events:      { type: DataTypes.JSONB,      allowNull: false, defaultValue: [] },
+    version:     { type: DataTypes.INTEGER,    allowNull: false, defaultValue: 0 },
+    phase:       { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'pre' },
+    summary:     { type: DataTypes.JSONB,      allowNull: true,  defaultValue: null },
+    playerLines: { type: DataTypes.JSONB,      allowNull: true,  defaultValue: null },
+    updatedBy:   { type: DataTypes.STRING,     allowNull: true,  defaultValue: null },
+    createdAt:   { type: DataTypes.DATE,       allowNull: true,  defaultValue: DataTypes.NOW },
+    updatedAt:   { type: DataTypes.DATE,       allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'match_scorecards', timestamps: false, underscored: true }
+);
+
 // ── User Badge ────────────────────────────────────────────────────────────────
 // One row per badge *tier* a user has earned. Definitions live in code
 // (`src/lib/badges.ts`), not in a table — this records only who earned what and
@@ -411,6 +449,9 @@ PlayerModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
 
 LeagueModel.hasMany(MatchModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 MatchModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
+
+MatchModel.hasOne(MatchScorecardModel,    { foreignKey: 'matchId', onDelete: 'CASCADE' });
+MatchScorecardModel.belongsTo(MatchModel, { foreignKey: 'matchId' });
 
 LeagueModel.hasMany(TeamOfficialModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 TeamOfficialModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });

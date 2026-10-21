@@ -360,9 +360,9 @@ const SAMPLE_STANDINGS: ShowcaseStandings = {
   leagueId: '',
   leagueName: 'Sunday Premier League',
   rows: [
-    { teamId: 'a', teamName: 'Strikers', colorHex: '#1d4a35', played: 6, won: 5, lost: 1, tied: 0, points: 10 },
-    { teamId: 'b', teamName: 'Titans', colorHex: '#94701a', played: 6, won: 4, lost: 2, tied: 0, points: 8 },
-    { teamId: 'c', teamName: 'Warriors', colorHex: '#58625b', played: 6, won: 2, lost: 4, tied: 0, points: 4 },
+    { teamId: 'a', teamName: 'Strikers', colorHex: '#1d4a35', played: 6, won: 5, lost: 1, tied: 0, points: 10, nrr: null },
+    { teamId: 'b', teamName: 'Titans', colorHex: '#94701a', played: 6, won: 4, lost: 2, tied: 0, points: 8, nrr: null },
+    { teamId: 'c', teamName: 'Warriors', colorHex: '#58625b', played: 6, won: 2, lost: 4, tied: 0, points: 4, nrr: null },
   ],
 };
 

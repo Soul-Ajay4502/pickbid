@@ -4,7 +4,9 @@
  * The auction console, the spectator watch board, Auction Wrapped, the sponsor
  * marquee and the squad reveal are full-screen experiences: they're projected,
  * screen-recorded or handed to a crowd, so nothing frames them — no nav bar and
- * no league sidebar. Both `NavBar` and `LeagueChrome` read this, so the two
+ * no league sidebar. The ball-by-ball scorer joins them: it runs on a phone at
+ * the boundary for three hours, and every pixel of chrome is a thumb's reach
+ * lost from the keypad. Both `NavBar` and `LeagueChrome` read this, so the two
  * can't drift into disagreeing about which screens are immersive.
  *
  * Pure string work, no server imports: safe for any client component.
@@ -12,7 +14,8 @@
 export function isImmersiveLeaguePath(pathname: string): boolean {
   return (
     /^\/leagues\/[^/]+\/(auction|watch|wrapped|sponsors)$/.test(pathname) ||
-    /^\/leagues\/[^/]+\/teams\/[^/]+\/reveal$/.test(pathname)
+    /^\/leagues\/[^/]+\/teams\/[^/]+\/reveal$/.test(pathname) ||
+    /^\/leagues\/[^/]+\/matches\/[^/]+\/score$/.test(pathname)
   );
 }
 

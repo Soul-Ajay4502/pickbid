@@ -1,45 +1,20 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Trophy, Minus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Trophy, Minus, Radio, ChevronRight } from 'lucide-react';
 import { formatMatchDay } from '@/lib/fixtures';
+import { calcStandings, formatNrr } from '@/lib/standings';
 import FixturePosterDialog, { type PosterSourceMatch } from '@/components/fixtures/FixturePosterDialog';
 import FixtureGeneratorPanel from './FixtureGeneratorPanel';
-import type { LeagueWithPlayers, Team, Match } from '@/lib/types';
-
-interface Standing {
-  team: Team;
-  played: number;
-  won: number;
-  lost: number;
-  tied: number;
-  points: number;
-}
-
-function calcStandings(teams: Team[], matches: Match[]): Standing[] {
-  const map: Record<string, Standing> = {};
-  teams.forEach(t => { map[t.id] = { team: t, played: 0, won: 0, lost: 0, tied: 0, points: 0 }; });
-
-  matches.forEach(m => {
-    if (!isPlayed(m)) return;
-    const t1 = map[m.team1Id], t2 = map[m.team2Id];
-    if (!t1 || !t2) return;
-    t1.played++; t2.played++;
-    if (!m.winnerTeamId) { // no-result / tie
-      t1.tied++; t2.tied++; t1.points++; t2.points++;
-    } else if (m.winnerTeamId === m.team1Id) {
-      t1.won++; t1.points += 2; t2.lost++;
-    } else {
-      t2.won++; t2.points += 2; t1.lost++;
-    }
-  });
-
-  return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
-}
+import type { LeagueWithPlayers, Match } from '@/lib/types';
 
 const isPlayed = (m: Match) => !!(m.team1Score || m.team2Score || m.winnerTeamId);
+
+/** Being scored ball by ball right now — between innings included. */
+const isLive = (m: Match) => m.scoring?.phase === 'live' || m.scoring?.phase === 'break';
 
 /**
  * Soonest first: by date with undated last, then in the order they were added —
@@ -149,40 +124,62 @@ export default function MatchesPage() {
 
   const teams = data.teams ?? [];
   const standings = calcStandings(teams, matches);
+  const showNrr = standings.some(s => s.nrr !== null);
   const teamById = Object.fromEntries(teams.map(t => [t.id, t]));
   const isCreator = data.canManage;
-  const fixtures = matches.filter(m => !isPlayed(m)).sort(byFixtureOrder);
-  const results = matches.filter(isPlayed).sort(byFixtureOrder).reverse();
+  const live = matches.filter(isLive).sort(byFixtureOrder);
+  const fixtures = matches.filter(m => !isPlayed(m) && !isLive(m)).sort(byFixtureOrder);
+  const results = matches.filter(m => isPlayed(m) && !isLive(m)).sort(byFixtureOrder).reverse();
 
   const renderMatch = (m: Match, mi: number) => {
     const t1 = teamById[m.team1Id], t2 = teamById[m.team2Id];
     if (!t1 || !t2) return null;
+    const scoring = m.scoring;
+    const liveNow = isLive(m);
+    // A live match has no score on the row yet — show the one being bowled
+    const liveScore = (teamId: string) =>
+      scoring?.live?.battingTeamId === teamId ? `${scoring.live.score} (${scoring.live.overs})` : null;
     return (
       <div key={m.id} className="card-premium p-4 flex items-center gap-4 animate-fade-in-up" style={{ animationDelay: `${Math.min(mi, 8) * 0.04}s` }}>
-        <div className="flex-1 flex items-center gap-3">
-          <div className="text-center flex-1">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: t1.colorHex }}/>
-              <span className={`font-semibold text-sm ${m.winnerTeamId===t1.id?'text-foreground':'text-muted-foreground'}`}>{t1.name}</span>
+        <Link href={`/leagues/${id}/matches/${m.id}`} className="flex-1 min-w-0 flex items-center gap-3" title="Open the match centre">
+          <div className="text-center flex-1 min-w-0">
+            <div className="flex items-center justify-center gap-2 mb-1 min-w-0">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t1.colorHex }}/>
+              <span className={`font-semibold text-sm truncate ${m.winnerTeamId===t1.id?'text-foreground':'text-muted-foreground'}`}>{t1.name}</span>
               {m.winnerTeamId===t1.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
             </div>
-            {m.team1Score && <p className="text-xs text-muted-foreground font-mono">{m.team1Score}</p>}
+            {(liveScore(t1.id) ?? m.team1Score) && <p className={`text-xs font-mono ${liveScore(t1.id) ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>{liveScore(t1.id) ?? m.team1Score}</p>}
           </div>
           <div className="text-xs text-muted-foreground font-bold"><Minus className="w-3 h-3"/></div>
-          <div className="text-center flex-1">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              {m.winnerTeamId===t2.id&&<Trophy className="w-3.5 h-3.5 text-amber-500"/>}
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: t2.colorHex }}/>
-              <span className={`font-semibold text-sm ${m.winnerTeamId===t2.id?'text-foreground':'text-muted-foreground'}`}>{t2.name}</span>
+          <div className="text-center flex-1 min-w-0">
+            <div className="flex items-center justify-center gap-2 mb-1 min-w-0">
+              {m.winnerTeamId===t2.id&&<Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0"/>}
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t2.colorHex }}/>
+              <span className={`font-semibold text-sm truncate ${m.winnerTeamId===t2.id?'text-foreground':'text-muted-foreground'}`}>{t2.name}</span>
             </div>
-            {m.team2Score && <p className="text-xs text-muted-foreground font-mono">{m.team2Score}</p>}
+            {(liveScore(t2.id) ?? m.team2Score) && <p className={`text-xs font-mono ${liveScore(t2.id) ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>{liveScore(t2.id) ?? m.team2Score}</p>}
           </div>
-        </div>
-        <div className="shrink-0 text-right space-y-1">
+        </Link>
+        {/* Stacked, so the badges and the Score button never share a line and
+            squeeze the team names on a phone */}
+        <div className="shrink-0 flex flex-col items-end gap-1 text-right">
           {m.matchDate && <p className="text-xs text-muted-foreground">{formatMatchDay(m.matchDate)}</p>}
-          {!m.winnerTeamId && !m.team1Score && <p className="text-xs text-amber-500">Upcoming</p>}
-          {!m.winnerTeamId && (m.team1Score || m.team2Score) && <p className="text-xs text-muted-foreground">No result</p>}
+          {liveNow && (
+            <p className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />Live
+            </p>
+          )}
+          {!liveNow && !m.winnerTeamId && !m.team1Score && <p className="text-xs text-amber-500">Upcoming</p>}
+          {!liveNow && !m.winnerTeamId && (m.team1Score || m.team2Score) && <p className="text-xs text-muted-foreground">{scoring?.result?.kind === 'tie' ? 'Tied' : 'No result'}</p>}
+          {scoring && !liveNow && scoring.phase === 'completed' && <p className="text-[10px] text-muted-foreground">Ball by ball</p>}
+          {isCreator && !isPlayed(m) && (
+            <Link href={`/leagues/${id}/matches/${m.id}/score`}
+              className="inline-flex items-center gap-1 rounded-lg border border-primary/40 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10">
+              <Radio className="w-3 h-3" />{scoring ? 'Continue' : 'Score'}
+            </Link>
+          )}
         </div>
+        {!isCreator && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
         {isCreator && (
           <button onClick={() => handleDelete(m.id)} title="Delete match"
             className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
@@ -220,7 +217,7 @@ export default function MatchesPage() {
             </div>
             <div>
               <p className="text-sm font-semibold">Points Table</p>
-              <p className="text-xs text-muted-foreground">Win 2 pts · Tie / no result 1 pt</p>
+              <p className="text-xs text-muted-foreground">Win 2 pts · Tie / no result 1 pt{showNrr ? ' · NRR from ball-by-ball scored matches' : ''}</p>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -229,11 +226,12 @@ export default function MatchesPage() {
                 <tr className="border-b border-border">
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide w-10">#</th>
                   <th className="px-2 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Team</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">P</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">W</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">L</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">T</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pts</th>
+                  <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">P</th>
+                  <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">W</th>
+                  <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">L</th>
+                  <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">T</th>
+                  {showNrr && <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">NRR</th>}
+                  <th className="px-1.5 sm:px-3 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pts</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,11 +249,12 @@ export default function MatchesPage() {
                           {isLeader && <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0"/>}
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-center tabular-nums text-muted-foreground">{s.played}</td>
-                      <td className="px-3 py-3 text-center tabular-nums text-green-600 dark:text-green-400 font-semibold">{s.won}</td>
-                      <td className="px-3 py-3 text-center tabular-nums text-muted-foreground">{s.lost}</td>
-                      <td className="px-3 py-3 text-center tabular-nums text-muted-foreground">{s.tied}</td>
-                      <td className="px-3 py-3 text-center tabular-nums font-bold text-foreground">{s.points}</td>
+                      <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums text-muted-foreground">{s.played}</td>
+                      <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums text-green-600 dark:text-green-400 font-semibold">{s.won}</td>
+                      <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums text-muted-foreground">{s.lost}</td>
+                      <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums text-muted-foreground">{s.tied}</td>
+                      {showNrr && <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums text-xs text-muted-foreground">{formatNrr(s.nrr)}</td>}
+                      <td className="px-1.5 sm:px-3 py-3 text-center tabular-nums font-bold text-foreground">{s.points}</td>
                     </tr>
                   );
                 })}
@@ -270,6 +269,12 @@ export default function MatchesPage() {
         <p className="text-muted-foreground text-sm text-center py-6 mb-8">
           No matches yet.{isCreator && teams.length >= 2 && ' Generate a full fixture list below, or add matches one at a time.'}
         </p>
+      )}
+      {live.length > 0 && (
+        <div className="space-y-2.5 mb-8">
+          <div className="section-label mb-3">Live now</div>
+          {live.map(renderMatch)}
+        </div>
       )}
       {fixtures.length > 0 && (
         <div className="space-y-2.5 mb-8">
