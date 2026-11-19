@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus } from 'lucide-react';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
+import { useLeagueRevision } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, Team, Player, TeamOfficial } from '@/lib/types';
 
 // No reds or blacks: new teams cycle through this in order, so neighbours are
@@ -175,7 +176,14 @@ export default function TeamsPage() {
     setLoading(false);
   }, [id, router]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // The sidebar can change the roster under this page (an Excel import, Add
+  // from Accounts, Reset Auction) — reload when it says it has.
+  const leagueRevision = useLeagueRevision();
+  useEffect(() => {
+    // Inside an async function so the state it sets lands after the fetch,
+    // not synchronously in the effect body.
+    void (async () => { await fetchData(); })();
+  }, [fetchData, leagueRevision]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();

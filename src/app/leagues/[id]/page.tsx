@@ -12,6 +12,7 @@ import LeagueWorkspace from './LeagueWorkspace';
  * A league URL serves two audiences, and this component picks between them:
  *
  *   signed in                  → the interactive workspace, server-rendered with its data
+ *   owner console session      → the same workspace, as an organizer of any league
  *   signed out + public league → a server-rendered public page (indexable)
  *   signed out + private league → sign in, as before
  *
@@ -35,17 +36,21 @@ export default async function LeaguePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth();
+  const [session, platformAdmin] = await Promise.all([auth(), isAdmin()]);
 
-  if (session?.user) {
+  // The owner console carries no Auth.js session, so it has to be let in here
+  // by name: without this an owner opening a *private* league from `/admin`
+  // fell through to the signed-out branch below and was sent to /login, on the
+  // one league screen that is server-rendered. `isAdmin` verifies the cookie's
+  // signature, so this is the real check, not the proxy's presence test.
+  if (session?.user || platformAdmin) {
     // The workspace used to fetch all of this after hydration, which put four
     // steps — HTML, JS, the league GET, then the card photos — between a visitor
     // and the first card. Rendering it here puts the cards in the HTML, so the
     // photos start downloading as the document parses. `getLeagueView` is the
     // same function the GET uses, so nothing reaches this page that the API
     // would have withheld from this viewer.
-    const userId = session.user.id;
-    const platformAdmin = await isAdmin();
+    const userId = session?.user?.id ?? null;
     const [view, profile] = await Promise.all([
       // `undefined` on failure, not null: a database hiccup should fall back to
       // the workspace loading its own data, not bounce the visitor off a league

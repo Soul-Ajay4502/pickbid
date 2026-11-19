@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles } from 'lucide-react';
+import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles, Pencil, UserPlus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import PlayerFullView from '@/components/PlayerFullView';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cloudinaryImage, copyToClipboard, formatIndianPhone, localPhoneDigits } from '@/lib/utils';
+import { useLeagueRevision } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, Player, Team, TeamOfficial } from '@/lib/types';
 
 function fmt(n: number) {
@@ -42,6 +43,15 @@ export default function TeamDetailPage() {
   const [loading, setLoading] = useState(true);
   // Player whose full view is shown in the modal (null = closed)
   const [cardPlayer, setCardPlayer] = useState<Player | null>(null);
+  // Organizer corrections after the auction: the squad member whose price is
+  // being edited, and the "add a player" dialog for anyone still without a team
+  const [editPlayer, setEditPlayer] = useState<Player | null>(null);
+  const [editPrice, setEditPrice] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPlayerId, setAddPlayerId] = useState<string | null>(null);
+  const [addPrice, setAddPrice] = useState('');
+  const [addQuery, setAddQuery] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/leagues/${id}`);
@@ -55,7 +65,14 @@ export default function TeamDetailPage() {
     setLoading(false);
   }, [id, teamId, router]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Reload when the sidebar changes the roster (import, reset) — the Add
+  // player list is drawn from it.
+  const leagueRevision = useLeagueRevision();
+  useEffect(() => {
+    // Inside an async function so the state it sets lands after the fetch,
+    // not synchronously in the effect body.
+    void (async () => { await fetchData(); })();
+  }, [fetchData, leagueRevision]);
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -90,6 +107,79 @@ export default function TeamDetailPage() {
   const phoneEntries = squad
     .map((p) => ({ name: p.name, phone: formatIndianPhone(localPhoneDigits(p.contactNumber)) }))
     .filter((e) => e.phone);
+
+  // Players with no team — passed over at the auction, or never put up. Unsold
+  // first: they are who an organizer is usually here to place.
+  const teamless = data.players
+    .filter((p) => !p.teamId)
+    .sort((a, b) => Number(!!b.isUnsold) - Number(!!a.isUnsold) || a.name.localeCompare(b.name));
+  const squadFull = squad.length >= team.maxPlayers;
+
+  /**
+   * Writes an auction result for one player through the same PUT the auction
+   * uses, so a correction is held to the same squad-size and purse rules as a
+   * sale — and the server's refusal, when there is one, is what gets shown.
+   */
+  async function saveResult(playerId: string, body: Record<string, unknown>, done: string): Promise<boolean> {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/leagues/${id}/players/${playerId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(json.error ?? 'Could not save that change'); return false; }
+      toast.success(done);
+      await fetchData();
+      return true;
+    } catch {
+      toast.error('Could not save that change');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** A price field's value as whole rupees, or null when it isn't a valid amount. */
+  function parsePrice(text: string): number | null {
+    if (!/^\d{1,12}$/.test(text.trim())) return null;
+    return Number(text.trim());
+  }
+
+  function openEdit(player: Player) {
+    setEditPlayer(player);
+    setEditPrice(player.soldPrice != null ? String(player.soldPrice) : '');
+  }
+
+  async function savePrice() {
+    if (!editPlayer) return;
+    const price = parsePrice(editPrice);
+    if (price === null) { toast.error('Enter the price as a whole number'); return; }
+    if (await saveResult(editPlayer.id, { teamId: team.id, soldPrice: price }, `${editPlayer.name}'s price updated to ${fmt(price)}`)) {
+      setEditPlayer(null);
+    }
+  }
+
+  async function releasePlayer() {
+    if (!editPlayer) return;
+    if (!confirm(`Remove ${editPlayer.name} from ${team.name}? They go back on the unsold list and their price is cleared.`)) return;
+    if (await saveResult(editPlayer.id, { teamId: null, soldPrice: null, isUnsold: true }, `${editPlayer.name} removed from ${team.name}`)) {
+      setEditPlayer(null);
+    }
+  }
+
+  function openAdd() {
+    setAddPlayerId(null); setAddPrice(''); setAddQuery(''); setAddOpen(true);
+  }
+
+  async function addToTeam() {
+    const player = teamless.find((p) => p.id === addPlayerId);
+    if (!player) return;
+    const price = addPrice.trim() === '' ? 0 : parsePrice(addPrice);
+    if (price === null) { toast.error('Enter the price as a whole number'); return; }
+    if (await saveResult(player.id, { teamId: team.id, soldPrice: price, isUnsold: false }, `${player.name} added to ${team.name}`)) {
+      setAddOpen(false);
+    }
+  }
 
   async function copyPhone(phone: string) {
     if (await copyToClipboard(phone)) toast.success('Phone number copied');
@@ -194,12 +284,29 @@ export default function TeamDetailPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5" /> Squad
         </p>
-        {canSeePhones && phoneEntries.length > 0 && (
-          <button onClick={copyAllPhones} className="toolbar-btn" title="Copy every player's name and phone number">
-            <Copy className="w-3.5 h-3.5" />Copy all numbers
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {canSeePhones && phoneEntries.length > 0 && (
+            <button onClick={copyAllPhones} className="toolbar-btn" title="Copy every player's name and phone number">
+              <Copy className="w-3.5 h-3.5" />Copy all numbers
+            </button>
+          )}
+          {data.canManage && (
+            <button onClick={openAdd} disabled={teamless.length === 0 || squadFull} className="toolbar-btn disabled:opacity-50 disabled:cursor-not-allowed"
+              title={squadFull
+                ? `Squad is full (${team.maxPlayers}) — raise the squad size on the Teams page first`
+                : teamless.length === 0
+                  ? 'Every player in the league is already in a team'
+                  : 'Place an unsold or unassigned player in this team'}>
+              <UserPlus className="w-3.5 h-3.5" />Add player
+            </button>
+          )}
+        </div>
       </div>
+      {data.canManage && (
+        <p className="text-xs text-muted-foreground -mt-2 mb-4">
+          After the auction you can still correct a price with the pencil beside it, or add a player who went unsold.
+        </p>
+      )}
       {squad.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-green-500/15 to-emerald-600/15 border border-green-500/20 flex items-center justify-center">
@@ -275,6 +382,12 @@ export default function TeamDetailPage() {
                           </span>
                         )
                         : fmt(player.soldPrice ?? 0)}
+                      {data.canManage && (
+                        <button onClick={() => openEdit(player)} title={`Edit ${player.name}'s price`} aria-label={`Edit ${player.name}'s price`}
+                          className="ml-2 inline-flex items-center justify-center w-6 h-6 rounded-md align-middle text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -283,6 +396,116 @@ export default function TeamDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Edit a squad member's price */}
+      <Dialog open={!!editPlayer} onOpenChange={(open) => { if (!open && !saving) setEditPlayer(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogTitle>Edit price — {editPlayer?.name}</DialogTitle>
+          {editPlayer && (() => {
+            const price = parsePrice(editPrice);
+            const others = spent - (editPlayer.soldPrice ?? 0);
+            const over = price !== null && others + price > team.budget;
+            return (
+              <div className="space-y-4">
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sale price (₹)</span>
+                  <input type="number" min="0" step="1" inputMode="numeric" autoFocus value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void savePrice(); }}
+                    className="w-full h-11 px-3 rounded-xl border border-border bg-input text-base tabular-nums" />
+                  <span className={`block text-xs ${over ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                    {price === null
+                      ? 'Whole rupees, no commas'
+                      : over
+                        ? `${fmt(price)} takes ${team.name} over its ${fmt(team.budget)} purse`
+                        : `${fmt(price)} · leaves ${team.name} ${fmt(team.budget - others - price)}`}
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditPlayer(null)} disabled={saving}
+                    className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button onClick={savePrice} disabled={saving || price === null || over}
+                    className="flex-1 h-10 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40">
+                    {saving ? 'Saving…' : 'Save price'}
+                  </button>
+                </div>
+                {!editPlayer.isIcon && (
+                  <button onClick={releasePlayer} disabled={saving}
+                    className="w-full text-xs font-medium text-destructive/80 hover:text-destructive disabled:opacity-50">
+                    Remove from {team.name}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add an unsold / unassigned player to this team */}
+      <Dialog open={addOpen} onOpenChange={(open) => { if (!open && !saving) setAddOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Add a player to {team.name}</DialogTitle>
+          {addOpen && (() => {
+            const q = addQuery.trim().toLowerCase();
+            const shown = teamless.filter((p) => !q || p.name.toLowerCase().includes(q));
+            const price = addPrice.trim() === '' ? 0 : parsePrice(addPrice);
+            const over = price !== null && spent + price > team.budget;
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground -mt-2">
+                  Players without a team — unsold at the auction, or never put up. {team.maxPlayers - squad.length} squad
+                  slot{team.maxPlayers - squad.length === 1 ? '' : 's'} and {fmt(remaining)} left.
+                </p>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input value={addQuery} onChange={(e) => setAddQuery(e.target.value)} placeholder="Search by name…"
+                    className="w-full h-10 pl-9 pr-3 rounded-xl border border-border bg-input text-sm" />
+                </div>
+                <ul className="max-h-56 overflow-y-auto space-y-1">
+                  {shown.length === 0 && <li className="text-sm text-muted-foreground py-4 text-center">No players match.</li>}
+                  {shown.map((p) => (
+                    <li key={p.id}>
+                      <button onClick={() => setAddPlayerId(p.id)} aria-pressed={addPlayerId === p.id}
+                        className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition-colors ${addPlayerId === p.id ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted'}`}>
+                        <span className="min-w-0">
+                          <span className="block font-medium text-foreground truncate">{p.name}</span>
+                          <span className="block text-xs text-muted-foreground truncate">{p.role}</span>
+                        </span>
+                        <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide ${p.isUnsold ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                          {p.isUnsold ? 'Unsold' : 'Not auctioned'}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Price (₹) — leave empty for a free signing</span>
+                  <input type="number" min="0" step="1" inputMode="numeric" value={addPrice} placeholder="0"
+                    onChange={(e) => setAddPrice(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-border bg-input text-base tabular-nums" />
+                  {(price === null || over) && (
+                    <span className="block text-xs text-destructive font-semibold">
+                      {price === null ? 'Whole rupees, no commas' : `${fmt(price)} is more than the ${fmt(remaining)} ${team.name} has left`}
+                    </span>
+                  )}
+                </label>
+                <div className="flex gap-2">
+                  <button onClick={() => setAddOpen(false)} disabled={saving}
+                    className="flex-1 h-10 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button onClick={addToTeam} disabled={saving || !addPlayerId || price === null || over}
+                    className="flex-1 h-10 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40">
+                    {saving ? 'Adding…' : 'Add to team'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Full player view */}
       <Dialog open={!!cardPlayer} onOpenChange={(open) => { if (!open) setCardPlayer(null); }}>

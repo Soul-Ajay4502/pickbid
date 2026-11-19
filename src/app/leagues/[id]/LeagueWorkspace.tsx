@@ -213,6 +213,13 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
 
   async function handleJoin() {
     if (!profile) return;
+    // A card needs a photo (the players POST enforces it). Their profile has
+    // none to copy, so send them to the form, where they can add one.
+    if (!profile.photo) {
+      toast.error('A photo is required to join. Add your photo to continue.');
+      router.push(`/leagues/${id}/players/new?self=1`);
+      return;
+    }
     setJoining(true);
     const creatorToken = generateToken();
     try {

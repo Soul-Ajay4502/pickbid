@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
+import { UserPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   DISMISSAL_LABELS, SUB_FIELDER, allowedDismissals, ballChip as ballLabel, bowlerOptions, currentInnings, economy, nextBatterOptions,
@@ -105,9 +106,85 @@ function PlayerSelect({ label, value, onChange, players, placeholder = 'Choose�
   );
 }
 
+// ── Someone who isn't in the list ────────────────────────────────────────────
+
+/**
+ * "Not in the list?" — sits under every batter and bowler picker, so a player
+ * who turns up after the squads were set can be added at the moment they walk
+ * out, not from a menu the scorer has to remember exists. It records the same
+ * `add_player` event as *Add a late arrival*: pick a league player who isn't
+ * in either squad, or type a name for a guest. `onAdded` hands back the new
+ * id so the picker can select them straight away.
+ */
+export function QuickAddPlayer({ state, teamId, players, send, onAdded }: {
+  state: MatchState;
+  /** The side the new player joins — the batting side under a batter picker, the fielding side under a bowler's. */
+  teamId: string;
+  /** The league roster, for players who have a card but aren't in a squad. */
+  players: Player[];
+  send: Send;
+  onAdded?: (playerId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [cardId, setCardId] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const teamName = state.setup.sides.find((s) => s.teamId === teamId)?.name ?? 'this team';
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="w-full min-h-10 inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-muted/50">
+        <UserPlus className="w-4 h-4" />Not in the list? Add a new player
+      </button>
+    );
+  }
+
+  const taken = new Set(Object.values(state.squads).flat().map((p) => p.id));
+  const available = players.filter((p) => !taken.has(p.id))
+    .sort((a, b) => Number(b.teamId === teamId) - Number(a.teamId === teamId) || a.name.localeCompare(b.name));
+
+  function add() {
+    const card = players.find((p) => p.id === cardId);
+    const typed = name.trim().slice(0, 80);
+    if (!card && !typed) return;
+    const player = card ? { id: card.id, name: card.name } : { id: `guest:${eventId()}`, name: typed };
+    const err = send({ type: 'add_player', teamId, player });
+    if (err) { setProblem(err); return; }
+    setOpen(false); setName(''); setCardId(null); setProblem(null);
+    onAdded?.(player.id);
+  }
+
+  return (
+    <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 space-y-2.5">
+      <p className="text-xs font-semibold text-foreground">New player for {teamName}</p>
+      <input value={name} autoFocus
+        onChange={(e) => { setName(e.target.value); if (e.target.value) setCardId(null); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+        placeholder="Player name" maxLength={80}
+        className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm" />
+      {available.length > 0 && (
+        <select value={cardId ?? ''} onChange={(e) => { setCardId(e.target.value || null); if (e.target.value) setName(''); }}
+          aria-label="Or pick a league player who isn't in a squad"
+          className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm">
+          <option value="">…or pick from the league</option>
+          {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+      <Problem text={problem} />
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => { setOpen(false); setProblem(null); }}
+          className="h-10 rounded-xl border border-border bg-card text-sm font-semibold hover:bg-muted">Cancel</button>
+        <button type="button" onClick={add} disabled={!cardId && !name.trim()}
+          className="h-10 rounded-xl btn-premium text-sm font-bold text-white disabled:opacity-40">Add to squad</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Start of an innings ──────────────────────────────────────────────────────
 
-export function StartInningsPanel({ state, send }: { state: MatchState; send: Send }) {
+export function StartInningsPanel({ state, players, send }: { state: MatchState; players: Player[]; send: Send }) {
   const next = upcomingInnings(state);
   const [striker, setStriker] = useState<string | null>(null);
   const [nonStriker, setNonStriker] = useState<string | null>(null);
@@ -130,7 +207,10 @@ export function StartInningsPanel({ state, send }: { state: MatchState; send: Se
       </div>
       <PlayerSelect label="Striker" value={striker} onChange={setStriker} players={batting} exclude={[nonStriker]} />
       <PlayerSelect label="Non-striker" value={nonStriker} onChange={setNonStriker} players={batting} exclude={[striker]} />
+      <QuickAddPlayer state={state} teamId={next.battingTeamId} players={players} send={send}
+        onAdded={(pid) => { if (!striker) setStriker(pid); else if (!nonStriker) setNonStriker(pid); }} />
       <PlayerSelect label={`Opening bowler (${side(next.bowlingTeamId)?.name ?? ''})`} value={bowler} onChange={setBowler} players={bowling} />
+      <QuickAddPlayer state={state} teamId={next.bowlingTeamId} players={players} send={send} onAdded={setBowler} />
       <Problem text={problem} />
       <Submit
         disabled={!striker || !nonStriker || !bowler}
@@ -144,7 +224,8 @@ export function StartInningsPanel({ state, send }: { state: MatchState; send: Se
 
 // ── Bowler ───────────────────────────────────────────────────────────────────
 
-export function BowlerPicker({ state, send, onDone }: { state: MatchState; send: Send; onDone?: () => void }) {
+export function BowlerPicker({ state, players, send, onDone }: { state: MatchState; players: Player[]; send: Send; onDone?: () => void }) {
+  const fieldingTeamId = currentInnings(state)?.bowlingTeamId ?? null;
   const bpo = state.setup.rules.ballsPerOver;
   const quota = state.setup.rules.maxOversPerBowler;
   const options = bowlerOptions(state);
@@ -174,6 +255,13 @@ export function BowlerPicker({ state, send, onDone }: { state: MatchState; send:
           </button>
         </li>
       ))}
+      {fieldingTeamId && (
+        <li>
+          {/* A bowler who isn't in the squad yet: add them and bring them on in one go */}
+          <QuickAddPlayer state={state} teamId={fieldingTeamId} players={players} send={send}
+            onAdded={(pid) => { if (!send({ type: 'bowler', bowlerId: pid })) onDone?.(); }} />
+        </li>
+      )}
     </ul>
   );
 }
@@ -282,8 +370,10 @@ type DeliveryType = 'legal' | Extra;
 const DELIVERY_LABEL: Record<DeliveryType, string> = { legal: 'Legal ball', wd: 'Wide', nb: 'No-ball', b: 'Bye', lb: 'Leg bye' };
 const toExtra = (t: DeliveryType): Extra | null => (t === 'legal' ? null : t);
 
-export function WicketSheet({ state, mode, presetExtra, send, preview, onClose }: {
+export function WicketSheet({ state, players, mode, presetExtra, send, preview, onClose }: {
   state: MatchState;
+  /** The league roster, so a batter who isn't in the squad can be added as they walk in. */
+  players: Player[];
   /** `delivery`: out off a ball. `crease`: retirements and the like, between balls. */
   mode: 'delivery' | 'crease';
   presetExtra: Extra | null;
@@ -437,10 +527,10 @@ export function WicketSheet({ state, mode, presetExtra, send, preview, onClose }
           </div>
         )}
 
-        {kind && candidates.length > 0 && (
+        {kind && (
           <div>
             <Label>Next batter</Label>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto empty:hidden">
               {candidates.map((p) => {
                 const back = !freshCandidates.some((c) => c.id === p.id);
                 return (
@@ -455,6 +545,9 @@ export function WicketSheet({ state, mode, presetExtra, send, preview, onClose }
                 {state.setup.rules.lastManStanding ? 'Leave empty to let the last batter carry on alone.' : 'Leave empty if nobody can come in — the innings ends.'}
               </p>
             )}
+            <div className="mt-2">
+              <QuickAddPlayer state={state} teamId={inn.battingTeamId} players={players} send={send} onAdded={setNextBatterId} />
+            </div>
           </div>
         )}
 

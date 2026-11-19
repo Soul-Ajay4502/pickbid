@@ -1125,6 +1125,60 @@ export async function createPlayer(data: Omit<Player, 'id' | 'createdAt'>): Prom
   return toPlayer(row);
 }
 
+/**
+ * Adds a whole registration sheet's worth of cards in one transaction — all of
+ * them or none, so a failure halfway never leaves an organizer guessing which
+ * rows made it.
+ *
+ * A row with an email is linked to that person's account (minted if they have
+ * never signed in), exactly as the Add Player form does, so the card turns up
+ * on their profile. A row without one stays unlinked rather than being pinned
+ * on the organizer: `userId` means "whose card this is".
+ */
+export async function importPlayers(
+  leagueId: string,
+  rows: Array<Pick<Player, 'name' | 'battingType' | 'bowlingType' | 'role' | 'isWicketKeeper'> & {
+    contactNumber: string | null;
+    email: string | null;
+  }>
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  return sequelize.transaction(async (t) => {
+    const emails = [...new Set(rows.map((r) => r.email).filter((e): e is string => !!e))];
+    const userIdByEmail = new Map<string, string>();
+    if (emails.length > 0) {
+      const known = await UserModel.findAll({ where: { email: { [Op.in]: emails } }, attributes: ['id', 'email'], transaction: t });
+      for (const u of known) userIdByEmail.set(u.email, u.id);
+      const fresh = emails.filter((e) => !userIdByEmail.has(e)).map((email) => ({ id: uuidv4(), email }));
+      if (fresh.length > 0) {
+        await UserModel.bulkCreate(fresh, { transaction: t });
+        for (const u of fresh) userIdByEmail.set(u.email, u.id);
+      }
+    }
+    // Spread the timestamps a millisecond apart so the roster — ordered by
+    // `createdAt` — keeps the sheet's order instead of an arbitrary one.
+    const now = Date.now();
+    const created = await PlayerModel.bulkCreate(
+      rows.map((r, i) => ({
+        id:             uuidv4(),
+        leagueId,
+        userId:         r.email ? userIdByEmail.get(r.email) ?? null : null,
+        name:           r.name,
+        photo:          '',
+        battingType:    r.battingType,
+        bowlingType:    r.bowlingType,
+        role:           r.role,
+        isWicketKeeper: r.isWicketKeeper,
+        creatorToken:   uuidv4(),
+        contactNumber:  r.contactNumber,
+        createdAt:      new Date(now + i),
+      })),
+      { transaction: t }
+    );
+    return created.length;
+  });
+}
+
 export async function updatePlayer(
   id: string,
   data: Partial<Omit<Player, 'id' | 'leagueId' | 'creatorToken' | 'createdAt'>>

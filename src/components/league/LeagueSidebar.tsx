@@ -7,13 +7,14 @@ import { toast } from 'sonner';
 import {
   LayoutGrid, UserPlus, Users, BarChart2, Activity, Trophy, Handshake, ShieldCheck,
   ReceiptText, Palette, Globe, Lock, CopyPlus, RotateCcw, Award, Eye, EyeOff, Trash2,
-  ChevronDown, Settings2, UserRoundPlus, BarChart3,
+  ChevronDown, Settings2, UserRoundPlus, BarChart3, FileSpreadsheet,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import CoOrganizersModal from '@/components/CoOrganizersModal';
 import PlayerAccessModal from '@/components/league/PlayerAccessModal';
 import AddPlayerFromAccountModal from '@/components/league/AddPlayerFromAccountModal';
+import ImportPlayersModal from '@/components/league/ImportPlayersModal';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueNavSummary } from '@/lib/types';
 
@@ -66,6 +67,7 @@ export default function LeagueSidebar({
   const [templateOpen, setTemplateOpen] = useState(false);
   const [coOrgOpen, setCoOrgOpen] = useState(false);
   const [addFromAccountOpen, setAddFromAccountOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -281,6 +283,14 @@ export default function LeagueSidebar({
                   <UserRoundPlus className="w-4 h-4 shrink-0" />Add from Accounts
                 </button>
 
+                <button
+                  onClick={() => setImportOpen(true)}
+                  title="Add many players at once from a registration spreadsheet (.xlsx or .csv)"
+                  className="rail-link"
+                >
+                  <FileSpreadsheet className="w-4 h-4 shrink-0" />Import from Excel
+                </button>
+
                 <button onClick={() => setTemplateOpen(true)} className="rail-link">
                   <Palette className="w-4 h-4 shrink-0" />Card Template
                 </button>
@@ -396,6 +406,13 @@ export default function LeagueSidebar({
         <AddPlayerFromAccountModal
           leagueId={leagueId}
           onClose={(didChange) => { setAddFromAccountOpen(false); if (didChange) changed(); }}
+        />
+      )}
+
+      {importOpen && (
+        <ImportPlayersModal
+          leagueId={leagueId}
+          onClose={(didChange) => { setImportOpen(false); if (didChange) changed(); }}
         />
       )}
 

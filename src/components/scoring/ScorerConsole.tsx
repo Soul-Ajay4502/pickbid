@@ -235,7 +235,7 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
             </section>
           );
         })()}
-        {state.awaiting === 'start_innings' && <StartInningsPanel state={state} send={send} />}
+        {state.awaiting === 'start_innings' && <StartInningsPanel state={state} players={players} send={send} />}
 
         {inn && (
           <>
@@ -318,7 +318,7 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
             {state.awaiting === 'bowler' ? (
               <section className="rounded-2xl border border-primary/40 bg-primary/5 p-3">
                 <p className="text-sm font-bold mb-2 px-1">Over complete — who bowls next?</p>
-                <BowlerPicker state={state} send={send} />
+                <BowlerPicker state={state} players={players} send={send} />
               </section>
             ) : (
               <section className="sticky bottom-0 -mx-3 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/95 backdrop-blur-xl">
@@ -406,11 +406,11 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
       )}
       <CustomRunsSheet open={sheet?.kind === 'runs'} send={send} onClose={close} />
       {sheet?.kind === 'wicket' && (
-        <WicketSheet state={state} mode={sheet.mode} presetExtra={sheet.extra} send={send} preview={preview} onClose={close} />
+        <WicketSheet state={state} players={players} mode={sheet.mode} presetExtra={sheet.extra} send={send} preview={preview} onClose={close} />
       )}
       {sheet?.kind === 'bowler' && (
         <Sheet open onClose={close} title="Change bowler" description="Finishes the over — injury, or a change of mind before the first ball.">
-          <BowlerPicker state={state} send={send} onDone={close} />
+          <BowlerPicker state={state} players={players} send={send} onDone={close} />
         </Sheet>
       )}
       {sheet?.kind === 'revise' && <ReviseSheet state={state} send={send} onClose={close} />}

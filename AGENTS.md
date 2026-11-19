@@ -90,6 +90,24 @@ signing in. Do not add session gating to
 [api/leagues/[id]/players](src/app/api/leagues/[id]/players/route.ts) or
 [api/upload](src/app/api/upload/route.ts).
 
+**A card can't be created without a photo.** The players POST refuses an empty
+`photo` for everyone — a player joining and an organizer adding on someone's
+behalf alike; unlike the ID and receipt requirements there is no on-behalf-of
+exemption. `PlayerForm`'s `requirePhoto` (set only by the registration form)
+says so before the upload, and the one-tap Join and *Add from Accounts* check
+the profile photo they would copy. The spreadsheet import is the deliberate
+exception — a sheet can't carry photos, and it has its own endpoint. Editing a
+card is not held to it either.
+
+**A card's auction result is the organizers' to write, even though the card is
+not.** The player PUT answers to the anonymous `creatorToken` for a card's own
+details, but `teamId`, `soldPrice`, `isUnsold` and `isIcon` are dropped unless
+the caller can manage the league — add any new auction field to
+`AUCTION_FIELDS` in that handler. The same PUT serves the live sale and the
+post-auction corrections on the team page, so both go through
+`assignPlayerToTeam`'s squad-size and purse checks; it WhatsApps the player only
+when their team actually changes, so a price correction never re-announces a sale.
+
 **Player documents are organizer-only, and the two live in different places.**
 The *identity proof* is on the user (`users.idProofType` / `users.idProofUrl`):
 uploaded once from `/profile`, reused by every league they join. The *entry-fee

@@ -311,6 +311,9 @@ function NewPlayerPageInner() {
           }
           showPaymentProof={!!league?.paymentProofRequired}
           requirePaymentProof={!!league?.paymentProofRequired && heldToRequirements}
+          // Every card needs a face, whoever is adding it — unlike the document
+          // requirements this one has no on-behalf-of exemption.
+          requirePhoto
           onSubmit={handleSubmit}
           submitLabel={submitLabel}
           loading={loading}

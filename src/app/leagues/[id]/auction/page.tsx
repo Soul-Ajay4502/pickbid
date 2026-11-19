@@ -9,7 +9,7 @@ import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, Liv
 import { toast } from 'sonner';
 import { copyToClipboard, formatINR, buildPlayerSoldMessage, whatsappShareLink } from '@/lib/utils';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
+import { Shuffle, Wallet, X, ListChecks, Search, Undo2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
@@ -43,6 +43,17 @@ function selectFromPool(from: Player[], pickPreference: PlayerRole[] | null | un
     if (bucket) candidates = bucket;
   }
   return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/**
+ * Reads one of this screen's per-league settings out of localStorage, for a
+ * `useState` initializer. Safe against a hydration mismatch because nothing
+ * read this way is drawn until the league has loaded: the server and the first
+ * client render both show the loading screen whatever these hold.
+ */
+function stored<T>(read: () => T, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try { return read(); } catch { return fallback; /* private mode, or a mangled value */ }
 }
 
 function teamStats(team: Team, roster: Player[], basePrice: number) {
@@ -81,6 +92,17 @@ export default function AuctionPage() {
   const [viewTeam, setViewTeam] = useState<Team | null>(null);
   // Full-screen photo lightbox for the player on the block
   const [photoOpen, setPhotoOpen] = useState(false);
+  // Hand-picking: the chooser dialog, and an optional "draw set" — player ids
+  // the random draw is confined to until they have all come up. Persisted per
+  // league so a reload mid-auction doesn't lose the set.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [drawSet, setDrawSet] = useState<string[]>(() => stored(() => {
+    const saved: unknown = JSON.parse(localStorage.getItem(`auction_set_${id}`) ?? '[]');
+    return Array.isArray(saved) ? saved.filter((x): x is string => typeof x === 'string') : [];
+  }, []));
+  // Whether whoever is on the block was drawn out of the set — so putting them
+  // back in the pool puts them back in the set too.
+  const blockFromSet = useRef(false);
   const liveSeq = useRef(0);
   // Confetti burst on each committed sale — the counter keys the remount so
   // back-to-back sales replay it; 0 means no confetti on screen
@@ -88,21 +110,21 @@ export default function AuctionPage() {
   const confettiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Base price per player — used for the max-bid rule; persisted per league
-  const [basePrice, setBasePrice] = useState(0);
+  const [basePrice, setBasePrice] = useState(() => stored(() => parseInt(localStorage.getItem(`auction_base_${id}`) || '100') || 0, 100));
   // Purse sidebar visibility — persisted per league
-  const [purseOpen, setPurseOpen] = useState(true);
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(`auction_base_${id}`) || '100';
-      if (v) setBasePrice(parseInt(v) || 0);
-      setPurseOpen(localStorage.getItem(`auction_purse_${id}`) !== '0');
-    } catch { /* private mode */ }
-  }, [id]);
+  const [purseOpen, setPurseOpen] = useState(() => stored(() => localStorage.getItem(`auction_purse_${id}`) !== '0', true));
   function togglePurse() {
     setPurseOpen(v => {
       try { localStorage.setItem(`auction_purse_${id}`, v ? '0' : '1'); } catch { /* private mode */ }
       return !v;
     });
+  }
+  function saveDrawSet(ids: string[]) {
+    setDrawSet(ids);
+    try {
+      if (ids.length > 0) localStorage.setItem(`auction_set_${id}`, JSON.stringify(ids));
+      else localStorage.removeItem(`auction_set_${id}`);
+    } catch { /* private mode */ }
   }
   function changeBasePrice(v: string) {
     const n = Math.max(0, parseInt(v) || 0);
@@ -126,7 +148,11 @@ export default function AuctionPage() {
     finally { setLoading(false); }
   }, [id, router]);
 
-  useEffect(() => { fetchLeague(); }, [fetchLeague]);
+  useEffect(() => {
+    // Inside an async function so the state it sets lands after the fetch,
+    // not synchronously in the effect body.
+    void (async () => { await fetchLeague(); })();
+  }, [fetchLeague]);
   useEffect(() => {
     function upd() {
       // Reserve room for the team-purse sidebars on desktop (split left + right)
@@ -226,7 +252,37 @@ export default function AuctionPage() {
     step();
   }
 
+  // Runs the slot-machine reveal over `among` and lands on `picked`. The
+  // caller has already taken `picked` out of whichever list it was waiting in.
+  function spinTo(picked: Player, among: Player[], newPool: Player[], unsoldNow: Player[], r: number) {
+    setPhase('picking'); setPhotoOpen(false);
+    postLive(buildLive({ phase: 'picking', current: null, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
+    runSlot(among.map(p => p.name), picked.name, () => {
+      setCurrent(picked); setPhase('showing');
+      postLive(buildLive({ phase: 'showing', current: picked, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
+    });
+  }
+
   function pickNext() {
+    // A draw set, while any of its players are still waiting, confines the
+    // draw to them — wherever they wait, pool or unsold queue — and is a plain
+    // uniform draw: the organizer chose these players by hand, so the league's
+    // role preference has nothing left to decide.
+    const fromSet = [...pool, ...unsoldQueue].filter(p => drawSet.includes(p.id));
+    if (fromSet.length > 0) {
+      const picked = selectFromPool(fromSet, null);
+      const newPool = pool.filter(p => p.id !== picked.id);
+      const nu = unsoldQueue.filter(p => p.id !== picked.id);
+      setPool(newPool); setUnsoldQueue(nu);
+      // Coming up is what takes a player out of the set — not being sold. One
+      // who goes unsold waits in the unsold queue like anyone else, instead of
+      // being drawn again on the very next pick.
+      saveDrawSet(drawSet.filter(sid => sid !== picked.id));
+      blockFromSet.current = true;
+      spinTo(picked, fromSet, newPool, nu, round);
+      return;
+    }
+    blockFromSet.current = false;
     let from = pool;
     let r = round;
     let unsoldNow = unsoldQueue;
@@ -241,12 +297,34 @@ export default function AuctionPage() {
     }
     const picked = selectFromPool(from, league?.pickPreference);
     const newPool = from.filter(p => p.id !== picked.id);
-    setPool(newPool); setPhase('picking'); setPhotoOpen(false);
-    postLive(buildLive({ phase: 'picking', current: null, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
-    runSlot(from.map(p => p.name), picked.name, () => {
-      setCurrent(picked); setPhase('showing');
-      postLive(buildLive({ phase: 'showing', current: picked, roster: soldPlayers, pool: newPool, unsold: unsoldNow, round: r }));
-    });
+    setPool(newPool);
+    spinTo(picked, from, newPool, unsoldNow, r);
+  }
+
+  // The auctioneer's own choice: a named player goes straight onto the block,
+  // no draw and no reveal animation, from the pool or the unsold queue alike.
+  function pickManual(player: Player) {
+    if (phase !== 'idle') return;
+    const newPool = pool.filter(p => p.id !== player.id);
+    const nu = unsoldQueue.filter(p => p.id !== player.id);
+    setPool(newPool); setUnsoldQueue(nu); setPickerOpen(false);
+    // Brought up by name, so they no longer need drawing
+    if (drawSet.includes(player.id)) saveDrawSet(drawSet.filter(sid => sid !== player.id));
+    blockFromSet.current = false;
+    setCurrent(player); setPhase('showing'); setPhotoOpen(false);
+    postLive(buildLive({ phase: 'showing', current: player, roster: soldPlayers, pool: newPool, unsold: nu, round }));
+  }
+
+  // Takes whoever is on the block off it without a call — the way out of a
+  // mis-pick. Nothing was saved for them, so they simply rejoin the pool.
+  function returnToPool() {
+    if (!current || committing || undoing || phase !== 'showing') return;
+    const np = [current, ...pool];
+    if (blockFromSet.current) saveDrawSet([...drawSet, current.id]);
+    blockFromSet.current = false;
+    setPool(np); setCurrent(null); setPhase('idle'); setPhotoOpen(false);
+    postLive(buildLive({ phase: 'idle', roster: soldPlayers, pool: np, unsold: unsoldQueue, round }));
+    toast.info(`${current.name} is back in the pool`);
   }
 
   /**
@@ -395,6 +473,8 @@ export default function AuctionPage() {
   const rightTeams = teams.slice(purseHalf);
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = league.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
+  // Draw-set players still waiting to come up; the set quietly lapses once it's empty
+  const drawSetLeft = [...pool, ...unsoldQueue].filter(p => drawSet.includes(p.id)).length;
   const watchUrl = typeof window !== 'undefined' ? `${window.location.origin}/leagues/${id}/watch` : '';
 
   if (phase === 'lobby') return (
@@ -524,6 +604,10 @@ export default function AuctionPage() {
               : <RotateCcw className="w-4 h-4 mr-2" />}
             Reset Auction
           </Button>
+          <Button variant="outline" onClick={() => router.push(`/leagues/${id}/teams`)} title="Correct a sale price, or place an unsold player in a team"
+            className="border-foreground/20 text-foreground hover:bg-foreground/10">
+            Adjust results
+          </Button>
           <Button onClick={() => router.push(`/leagues/${id}`)} className="bg-green-600 hover:bg-green-500 text-white btn-glow-green">Back to League</Button>
           {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} />}
         </div>
@@ -560,6 +644,15 @@ export default function AuctionPage() {
         </div>
         <ShareLiveModal open={shareOpen} onClose={() => setShareOpen(false)} url={watchUrl} />
         {viewTeam && <TeamSquadModal team={viewTeam} roster={soldPlayers} basePrice={basePrice} onClose={() => setViewTeam(null)} />}
+        {pickerOpen && phase === 'idle' && (
+          <PickPlayerModal pool={pool} unsold={unsoldQueue} drawSet={drawSet}
+            onPick={pickManual}
+            onSaveSet={(ids) => {
+              saveDrawSet(ids); setPickerOpen(false);
+              if (ids.length > 0) toast.success(`Set saved — Pick Next Player now draws from these ${ids.length}`);
+            }}
+            onClose={() => setPickerOpen(false)} />
+        )}
         {/* Mobile: horizontal purse strip */}
         {teams.length > 0 && (
           <div className="md:hidden flex gap-2.5 px-4 py-2.5 border-b border-foreground/5 bg-foreground/2 overflow-x-auto shrink-0">
@@ -585,6 +678,18 @@ export default function AuctionPage() {
                   <Shuffle size={30} />Pick Next Player
                 </button>
                 <p style={{ color: 'var(--muted-foreground)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' }}>{pool.length + unsoldQueue.length} in pool</p>
+                {drawSetLeft > 0 && (
+                  <p className="text-sm text-indigo-600 dark:text-indigo-300 text-center">
+                    Drawing from your set — {drawSetLeft} player{drawSetLeft === 1 ? '' : 's'} left
+                    <button onClick={() => saveDrawSet([])} className="ml-2 underline underline-offset-2 text-foreground/50 hover:text-foreground">Clear set</button>
+                  </p>
+                )}
+                {pool.length + unsoldQueue.length > 0 && (
+                  <button onClick={() => setPickerOpen(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-foreground/15 bg-foreground/5 text-sm font-semibold text-foreground/75 hover:text-foreground hover:bg-foreground/10 hover:border-foreground/30 transition-colors">
+                    <ListChecks className="w-4 h-4" />Choose a player or a set
+                  </button>
+                )}
                 {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} />}
               </div>
             )}
@@ -620,6 +725,10 @@ export default function AuctionPage() {
                       <Button size="lg" disabled={committing} onClick={() => setPhase('sold-modal')} className="bg-green-600 hover:bg-green-500 active:scale-95 text-white px-10 py-6 text-lg rounded-xl font-bold min-w-40 transition-transform shadow-xl shadow-green-500/20 disabled:opacity-60">Sold ✓</Button>
                     </div>
                     {lastAction && <UndoLastButton action={lastAction} busy={undoing || committing} onClick={undoLast} note="whoever is on the block now goes back to the pool" />}
+                    <button onClick={returnToPool} disabled={committing || undoing} title="Take this player off the block without a sold or unsold call"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/40 hover:text-foreground disabled:opacity-50 transition-colors">
+                      <Undo2 className="w-3.5 h-3.5" />Put back in the pool
+                    </button>
                   </div>
                 )}
                 {phase === 'sold-modal' && (
@@ -715,6 +824,118 @@ function UndoLastButton({ action, busy, onClick, note }: {
       <span className="shrink-0">Undo last</span>
       <span className="text-foreground/35 truncate">{detail}</span>
     </button>
+  );
+}
+
+/**
+ * The auctioneer's chooser, for when the next player shouldn't be left to the
+ * draw. Two ways to use it: **Bring to block** puts one named player up at
+ * once; ticking several and saving them as a set keeps the draw random but
+ * confined to those players until every one of them has come up — the marquee
+ * names first, say, or one role at a time in an order of the room's choosing.
+ */
+function PickPlayerModal({ pool, unsold, drawSet, onPick, onSaveSet, onClose }: {
+  pool: Player[]; unsold: Player[]; drawSet: string[];
+  onPick: (p: Player) => void; onSaveSet: (ids: string[]) => void; onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState<PlayerRole | 'all'>('all');
+  const waiting = [
+    ...pool.map(p => ({ player: p, isUnsold: false })),
+    ...unsold.map(p => ({ player: p, isUnsold: true })),
+  ];
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(drawSet.filter(sid => waiting.some(w => w.player.id === sid)))
+  );
+  const q = query.trim().toLowerCase();
+  const shown = waiting
+    .filter(w => (role === 'all' || w.player.role === role) && (!q || w.player.name.toLowerCase().includes(q)))
+    .sort((a, b) => a.player.name.localeCompare(b.player.name, undefined, { sensitivity: 'base', numeric: true }));
+  const roles = (['Batter', 'Bowler', 'All-Rounder', 'Wicket-Keeper Batter'] as PlayerRole[])
+    .filter(r => waiting.some(w => w.player.role === r));
+  const allShownSelected = shown.length > 0 && shown.every(w => selected.has(w.player.id));
+
+  function toggle(pid: string) {
+    setSelected(prev => { const next = new Set(prev); if (next.has(pid)) next.delete(pid); else next.add(pid); return next; });
+  }
+  function toggleShown() {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const w of shown) { if (allShownSelected) next.delete(w.player.id); else next.add(w.player.id); }
+      return next;
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-popover border border-foreground/12 rounded-2xl w-full max-w-lg max-h-[88vh] flex flex-col animate-scale-in shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-foreground/10">
+          <div className="min-w-0">
+            <h3 className="font-bold text-lg text-foreground">Choose the next player</h3>
+            <p className="text-xs text-foreground/45">Bring one to the block now — or tick several to draw randomly from just those.</p>
+          </div>
+          <button onClick={onClose} className="text-foreground/40 hover:text-foreground shrink-0" aria-label="Close"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="px-5 pt-4 space-y-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/35 pointer-events-none" />
+            <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by name…"
+              className="w-full h-10 pl-9 pr-3 rounded-xl border border-foreground/15 bg-foreground/8 text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(['all', ...roles] as const).map(r => (
+              <button key={r} onClick={() => setRole(r)} aria-pressed={role === r}
+                className={`px-2.5 h-7 rounded-full text-xs font-semibold border transition-colors ${role === r ? 'border-indigo-500 bg-indigo-500/15 text-foreground' : 'border-foreground/12 text-foreground/50 hover:text-foreground'}`}>
+                {r === 'all' ? 'All' : r}
+              </button>
+            ))}
+            {shown.length > 0 && (
+              <button onClick={toggleShown} className="ml-auto text-xs font-semibold text-indigo-600 dark:text-indigo-300 hover:underline underline-offset-2">
+                {allShownSelected ? 'Untick these' : `Tick all ${shown.length}`}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="overflow-y-auto px-5 py-3 flex-1 min-h-32">
+          {shown.length === 0 ? (
+            <p className="text-sm text-foreground/40 text-center py-8">No players match.</p>
+          ) : (
+            <ul className="space-y-1">
+              {shown.map(({ player: p, isUnsold }) => (
+                <li key={p.id} className="flex items-center gap-3 rounded-xl border border-foreground/8 bg-foreground/3 px-3 py-2">
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)}
+                    aria-label={`Add ${p.name} to the draw set`} className="w-4 h-4 shrink-0 accent-indigo-500" />
+                  <button onClick={() => toggle(p.id)} className="flex-1 min-w-0 text-left">
+                    <span className="block text-sm font-semibold text-foreground/90 truncate">{p.name}</span>
+                    <span className="block text-[11px] text-foreground/40 truncate">
+                      {p.role}{isUnsold && <span className="text-amber-600 dark:text-amber-400"> · unsold earlier</span>}
+                    </span>
+                  </button>
+                  <button onClick={() => onPick(p)}
+                    className="shrink-0 px-3 h-8 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors">
+                    Bring to block
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-foreground/10">
+          <p className="text-xs text-foreground/45">{selected.size} ticked</p>
+          <div className="flex gap-2">
+            {drawSet.length > 0 && (
+              <button onClick={() => onSaveSet([])} className="px-3 h-10 rounded-xl border border-foreground/15 text-sm font-medium text-foreground/60 hover:text-foreground">
+                Clear set
+              </button>
+            )}
+            <button onClick={() => onSaveSet([...selected])} disabled={selected.size === 0}
+              className="px-4 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold disabled:opacity-40 inline-flex items-center gap-2">
+              <Shuffle className="w-4 h-4" />Draw from these {selected.size || ''}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

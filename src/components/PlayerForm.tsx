@@ -64,6 +64,13 @@ interface PlayerFormProps {
   /** Block submission until a receipt is attached. */
   requirePaymentProof?: boolean;
   /**
+   * Block submission until the card has a photo — one already on the form (a
+   * prefill from the profile or an earlier card) or a newly picked file. Set by
+   * the league registration form, where the players POST enforces the same
+   * rule; the profile and edit forms leave it off.
+   */
+  requirePhoto?: boolean;
+  /**
    * `stacked` (default) is the narrow one-field-per-row form used inside a
    * dialog-width card. `grid` spreads the same fields across a page-wide
    * two-column layout with the photo in its own column, so a full card fits on
@@ -101,6 +108,7 @@ export default function PlayerForm({
   showIdProof = false,
   showPaymentProof = false,
   requirePaymentProof = false,
+  requirePhoto = false,
   layout = 'stacked',
   formId,
 }: PlayerFormProps) {
@@ -113,6 +121,7 @@ export default function PlayerForm({
   const [existingPhoto, setExistingPhoto] = useState(initial?.photo ?? '');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [photoError, setPhotoError] = useState('');
   const [battingType, setBattingType] = useState<Player['battingType']>(
     initial?.battingType ?? 'Right-Hand Bat'
   );
@@ -148,6 +157,7 @@ export default function PlayerForm({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPhotoFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+    setPhotoError('');
   }
 
   function handleRemovePhoto() {
@@ -248,6 +258,10 @@ export default function PlayerForm({
       );
     }
     setPhoneError('');
+    if (requirePhoto && !displaySrc) {
+      return reject('A player photo is required — add one to continue.', setPhotoError, 'player-photo');
+    }
+    setPhotoError('');
     // A document with no type is unusable to an organizer, so it's caught here
     // rather than uploaded and rejected by the API.
     if (showIdProof && proofSrc && !idProofType) {
@@ -287,8 +301,10 @@ export default function PlayerForm({
       type="button"
       onClick={() => fileRef.current?.click()}
       disabled={loading}
+      id="player-photo"
       aria-label={displaySrc ? 'Change photo' : 'Upload photo'}
-      className="relative group shrink-0 rounded-full focus:outline-none"
+      aria-invalid={photoError ? true : undefined}
+      className={`relative group shrink-0 rounded-full focus:outline-none ${photoError ? 'ring-2 ring-destructive ring-offset-2 ring-offset-card' : ''}`}
     >
       {displaySrc ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -323,7 +339,7 @@ export default function PlayerForm({
   /* Photo beside its caption — the stacked layout's version. */
   const photoRow = (
     <div className="space-y-1.5">
-      <Label>Photo</Label>
+      <Label>Photo{requirePhoto && <span className="text-destructive"> *</span>}</Label>
       <div className="flex items-center gap-4">
         {photoPicker('w-20 h-20')}
         <div className="flex flex-col gap-1">
@@ -331,8 +347,9 @@ export default function PlayerForm({
             {displaySrc ? 'Looking good!' : 'Add a photo'}
           </p>
           <p className="text-xs text-muted-foreground">
-            {displaySrc ? 'Click the photo to change it' : 'Shown on your player card'}
+            {displaySrc ? 'Click the photo to change it' : requirePhoto ? 'Required — shown on your player card' : 'Shown on your player card'}
           </p>
+          {photoError && <p role="alert" className="text-xs font-medium text-destructive">{photoError}</p>}
           {displaySrc && <span className="mt-0.5">{removePhotoButton}</span>}
         </div>
       </div>
@@ -345,11 +362,12 @@ export default function PlayerForm({
       {photoPicker('w-28 h-28')}
       <div>
         <p className="text-sm font-medium text-foreground">
-          {displaySrc ? 'Looking good!' : 'Add a photo'}
+          {displaySrc ? 'Looking good!' : 'Add a photo'}{requirePhoto && !displaySrc && <span className="text-destructive"> *</span>}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {displaySrc ? 'Click the photo to change it' : 'Tap the circle to upload — shown on your card'}
+          {displaySrc ? 'Click the photo to change it' : requirePhoto ? 'Required — tap the circle to upload. Shown on the card.' : 'Tap the circle to upload — shown on your card'}
         </p>
+        {photoError && <p role="alert" className="text-xs font-medium text-destructive mt-1.5">{photoError}</p>}
       </div>
       {displaySrc && removePhotoButton}
     </div>

@@ -69,6 +69,15 @@ export async function POST(
     if (photo != null && (typeof photo !== 'string' || photo.length > 1000)) {
       return NextResponse.json({ error: 'Invalid photo URL' }, { status: 400 });
     }
+    // No card without a photo — a player joining and an organizer adding one
+    // alike, so the form, Join and Add from Accounts all answer to it here.
+    // (The spreadsheet import has its own endpoint: a sheet can't carry photos.)
+    if (typeof photo !== 'string' || !photo.trim()) {
+      return NextResponse.json(
+        { error: 'A player photo is required. Add a photo, then try again.' },
+        { status: 400 }
+      );
+    }
     if (contactNumber != null && (typeof contactNumber !== 'string' || contactNumber.length > 40)) {
       return NextResponse.json({ error: 'Invalid contact number' }, { status: 400 });
     }
@@ -124,7 +133,7 @@ export async function POST(
       leagueId: id,
       userId: playerUserId,
       name: name.trim(),
-      photo: photo ?? '',
+      photo: photo.trim(),
       battingType,
       bowlingType,
       role,

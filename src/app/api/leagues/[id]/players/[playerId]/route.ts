@@ -50,6 +50,9 @@ const UPDATABLE_FIELDS = [
   'statsMatches', 'statsRuns', 'statsWickets', 'statsAverage', 'statsSR',
 ] as const;
 
+/** The subset of the above that records an auction result — organizers only. */
+const AUCTION_FIELDS = ['teamId', 'soldPrice', 'isUnsold', 'isIcon'] as const;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; playerId: string }> }
@@ -94,13 +97,19 @@ export async function PUT(
     const token = typeof body.creatorToken === 'string' ? body.creatorToken : null;
     // A locked-down roster never blocks *editing* — a player keeps control of
     // their own photo, stats and details whatever the organizer has switched off
-    if (!canEditCard(await resolveCardAccess(league, player, token))) {
+    const access = await resolveCardAccess(league, player, token);
+    if (!canEditCard(access)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // The auction's outcome — team, price, unsold and icon flags — is the
+    // organizers' to write, during the auction and when correcting it
+    // afterwards. A card's `creatorToken` proves whose card it is, not who runs
+    // the league, so those fields are dropped from a card holder's request.
     const patch = Object.fromEntries(
       Object.entries(body).filter(([k]) =>
-        (UPDATABLE_FIELDS as readonly string[]).includes(k)
+        (UPDATABLE_FIELDS as readonly string[]).includes(k) &&
+        (access.isOrganizer || !(AUCTION_FIELDS as readonly string[]).includes(k))
       )
     ) as Partial<Player>;
 
@@ -117,7 +126,10 @@ export async function PUT(
       delete rest.soldPrice;
       try {
         updated = await assignPlayerToTeam(playerId, patch.teamId, soldPrice, rest);
-        isSale = true;
+        // Only joining a team is a sale. Correcting the price of a player
+        // already in it comes through here too, and must not message them
+        // "you've been sold" a second time.
+        isSale = patch.teamId !== player.teamId;
       } catch (err) {
         if (err instanceof AuctionRuleError) {
           return NextResponse.json({ error: err.message }, { status: 409 });

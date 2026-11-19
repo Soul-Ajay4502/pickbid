@@ -65,6 +65,12 @@ export default function AddPlayerFromAccountModal({ leagueId, onClose }: {
   }, [query, leagueId]);
 
   async function handleAdd(user: LeagueUserCandidate) {
+    // The players POST refuses a card without a photo; say so here, in terms
+    // of what the organizer can do about it, before making the request.
+    if (!user.photo) {
+      toast.error(`${user.name || 'This account'} has no profile photo. A photo is required — ask them to add one, or add their card from Add Player with a photo.`);
+      return;
+    }
     setBusyUserId(user.userId);
     const creatorToken = generateToken();
     try {
@@ -178,6 +184,7 @@ export default function AddPlayerFromAccountModal({ leagueId, onClose }: {
                       <span className="block text-xs text-muted-foreground truncate">{user.email}</span>
                       <span className="block text-[11px] text-muted-foreground/80 truncate">
                         {user.role}{user.isWicketKeeper ? ' · WK' : ''}
+                        {!user.photo && <span className="text-amber-600 dark:text-amber-400"> · no photo — can&apos;t be added</span>}
                       </span>
                     </span>
                     <button

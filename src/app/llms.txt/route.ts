@@ -37,8 +37,15 @@ shared with a single link. It runs in any modern browser with no app install.
 
 - **Premium player cards** — build broadcast-quality cards from a photo, role
   and stats, across 12 colour templates.
+- **Import registrations from Excel** — organizers upload a registration sheet
+  (.xlsx or .csv, such as a Google Forms export), match its columns to name,
+  phone, email, role and batting/bowling style, preview every card and add the
+  whole list in one go.
 - **Live auctions** — run a real-time auction with team budgets, icon players
-  and bidding, mirrored to a public spectator screen as it happens.
+  and bidding, mirrored to a public spectator screen as it happens. The next
+  player is drawn at random, drawn at random from a set the auctioneer picks,
+  or chosen by name. After the auction, organizers can still correct a sale
+  price or place an unsold player in a team.
 - **Watch mode** — a full-screen public screen fans can follow during the
   auction, shareable without an account, with a projector mode for large-format
   display in the hall and an optional gavel-and-chime sound on every sale.
@@ -55,7 +62,8 @@ shared with a single link. It runs in any modern browser with no app install.
   story or square, in thirteen templates), then record scores and winners.
 - **Live ball-by-ball scoring** — score a match from a phone, with every extra
   (wides, no-balls, byes, leg byes, penalty runs), every mode of dismissal,
-  free hits, retirements, late arrivals, last man standing, rain-revised targets
+  free hits, retirements, late arrivals (added on the spot from the batter or
+  bowler picker when someone isn't in the squad), last man standing, rain-revised targets
   and super overs, and keep scoring through a patchy connection. Spectators
   follow a public match centre with the live score, full scorecard,
   ball-by-ball commentary and over-by-over summary. Results feed the points

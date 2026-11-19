@@ -125,7 +125,9 @@ TeamModel.init(
 // ── Player ────────────────────────────────────────────────────────────────────
 export class PlayerModel extends Model<
   InferAttributes<PlayerModel>,
-  InferCreationAttributes<PlayerModel, { omit: 'createdAt' }>
+  // `createdAt` stays settable, as on matches: a spreadsheet import staggers it
+  // so the roster keeps the sheet's order.
+  InferCreationAttributes<PlayerModel>
 > {
   declare id: string;
   declare leagueId: ForeignKey<LeagueModel['id']>;
