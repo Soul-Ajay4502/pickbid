@@ -248,6 +248,51 @@ export interface PlayerDocuments {
   paymentReceived: boolean;
   /** The team this card is in — bought at auction or pre-assigned as an icon. Null while it has none. */
   teamId: string | null;
+  /**
+   * The card's phone number, for the register's WhatsApp reminders. Organizer
+   * data like everything else on this type — the register is the one screen
+   * allowed to act on it, and it must not be copied into a payment PDF.
+   */
+  contactNumber: string | null;
+}
+
+/** What one auction-log entry records having happened to a player's result. */
+export type AuctionChangeAction =
+  | 'sold'      // bought in the live auction
+  | 'unsold'    // called unsold in the live auction
+  | 'price'     // price changed, same team
+  | 'moved'     // one team to another
+  | 'added'     // put in a team outside the auction
+  | 'removed'   // taken out of a team
+  | 'cleared'   // an unsold flag taken off again
+  | 'icon'      // pre-assigned as an icon player
+  | 'reset';    // the whole auction reset
+
+/** Which screen a change was made from. */
+export type AuctionChangeSource = 'auction' | 'correction' | 'setup' | 'other';
+export const AUCTION_CHANGE_SOURCES: AuctionChangeSource[] = ['auction', 'correction', 'setup', 'other'];
+
+/**
+ * One row of a league's auction change log — organizers only. Every name is a
+ * snapshot taken when the change was made, so the entry still reads correctly
+ * after the card, the team or the organizer's account has gone.
+ */
+export interface AuctionChange {
+  id: string;
+  leagueId: string;
+  action: AuctionChangeAction;
+  source: AuctionChangeSource;
+  /** Null for `reset`, which is about the whole league. */
+  playerId: string | null;
+  playerName: string;
+  fromTeamName: string | null;
+  toTeamName: string | null;
+  fromPrice: number | null;
+  toPrice: number | null;
+  /** Null when the platform owner made the change — it has no user row. */
+  actorId: string | null;
+  actorName: string;
+  createdAt: string;
 }
 
 /** GET /api/leagues/[id]/identity — the organizer's document register. */

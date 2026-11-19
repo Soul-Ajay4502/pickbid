@@ -223,10 +223,11 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
     setJoining(true);
     const creatorToken = generateToken();
     try {
-      const res = await fetch(`/api/leagues/${id}/players`, {
+      const send = (confirmDuplicate: boolean) => fetch(`/api/leagues/${id}/players`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          confirmDuplicate,
           name: profile.name,
           photo: profile.photo,
           battingType: profile.battingType,
@@ -237,6 +238,15 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
           creatorToken,
         }),
       });
+      let res = await send(false);
+      if (res.status === 409) {
+        // Held back as a likely duplicate — often an organizer already added
+        // this person by hand. Let them decide rather than failing the join.
+        const held = await res.json().catch(() => ({}));
+        if (!held.duplicate) throw new Error(held.error ?? 'Failed to join');
+        if (!window.confirm(`${held.error}\n\nIf that is you, you are already registered and don't need to join again. Join anyway?`)) return;
+        res = await send(true);
+      }
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error ?? 'Failed to join');

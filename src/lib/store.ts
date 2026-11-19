@@ -1,13 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from './db';
-import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, MatchScorecardModel, TeamOfficialModel, AuctionLiveModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
+import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, MatchScorecardModel, TeamOfficialModel, AuctionLiveModel, AuctionChangeModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
 import { EARLY_ADOPTER_CUTOFF } from './badges';
-import { playerNameKey } from './utils';
+import { playerNameKey, localPhoneDigits } from './utils';
 import { LIVE_AUCTION_TTL_MS } from './types';
 import type { MatchScoreSummary, MatchSetup, PlayerMatchLine, ScoredMatchLines, ScoringEvent } from './scoring';
-import type { MatchScorecard, MatchCentre, BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
+import type { AuctionChange, MatchScorecard, MatchCentre, BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1098,6 +1098,30 @@ export async function getCreatorOwnedPlayerUserId(
   return player.userId ?? null;
 }
 
+/**
+ * Whether a card about to be added looks like someone already in the league:
+ * the same phone number (compared on its last ten digits, so "+91 98…" and
+ * "98…" agree), or failing that the same name once case and punctuation are
+ * set aside. A phone match is reported first — it is the stronger signal; two
+ * different people do share a name. Returns the existing card's name so an
+ * organizer can see who it clashed with.
+ */
+export async function findDuplicatePlayer(
+  leagueId: string,
+  name: string,
+  contactNumber: string | null | undefined
+): Promise<{ reason: 'phone' | 'name'; name: string } | null> {
+  const rows = await PlayerModel.findAll({ where: { leagueId }, attributes: ['name', 'contactNumber'] });
+  const phone = localPhoneDigits(contactNumber);
+  if (phone.length >= 7) {
+    const samePhone = rows.find((r) => localPhoneDigits(r.contactNumber) === phone);
+    if (samePhone) return { reason: 'phone', name: samePhone.name };
+  }
+  const key = playerNameKey(name);
+  const sameName = key ? rows.find((r) => playerNameKey(r.name) === key) : undefined;
+  return sameName ? { reason: 'name', name: sameName.name } : null;
+}
+
 export async function createPlayer(data: Omit<Player, 'id' | 'createdAt'>): Promise<Player> {
   const row = await PlayerModel.create({
     id:             uuidv4(),
@@ -1253,6 +1277,43 @@ export async function resetAuction(leagueId: string): Promise<number> {
     { where: { leagueId, isIcon: false } }
   );
   return count;
+}
+
+// ── Auction change log ────────────────────────────────────────────────────────
+
+/**
+ * Appends one entry to a league's auction change log. Callers treat this as
+ * best-effort — a sale must never fail because its log line did — so it is
+ * awaited inside their own try/catch, after the response where they can.
+ */
+export async function recordAuctionChange(entry: Omit<AuctionChange, 'id' | 'createdAt'>): Promise<void> {
+  await AuctionChangeModel.create({ id: uuidv4(), ...entry });
+}
+
+/** A league's change log, newest first. */
+export async function getAuctionChanges(leagueId: string, limit = 300): Promise<AuctionChange[]> {
+  const rows = await AuctionChangeModel.findAll({ where: { leagueId }, order: [['createdAt', 'DESC']], limit });
+  return rows.map((r) => ({
+    id:           r.id,
+    leagueId:     r.leagueId!,
+    action:       r.action as AuctionChange['action'],
+    source:       r.source as AuctionChange['source'],
+    playerId:     r.playerId ?? null,
+    playerName:   r.playerName,
+    fromTeamName: r.fromTeamName ?? null,
+    toTeamName:   r.toTeamName ?? null,
+    fromPrice:    r.fromPrice ?? null,
+    toPrice:      r.toPrice ?? null,
+    actorId:      r.actorId ?? null,
+    actorName:    r.actorName,
+    createdAt:    r.createdAt?.toISOString() ?? new Date().toISOString(),
+  }));
+}
+
+/** The name to put beside an action in a log; falls back to the email's local part. */
+export async function getUserDisplayName(userId: string): Promise<string> {
+  const user = await UserModel.findByPk(userId, { attributes: ['name', 'email'] });
+  return user?.name?.trim() || user?.email?.split('@')[0] || 'An organizer';
 }
 
 // ── Global leaderboard ──────────────────────────────────────────────────────────
@@ -1784,7 +1845,7 @@ export async function hasIdentityProof(userId: string | null | undefined): Promi
 export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocuments[]> {
   const players = await PlayerModel.findAll({
     where: { leagueId },
-    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl', 'paymentReceived', 'teamId'],
+    attributes: ['id', 'name', 'photo', 'userId', 'paymentProofUrl', 'paymentReceived', 'teamId', 'contactNumber'],
     order: [['createdAt', 'ASC']],
   });
   if (players.length === 0) return [];
@@ -1811,6 +1872,7 @@ export async function getLeagueDocuments(leagueId: string): Promise<PlayerDocume
       paymentProofUrl: p.paymentProofUrl || null,
       paymentReceived: p.paymentReceived,
       teamId:         p.teamId ?? null,
+      contactNumber:  p.contactNumber ?? null,
     };
   });
 }

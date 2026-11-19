@@ -17,13 +17,13 @@ import {
   ArrowLeft, ShieldCheck, ShieldAlert, UserX, FileText, Lock, Search,
   Maximize2, Minimize2, ExternalLink, ReceiptIndianRupee,
   ArrowUpDown, BadgeCheck, Circle, Download, ChevronDown, IndianRupee, Loader2,
-  UsersRound, type LucideIcon,
+  UsersRound, MessageCircle, Copy, Check, PhoneOff, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { downloadPaymentListPdf, downloadTeamPaymentPdf, partitionByPayment } from '@/lib/paymentPdf';
 import type { LeagueDocumentsResponse, PlayerDocuments } from '@/lib/types';
-import { cloudinaryImage } from '@/lib/utils';
+import { buildReminderMessage, cloudinaryImage, copyToClipboard, whatsappChatLink, type ReminderNeeds } from '@/lib/utils';
 
 type DocKind = 'id' | 'payment';
 
@@ -61,6 +61,20 @@ interface DownloadOption {
 interface Viewing {
   player: PlayerDocuments;
   kind: DocKind;
+}
+
+/** Which flagged players the reminder dialog lists. */
+type RemindFilter = 'all' | 'fee' | 'documents';
+
+const REMIND_FILTERS: { key: RemindFilter; label: string }[] = [
+  { key: 'all', label: 'Everyone flagged' },
+  { key: 'fee', label: 'Fee unpaid' },
+  { key: 'documents', label: 'Documents missing' },
+];
+
+/** "entry fee · receipt · ID" — what a reminder to this player is about. */
+function needsLabel(needs: ReminderNeeds): string {
+  return [needs.fee && 'entry fee', needs.receipt && 'payment receipt', needs.idProof && 'identity proof'].filter(Boolean).join(' · ');
 }
 
 function initials(name: string): string {
@@ -188,6 +202,10 @@ export default function LeagueDocumentsPage() {
   const downloadsRef = useRef<HTMLDivElement>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [zoomed, setZoomed] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
+  const [remindFilter, setRemindFilter] = useState<RemindFilter>('all');
+  /** Cards whose WhatsApp chat was opened this visit — a tick, so a long list isn't worked twice. */
+  const [reminded, setReminded] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/leagues/${id}/identity`);
@@ -197,7 +215,11 @@ export default function LeagueDocumentsPage() {
     setLoading(false);
   }, [id, router]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    // Inside an async function so the state it sets lands after the fetch,
+    // not synchronously in the effect body.
+    void (async () => { await fetchData(); })();
+  }, [fetchData]);
 
   useEffect(() => {
     if (!downloadsOpen) return;
@@ -396,6 +418,27 @@ export default function LeagueDocumentsPage() {
     },
   ];
 
+  // ── Reminders ──────────────────────────────────────────────────────────────
+  // What each player still owes, by the league's own rules: a fee the organizer
+  // hasn't ticked, and a receipt or an ID only where this league requires one.
+  // An unlinked card can't submit an ID at all, so it is never chased for one.
+  const needsOf = (p: PlayerDocuments): ReminderNeeds => ({
+    fee: !p.paymentReceived,
+    receipt: data.paymentRequired && !p.paymentProofUrl,
+    idProof: data.idRequired && p.linked && !p.idProofUrl,
+  });
+  const isFlagged = (n: ReminderNeeds) => n.fee || n.receipt || n.idProof;
+  const leagueUrl = typeof window !== 'undefined' ? `${window.location.origin}/leagues/${id}` : undefined;
+  const reminderFor = (p: PlayerDocuments, needs: ReminderNeeds) => {
+    const message = buildReminderMessage({ playerName: p.playerName, leagueName, needs, leagueUrl });
+    return { message, link: whatsappChatLink(p.contactNumber, message) };
+  };
+  // Like the PDFs, built from the whole register — never from a search result.
+  const flagged = players.map((p) => ({ player: p, needs: needsOf(p) })).filter((f) => isFlagged(f.needs));
+  const remindList = flagged.filter(({ needs }) =>
+    remindFilter === 'all' ? true : remindFilter === 'fee' ? needs.fee : needs.receipt || needs.idProof);
+  const markReminded = (playerId: string) => setReminded((ids) => (ids.includes(playerId) ? ids : [...ids, playerId]));
+
   const renderOption = (option: DownloadOption) => {
     const Icon = option.icon;
     return (
@@ -520,6 +563,18 @@ export default function LeagueDocumentsPage() {
                 ))}
               </select>
             </div>
+            <button
+              type="button"
+              onClick={() => setRemindOpen(true)}
+              disabled={flagged.length === 0}
+              className="toolbar-btn disabled:opacity-50 disabled:cursor-not-allowed"
+              title={flagged.length === 0
+                ? 'Nobody has anything outstanding'
+                : 'Send WhatsApp reminders to players with an unpaid fee or a missing document'}
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+              Remind{flagged.length > 0 ? ` (${flagged.length})` : ''}
+            </button>
             <div className="static sm:relative" ref={downloadsRef}>
               <button
                 type="button"
@@ -584,6 +639,34 @@ export default function LeagueDocumentsPage() {
                 {/* The three cells travel as one block, so on a phone they wrap
                     under the name together instead of breaking up mid-row. */}
                 <div className="flex items-start gap-2 ml-auto">
+                  {(() => {
+                    const needs = needsOf(p);
+                    if (!isFlagged(needs)) return null;
+                    const { link } = reminderFor(p, needs);
+                    const sent = reminded.includes(p.playerId);
+                    return link ? (
+                      <a
+                        href={link} target="_blank" rel="noopener noreferrer"
+                        onClick={() => markReminded(p.playerId)}
+                        title={`Remind ${p.playerName} on WhatsApp — ${needsLabel(needs)}`}
+                        aria-label={`Remind ${p.playerName} on WhatsApp`}
+                        className={`w-9 h-11 shrink-0 rounded-lg border flex items-center justify-center transition-colors ${
+                          sent
+                            ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400'
+                            : 'border-border text-green-600 dark:text-green-400 hover:border-green-500/40 hover:bg-green-500/5'
+                        }`}
+                      >
+                        {sent ? <Check className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
+                      </a>
+                    ) : (
+                      <span
+                        title="No phone number on this card — can't send a reminder"
+                        className="w-9 h-11 shrink-0 rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground/40"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5" />
+                      </span>
+                    );
+                  })()}
                   <DocSlot
                     label="ID"
                     url={p.idProofUrl}
@@ -611,6 +694,84 @@ export default function LeagueDocumentsPage() {
           </ul>
         </>
       )}
+
+      {/* Reminders. One chat at a time on purpose: a browser blocks a page
+          from opening a stack of tabs, and each message goes from the
+          organizer's own WhatsApp, where they can still edit it before sending. */}
+      <Dialog open={remindOpen} onOpenChange={setRemindOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[88vh] flex flex-col overflow-hidden">
+          <DialogTitle className="flex items-center gap-2 shrink-0">
+            <MessageCircle className="w-4 h-4 text-green-600 dark:text-green-400" />WhatsApp reminders
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground -mt-2 shrink-0">
+            Each button opens a chat with that player in your own WhatsApp, with the reminder already
+            typed — check it and press send. Nothing is sent automatically.
+          </p>
+          <div className="flex flex-wrap gap-1.5 shrink-0">
+            {REMIND_FILTERS.map((f) => {
+              const count = flagged.filter(({ needs }) =>
+                f.key === 'all' ? true : f.key === 'fee' ? needs.fee : needs.receipt || needs.idProof).length;
+              return (
+                <button
+                  key={f.key} type="button" aria-pressed={remindFilter === f.key}
+                  onClick={() => setRemindFilter(f.key)}
+                  className={`px-3 h-8 rounded-full text-xs font-semibold border transition-colors ${
+                    remindFilter === f.key ? 'border-green-500/50 bg-green-500/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {f.label} <span className="tabular-nums opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {remindList.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Nobody in this group has anything outstanding.</p>
+          ) : (
+            <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border/60 rounded-xl border border-border">
+              {remindList.map(({ player: p, needs }) => {
+                const { message, link } = reminderFor(p, needs);
+                const sent = reminded.includes(p.playerId);
+                return (
+                  <li key={p.playerId} className="flex items-center gap-3 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{p.playerName}</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 truncate">{needsLabel(needs)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => { if (await copyToClipboard(message)) toast.success(`Reminder for ${p.playerName} copied`); else toast.error('Could not copy'); }}
+                      title="Copy the message — for SMS or another app"
+                      aria-label={`Copy the reminder for ${p.playerName}`}
+                      className="w-8 h-8 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    {link ? (
+                      <a
+                        href={link} target="_blank" rel="noopener noreferrer"
+                        onClick={() => markReminded(p.playerId)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold transition-colors ${
+                          sent ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30' : 'bg-green-600 hover:bg-green-500 text-white'
+                        }`}
+                      >
+                        {sent ? <><Check className="w-3.5 h-3.5" />Opened</> : <><MessageCircle className="w-3.5 h-3.5" />WhatsApp</>}
+                      </a>
+                    ) : (
+                      <span className="shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-medium text-muted-foreground border border-dashed border-border">
+                        <PhoneOff className="w-3.5 h-3.5" />No phone
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="text-[11px] text-muted-foreground shrink-0">
+            {reminded.length > 0 ? `${reminded.length} chat${reminded.length === 1 ? '' : 's'} opened this visit. ` : ''}
+            Lists every flagged player — the search box doesn&apos;t apply.
+          </p>
+        </DialogContent>
+      </Dialog>
 
       {/* Document viewer.
           `DialogContent` is a viewport-centred fixed box with no height cap, so

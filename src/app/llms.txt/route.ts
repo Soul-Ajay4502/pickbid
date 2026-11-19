@@ -40,12 +40,16 @@ shared with a single link. It runs in any modern browser with no app install.
 - **Import registrations from Excel** — organizers upload a registration sheet
   (.xlsx or .csv, such as a Google Forms export), match its columns to name,
   phone, email, role and batting/bowling style, preview every card and add the
-  whole list in one go.
+  whole list in one go. Photos follow in bulk: drop a folder of images and each
+  is matched to its player by file name. A card that looks like someone already
+  in the league (same phone or name) is flagged before it is added.
 - **Live auctions** — run a real-time auction with team budgets, icon players
   and bidding, mirrored to a public spectator screen as it happens. The next
   player is drawn at random, drawn at random from a set the auctioneer picks,
   or chosen by name. After the auction, organizers can still correct a sale
-  price or place an unsold player in a team.
+  price or place an unsold player in a team — every such change is kept in a
+  change log showing who made it and when — and download the results as an
+  Excel workbook (signings, each team's purse, unsold players).
 - **Watch mode** — a full-screen public screen fans can follow during the
   auction, shareable without an account, with a projector mode for large-format
   display in the hall and an optional gavel-and-chime sound on every sale.

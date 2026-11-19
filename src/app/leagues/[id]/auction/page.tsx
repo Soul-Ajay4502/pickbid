@@ -8,8 +8,9 @@ import Confetti from '@/components/Confetti';
 import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, LivePurse } from '@/lib/types';
 import { toast } from 'sonner';
 import { copyToClipboard, formatINR, buildPlayerSoldMessage, whatsappShareLink } from '@/lib/utils';
+import { downloadAuctionResults } from '@/lib/auctionExport';
 import { QRCodeSVG } from 'qrcode.react';
-import { Shuffle, Wallet, X, ListChecks, Search, Undo2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
+import { Shuffle, Wallet, X, ListChecks, Search, Undo2, FileSpreadsheet, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
 
 type Phase = 'loading' | 'lobby' | 'idle' | 'picking' | 'showing' | 'sold-modal' | 'done';
 
@@ -386,7 +387,7 @@ export default function AuctionPage() {
 
     try {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, source: 'auction' }),
       });
       if (!res.ok) throw new Error();
     } catch {
@@ -413,7 +414,7 @@ export default function AuctionPage() {
     try {
       const res = await fetch(`/api/leagues/${id}/players/${action.player.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId: null, soldPrice: null, isUnsold: false }),
+        body: JSON.stringify({ teamId: null, soldPrice: null, isUnsold: false, source: 'auction' }),
       });
       if (!res.ok) throw new Error();
       const restored: Player = { ...action.player, teamId: null, soldPrice: null, isUnsold: false };
@@ -603,6 +604,17 @@ export default function AuctionPage() {
               ? <span className="w-4 h-4 border-2 border-foreground/30 border-t-white rounded-full animate-spin mr-2" />
               : <RotateCcw className="w-4 h-4 mr-2" />}
             Reset Auction
+          </Button>
+          <Button variant="outline" title="Every signing, each team's purse and who went unsold — as an Excel workbook"
+            onClick={() => {
+              // The board on this screen, not the roster it loaded with: every
+              // result of this session is in soldPlayers / unsoldQueue.
+              const settled = new Map<string, Player>([...soldPlayers, ...unsoldQueue.map(p => ({ ...p, isUnsold: true }))].map(p => [p.id, p]));
+              downloadAuctionResults(league.name, teams, league.players.map(p => settled.get(p.id) ?? p));
+              toast.success('Auction results downloaded');
+            }}
+            className="border-foreground/20 text-foreground hover:bg-foreground/10">
+            <FileSpreadsheet className="w-4 h-4 mr-2" />Results (Excel)
           </Button>
           <Button variant="outline" onClick={() => router.push(`/leagues/${id}/teams`)} title="Correct a sale price, or place an unsold player in a team"
             className="border-foreground/20 text-foreground hover:bg-foreground/10">

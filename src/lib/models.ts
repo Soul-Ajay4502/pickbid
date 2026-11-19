@@ -345,6 +345,48 @@ AuctionLiveModel.init(
   { sequelize, tableName: 'auction_live', timestamps: false, underscored: true }
 );
 
+// ── Auction Change Log ──────────────────────────────────────────────────────────
+// Append-only record of every write to a player's auction result. Names are
+// snapshots, not joins: the log must stay readable after the card, team or
+// account it mentions is gone. See the migration for the full reasoning.
+export class AuctionChangeModel extends Model<
+  InferAttributes<AuctionChangeModel>,
+  InferCreationAttributes<AuctionChangeModel>
+> {
+  declare id: string;
+  declare leagueId: ForeignKey<LeagueModel['id']>;
+  declare action: string;
+  declare source: CreationOptional<string>;
+  declare playerId: CreationOptional<string | null>;
+  declare playerName: CreationOptional<string>;
+  declare fromTeamName: CreationOptional<string | null>;
+  declare toTeamName: CreationOptional<string | null>;
+  declare fromPrice: CreationOptional<number | null>;
+  declare toPrice: CreationOptional<number | null>;
+  declare actorId: CreationOptional<string | null>;
+  declare actorName: CreationOptional<string>;
+  declare createdAt: CreationOptional<Date>;
+}
+
+AuctionChangeModel.init(
+  {
+    id:           { type: DataTypes.STRING,     primaryKey: true },
+    leagueId:     { type: DataTypes.STRING,     allowNull: false },
+    action:       { type: DataTypes.STRING(16), allowNull: false },
+    source:       { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'other' },
+    playerId:     { type: DataTypes.STRING,     allowNull: true,  defaultValue: null },
+    playerName:   { type: DataTypes.STRING,     allowNull: false, defaultValue: '' },
+    fromTeamName: { type: DataTypes.STRING,     allowNull: true,  defaultValue: null },
+    toTeamName:   { type: DataTypes.STRING,     allowNull: true,  defaultValue: null },
+    fromPrice:    { type: DataTypes.INTEGER,    allowNull: true,  defaultValue: null },
+    toPrice:      { type: DataTypes.INTEGER,    allowNull: true,  defaultValue: null },
+    actorId:      { type: DataTypes.STRING,     allowNull: true,  defaultValue: null },
+    actorName:    { type: DataTypes.STRING,     allowNull: false, defaultValue: '' },
+    createdAt:    { type: DataTypes.DATE,       allowNull: true,  defaultValue: DataTypes.NOW },
+  },
+  { sequelize, tableName: 'auction_changes', timestamps: false, underscored: true }
+);
+
 // ── Match Scorecard ───────────────────────────────────────────────────────────
 // One per scored match: the ball-by-ball log (`setup` + `events`) the scoring
 // engine replays. `summary` and `playerLines` are caches derived from the log
@@ -463,6 +505,9 @@ TeamOfficialModel.belongsTo(TeamModel,   { foreignKey: 'teamId' });
 
 LeagueModel.hasOne(AuctionLiveModel,     { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 AuctionLiveModel.belongsTo(LeagueModel,  { foreignKey: 'leagueId' });
+
+LeagueModel.hasMany(AuctionChangeModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
+AuctionChangeModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });
 
 LeagueModel.hasMany(SponsorModel,   { foreignKey: 'leagueId', onDelete: 'CASCADE' });
 SponsorModel.belongsTo(LeagueModel, { foreignKey: 'leagueId' });

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   LayoutGrid, UserPlus, Users, BarChart2, Activity, Trophy, Handshake, ShieldCheck,
   ReceiptText, Palette, Globe, Lock, CopyPlus, RotateCcw, Award, Eye, EyeOff, Trash2,
-  ChevronDown, Settings2, UserRoundPlus, BarChart3, FileSpreadsheet,
+  ChevronDown, Settings2, UserRoundPlus, BarChart3, FileSpreadsheet, Images,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
@@ -15,6 +15,7 @@ import CoOrganizersModal from '@/components/CoOrganizersModal';
 import PlayerAccessModal from '@/components/league/PlayerAccessModal';
 import AddPlayerFromAccountModal from '@/components/league/AddPlayerFromAccountModal';
 import ImportPlayersModal from '@/components/league/ImportPlayersModal';
+import BulkPhotoUploadModal from '@/components/league/BulkPhotoUploadModal';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueNavSummary } from '@/lib/types';
 
@@ -68,6 +69,7 @@ export default function LeagueSidebar({
   const [coOrgOpen, setCoOrgOpen] = useState(false);
   const [addFromAccountOpen, setAddFromAccountOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkPhotosOpen, setBulkPhotosOpen] = useState(false);
   const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -291,6 +293,17 @@ export default function LeagueSidebar({
                   <FileSpreadsheet className="w-4 h-4 shrink-0" />Import from Excel
                 </button>
 
+                <button
+                  onClick={() => setBulkPhotosOpen(true)}
+                  disabled={nav.playerCount === 0}
+                  title={nav.playerCount === 0
+                    ? 'Add players first'
+                    : 'Add photos to many cards at once — matched to players by file name'}
+                  className="rail-link"
+                >
+                  <Images className="w-4 h-4 shrink-0" />Bulk Photos
+                </button>
+
                 <button onClick={() => setTemplateOpen(true)} className="rail-link">
                   <Palette className="w-4 h-4 shrink-0" />Card Template
                 </button>
@@ -413,6 +426,14 @@ export default function LeagueSidebar({
         <ImportPlayersModal
           leagueId={leagueId}
           onClose={(didChange) => { setImportOpen(false); if (didChange) changed(); }}
+        />
+      )}
+
+      {bulkPhotosOpen && (
+        <BulkPhotoUploadModal
+          leagueId={leagueId}
+          leagueName={nav.name}
+          onClose={(didChange) => { setBulkPhotosOpen(false); if (didChange) changed(); }}
         />
       )}
 

@@ -9,6 +9,7 @@ import { generateToken, sanitizeFolder, uploadFile } from '@/lib/utils';
 import type { LeagueWithPlayers, UserProfile, Player } from '@/lib/types';
 import { toast } from 'sonner';
 import { useLeagueScroller } from '@/components/league/LeagueChrome';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { requestRewardsCheck } from '@/components/rewards/rewardsStore';
 import { ArrowLeft, Check, Sparkles, UserPlus, Users, ShieldCheck } from 'lucide-react';
 
@@ -40,6 +41,10 @@ function NewPlayerPageInner() {
   const [addedCount, setAddedCount] = useState(0);
   // Player picked from search — prefills the form below instead of a blank one
   const [searchSelection, setSearchSelection] = useState<Player | null>(null);
+  // A card the API held back as a likely duplicate, waiting on "add anyway".
+  // It keeps the finished request — photo and receipt already uploaded — so
+  // confirming re-sends that instead of uploading everything a second time.
+  const [duplicate, setDuplicate] = useState<{ message: string; payload: Record<string, unknown>; name: string } | null>(null);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -96,10 +101,7 @@ function NewPlayerPageInner() {
         paymentProofUrl = await uploadFile(data.paymentProofFile, `${sanitizeFolder(league?.name ?? id)}/payments`);
       }
 
-      const res = await fetch(`/api/leagues/${id}/players`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      await savePlayer({
           name: data.name,
           photo: photoUrl,
           battingType: data.battingType,
@@ -111,13 +113,37 @@ function NewPlayerPageInner() {
           creatorToken,
           // Picking an existing player reuses their account — don't also send an email
           ...(searchSelection ? { sourcePlayerId: searchSelection.id } : { email: data.email }),
-        }),
+      }, data.name, false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /**
+   * Posts a finished card. A 409 naming a duplicate isn't an error to toast —
+   * it parks the request behind the confirm dialog, which calls back in with
+   * `confirmDuplicate` set. Throws for every other failure.
+   */
+  async function savePlayer(payload: Record<string, unknown>, name: string, confirmDuplicate: boolean) {
+    const creatorToken = String(payload.creatorToken);
+    {
+      const res = await fetch(`/api/leagues/${id}/players`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, confirmDuplicate }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 409 && err.duplicate && !confirmDuplicate) {
+          setDuplicate({ message: err.error, payload, name });
+          return;
+        }
         throw new Error(err.error ?? 'Failed to add player');
       }
+      setDuplicate(null);
 
       const player = await res.json();
       if (typeof window !== 'undefined') {
@@ -126,7 +152,7 @@ function NewPlayerPageInner() {
 
       if (isCreatorMode) {
         // Stay on the page so the creator can keep adding players
-        toast.success(`${data.name} added — add the next player or go back when done`);
+        toast.success(`${name} added — add the next player or go back when done`);
         setLeague((prev) => prev ? { ...prev, players: [...prev.players, player] } : prev);
         setAddedCount((c) => c + 1);
         setSearchSelection(null);
@@ -140,10 +166,6 @@ function NewPlayerPageInner() {
         requestRewardsCheck();
         router.push(`/leagues/${id}`);
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -263,6 +285,32 @@ function NewPlayerPageInner() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!duplicate}
+        title="Already in this league?"
+        description={
+          <>
+            {duplicate?.message}{' '}
+            {isCreatorMode
+              ? 'Add this card anyway only if it is a different person.'
+              : 'If you have already registered, you don\u2019t need a second card. Add this one only if it is a different person.'}
+          </>
+        }
+        confirmLabel="Add anyway"
+        pendingLabel="Adding…"
+        cancelLabel="Don\u2019t add"
+        destructive={false}
+        onConfirm={async () => {
+          if (!duplicate) return;
+          try {
+            await savePlayer(duplicate.payload, duplicate.name, true);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Something went wrong');
+          }
+        }}
+        onClose={() => setDuplicate(null)}
+      />
 
       <div className="rounded-2xl border border-border bg-card shadow-sm p-5 sm:p-6">
         {isCreatorMode && (

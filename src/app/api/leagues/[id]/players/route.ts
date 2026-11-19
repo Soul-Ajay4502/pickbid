@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlayers, createPlayer, getLeague, canManageLeague, findOrCreateUserIdByEmail, getCreatorOwnedPlayerUserId, hasIdentityProof } from '@/lib/store';
+import { getPlayers, createPlayer, getLeague, canManageLeague, findOrCreateUserIdByEmail, getCreatorOwnedPlayerUserId, hasIdentityProof, findDuplicatePlayer } from '@/lib/store';
 import { stripOrganizerFields, visibleRoster } from '@/lib/utils';
 import { auth } from '@/auth';
+import { isAdmin } from '@/lib/adminAuth';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BATTING_TYPES = ['Right-Hand Bat', 'Left-Hand Bat'];
@@ -17,10 +18,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const [players, session, league] = await Promise.all([getPlayers(id), auth(), getLeague(id)]);
+    const [players, session, league, platformAdmin] = await Promise.all([getPlayers(id), auth(), getLeague(id), isAdmin()]);
     // Phone numbers and payment receipts are records-only — strip them unless
     // the requester runs this league (creator or co-organizer)
-    const canManage = !!league && (await canManageLeague(session?.user?.id, league));
+    // The owner console counts as managing — it has no Auth.js user for
+    // `canManageLeague` to recognise, so it is checked by name, as in the league GET.
+    const canManage = !!league && (platformAdmin || (await canManageLeague(session?.user?.id, league)));
     // Same closed-roster rule the league GET applies — a player gets their own
     // cards and the icon signings, nothing else.
     const rosterHidden = !!league && !canManage && !league.rosterVisibleToPlayers;
@@ -39,20 +42,22 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const [session, league] = await Promise.all([auth(), getLeague(id)]);
+    const [session, league, platformAdmin] = await Promise.all([auth(), getLeague(id), isAdmin()]);
     if (!league) {
       return NextResponse.json({ error: 'League not found' }, { status: 404 });
     }
     // Once registration is closed, only the organizers (creator or
     // co-organizer) can still add cards via Add Player; public
     // self-registration is rejected.
-    const isOrganizer = await canManageLeague(session?.user?.id, league);
+    // The owner console manages every league but has no Auth.js user, so it is
+    // recognised by name here, exactly as in the GET above.
+    const isOrganizer = platformAdmin || (await canManageLeague(session?.user?.id, league));
     if (league.registrationClosed && !isOrganizer) {
       return NextResponse.json({ error: 'Registration is closed for this league' }, { status: 403 });
     }
 
     const body = await request.json();
-    const { name, photo, battingType, bowlingType, role, isWicketKeeper, contactNumber, paymentProofUrl, creatorToken, email, sourcePlayerId } = body;
+    const { name, photo, battingType, bowlingType, role, isWicketKeeper, contactNumber, paymentProofUrl, creatorToken, email, sourcePlayerId, confirmDuplicate } = body;
 
     if (!name || !battingType || !bowlingType || !role || !creatorToken) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -98,7 +103,11 @@ export async function POST(
       if (typeof sourcePlayerId !== 'string') {
         return NextResponse.json({ error: 'Invalid source player' }, { status: 400 });
       }
-      const reused = await getCreatorOwnedPlayerUserId(session!.user!.id, sourcePlayerId);
+      // Reuse is scoped to the signed-in creator's own past cards; the owner
+      // console has no such history to draw on.
+      const reused = session?.user?.id
+        ? await getCreatorOwnedPlayerUserId(session.user.id, sourcePlayerId)
+        : undefined;
       if (reused === undefined) {
         return NextResponse.json({ error: 'Invalid source player' }, { status: 400 });
       }
@@ -127,6 +136,26 @@ export async function POST(
         { error: 'This league requires proof of the entry fee. Attach your payment receipt to register.' },
         { status: 403 }
       );
+    }
+
+    // The same person registering twice — a double tap, a second device, an
+    // organizer re-adding someone who already joined — is the commonest way a
+    // roster goes wrong, and it is only discovered on auction night. So a card
+    // matching one already here on phone number or name is held back with a
+    // 409 until the caller repeats the request with `confirmDuplicate`: a
+    // warning to confirm, not a ban, because namesakes and shared family
+    // phones are real. The existing card's name goes only to organizers; a
+    // stranger with the join link shouldn't learn whose number is on the roster.
+    if (confirmDuplicate !== true) {
+      const duplicate = await findDuplicatePlayer(id, name.trim(), typeof contactNumber === 'string' ? contactNumber : null);
+      if (duplicate) {
+        const error = duplicate.reason === 'phone'
+          ? isOrganizer
+            ? `${duplicate.name} is already in this league with this phone number.`
+            : 'A player with this phone number is already in this league.'
+          : `A player named ${duplicate.name} is already in this league.`;
+        return NextResponse.json({ error, duplicate: duplicate.reason }, { status: 409 });
+      }
     }
 
     const player = await createPlayer({

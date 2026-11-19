@@ -74,10 +74,11 @@ export default function AddPlayerFromAccountModal({ leagueId, onClose }: {
     setBusyUserId(user.userId);
     const creatorToken = generateToken();
     try {
-      const res = await fetch(`/api/leagues/${leagueId}/players`, {
+      const send = (confirmDuplicate: boolean) => fetch(`/api/leagues/${leagueId}/players`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          confirmDuplicate,
           name: user.name,
           photo: user.photo,
           battingType: user.battingType,
@@ -92,7 +93,16 @@ export default function AddPlayerFromAccountModal({ leagueId, onClose }: {
           email: user.email,
         }),
       });
-      const json = await res.json();
+      let res = await send(false);
+      let json = await res.json();
+      // The API holds back a card that matches one already here on phone or
+      // name. This account isn't on the roster (the search excludes those), so
+      // the clash is with a hand-added card — let the organizer decide.
+      if (res.status === 409 && json.duplicate) {
+        if (!window.confirm(`${json.error}\n\nAdd ${user.name} anyway? Choose OK only if this is a different person.`)) return;
+        res = await send(true);
+        json = await res.json();
+      }
       if (!res.ok) throw new Error(json.error ?? 'Failed to add player');
       // The same token handshake the Add Player form does — it is what lets
       // whoever added the card edit or remove it from this browser.

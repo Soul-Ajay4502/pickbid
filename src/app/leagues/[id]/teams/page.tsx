@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus, FileSpreadsheet, History } from 'lucide-react';
+import { downloadAuctionResults } from '@/lib/auctionExport';
+import AuctionChangeLogDialog from '@/components/league/AuctionChangeLogDialog';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
 import { useLeagueRevision } from '@/components/league/LeagueChrome';
@@ -44,6 +46,7 @@ export default function TeamsPage() {
   // icon player picker
   const [iconPickerTeam, setIconPickerTeam] = useState<string | null>(null);
   const [iconBusy, setIconBusy] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   // team officials editor (squad-poster only; never affects the auction)
   const [officialTeam, setOfficialTeam] = useState<string | null>(null);
@@ -71,7 +74,7 @@ export default function TeamsPage() {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId: team.id, isIcon: true, soldPrice: null, isUnsold: false }),
+        body: JSON.stringify({ teamId: team.id, isIcon: true, soldPrice: null, isUnsold: false, source: 'setup' }),
       });
       if (!res.ok) throw new Error();
       const updated: Player = await res.json();
@@ -89,7 +92,7 @@ export default function TeamsPage() {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamId: null, isIcon: false }),
+        body: JSON.stringify({ teamId: null, isIcon: false, source: 'setup' }),
       });
       if (!res.ok) throw new Error();
       const updated: Player = await res.json();
@@ -298,7 +301,7 @@ export default function TeamsPage() {
             <p className="text-muted-foreground text-sm mt-1">{data.name}</p>
           </div>
           {teams.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => handleExport('roster')} disabled={!!exporting} className="toolbar-btn" title="One PDF listing every team's players">
                 {exporting === 'roster'
                   ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
@@ -311,6 +314,21 @@ export default function TeamsPage() {
                   : <ImageDown className="w-3.5 h-3.5" />}
                 Squad Posters
               </button>
+              <button
+                onClick={() => {
+                  try {
+                    downloadAuctionResults(data.name, teams, data.players);
+                    toast.success('Auction results downloaded');
+                  } catch { toast.error('Could not build the Excel file'); }
+                }}
+                className="toolbar-btn" title="Every signing, each team's purse and who is without a team — as an Excel workbook">
+                <FileSpreadsheet className="w-3.5 h-3.5" />Results (Excel)
+              </button>
+              {canEdit && (
+                <button onClick={() => setLogOpen(true)} className="toolbar-btn" title="Who changed a price or moved a player, and when">
+                  <History className="w-3.5 h-3.5" />Change log
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -668,6 +686,8 @@ export default function TeamsPage() {
           </form>
         </div>
       )}
+
+      {canEdit && <AuctionChangeLogDialog leagueId={id} open={logOpen} onClose={() => setLogOpen(false)} />}
     </div>
   );
 }

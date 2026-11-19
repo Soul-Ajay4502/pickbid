@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles, Pencil, UserPlus, Search } from 'lucide-react';
+import { ArrowLeft, Wallet, Users, Star, Briefcase, Shield, Copy, Sparkles, Pencil, UserPlus, Search, History } from 'lucide-react';
+import AuctionChangeLogDialog from '@/components/league/AuctionChangeLogDialog';
 import { toast } from 'sonner';
 import PlayerFullView from '@/components/PlayerFullView';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -52,6 +53,7 @@ export default function TeamDetailPage() {
   const [addPrice, setAddPrice] = useState('');
   const [addQuery, setAddQuery] = useState('');
   const [saving, setSaving] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/leagues/${id}`);
@@ -124,7 +126,7 @@ export default function TeamDetailPage() {
     setSaving(true);
     try {
       const res = await fetch(`/api/leagues/${id}/players/${playerId}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, source: 'correction' }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(json.error ?? 'Could not save that change'); return false; }
@@ -288,6 +290,11 @@ export default function TeamDetailPage() {
           {canSeePhones && phoneEntries.length > 0 && (
             <button onClick={copyAllPhones} className="toolbar-btn" title="Copy every player's name and phone number">
               <Copy className="w-3.5 h-3.5" />Copy all numbers
+            </button>
+          )}
+          {data.canManage && (
+            <button onClick={() => setLogOpen(true)} className="toolbar-btn" title="Who changed a price or moved a player, and when">
+              <History className="w-3.5 h-3.5" />Change log
             </button>
           )}
           {data.canManage && (
@@ -506,6 +513,8 @@ export default function TeamDetailPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {data.canManage && <AuctionChangeLogDialog leagueId={id} open={logOpen} onClose={() => setLogOpen(false)} />}
 
       {/* Full player view */}
       <Dialog open={!!cardPlayer} onOpenChange={(open) => { if (!open) setCardPlayer(null); }}>

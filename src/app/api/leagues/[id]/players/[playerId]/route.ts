@@ -2,11 +2,12 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import {
   getLeague, getPlayer, updatePlayer, deletePlayer, cleanupImages,
   assignPlayerToTeam, AuctionRuleError, canManageLeague, getTeams, getOfficials,
+  recordAuctionChange, getUserDisplayName,
 } from '@/lib/store';
 import { notifyPlayerSold } from '@/lib/whatsapp';
 import { isAdmin } from '@/lib/adminAuth';
 import { auth } from '@/auth';
-import type { League, Player } from '@/lib/types';
+import { AUCTION_CHANGE_SOURCES, type AuctionChangeAction, type AuctionChangeSource, type League, type Player } from '@/lib/types';
 import { stripOrganizerFields } from '@/lib/utils';
 
 /**
@@ -39,6 +40,24 @@ async function resolveCardAccess(
     isOrganizer: platformAdmin || (await canManageLeague(viewerUserId, league)),
     viewerUserId,
   };
+}
+
+/**
+ * What a write did to a player's auction result, for the change log — or null
+ * when it touched none of it (a name or photo edit). `source` only settles the
+ * one ambiguous case: joining a team is a *sale* on auction night and an
+ * *addition* from anywhere else.
+ */
+function classifyAuctionChange(before: Player, after: Player, source: AuctionChangeSource): AuctionChangeAction | null {
+  const from = before.teamId ?? null;
+  const to = after.teamId ?? null;
+  if (from !== to) {
+    if (!from) return after.isIcon ? 'icon' : source === 'auction' ? 'sold' : 'added';
+    return to ? 'moved' : 'removed';
+  }
+  if (to) return (before.soldPrice ?? null) !== (after.soldPrice ?? null) ? 'price' : null;
+  if (!!before.isUnsold !== !!after.isUnsold) return after.isUnsold ? 'unsold' : 'cleared';
+  return null;
 }
 
 /** Editing a card: unchanged by either switch — organizers or the card's holder. */
@@ -150,6 +169,38 @@ export async function PUT(
     // Same for a replaced receipt — nothing else ever points at it
     if (typeof patch.paymentProofUrl === 'string' && patch.paymentProofUrl !== player.paymentProofUrl) {
       await cleanupImages([player.paymentProofUrl]);
+    }
+
+    // Log what this did to the auction result — after the response, and never
+    // allowed to fail the write it describes. Only an organizer can reach the
+    // auction fields at all, so the actor is always one.
+    const source: AuctionChangeSource = (AUCTION_CHANGE_SOURCES as string[]).includes(body.source) ? body.source : 'other';
+    const action = classifyAuctionChange(player, updated, source);
+    if (action) {
+      const before = player;
+      const result = updated;
+      after(async () => {
+        try {
+          const teams = await getTeams(id);
+          const teamName = (teamId?: string | null) => (teamId ? teams.find((t) => t.id === teamId)?.name ?? 'a deleted team' : null);
+          await recordAuctionChange({
+            leagueId: id,
+            action,
+            source,
+            playerId: result.id,
+            playerName: result.name,
+            fromTeamName: teamName(before.teamId),
+            toTeamName: teamName(result.teamId),
+            fromPrice: before.soldPrice ?? null,
+            toPrice: result.soldPrice ?? null,
+            actorId: access.viewerUserId,
+            // No Auth.js user means the owner console made the change
+            actorName: access.viewerUserId ? await getUserDisplayName(access.viewerUserId) : 'Platform owner',
+          });
+        } catch (err) {
+          console.error('[auction-log] could not record change:', err);
+        }
+      });
     }
 
     // A player was just sold to a team → WhatsApp them the team, their owner's

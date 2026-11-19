@@ -1,11 +1,22 @@
-// Writes a one-sheet .xlsx workbook — the counterpart of sheetReader.ts, and
-// dependency-free for the same reason. It exists for the import dialog's
-// template: an organizer who is told "upload an Excel sheet" should be handed
-// an Excel sheet to fill in, not a CSV to convert.
+// Writes an .xlsx workbook — the counterpart of sheetReader.ts, and
+// dependency-free for the same reason. Two callers: the import dialog's
+// template (an organizer told "upload an Excel sheet" should be handed an Excel
+// sheet to fill in, not a CSV to convert) and the auction results export.
 //
-// The zip is written *stored* (no compression): a template is a few kilobytes,
-// and that keeps this to a CRC table and some headers. Cells are inline
-// strings, so nothing is ever reinterpreted as a number or a date.
+// The zip is written *stored* (no compression): these files are a few
+// kilobytes, and that keeps this to a CRC table and some headers. Text cells
+// are inline strings, so a name or a phone number is never reinterpreted as a
+// number or a date; only a value passed as a JS `number` is written as one.
+
+/** A cell: text, or a number Excel can sum. */
+export type SheetCell = string | number;
+
+export interface SheetSpec {
+  /** Tab name. Excel allows 31 characters; its reserved punctuation is replaced. */
+  name: string;
+  columns: SheetColumn[];
+  rows: SheetCell[][];
+}
 
 export interface SheetColumn {
   header: string;
@@ -45,7 +56,8 @@ const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const PKG_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
-// Cell styles: 0 plain, 1 bold header on a tint, 2 text-formatted.
+// Cell styles: 0 plain, 1 bold header on a tint, 2 text-formatted, 3 a whole
+// number with thousands separators.
 const STYLES =
   `${XML}<styleSheet xmlns="${MAIN_NS}">` +
   '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
@@ -53,15 +65,18 @@ const STYLES =
   '<fill><patternFill patternType="solid"><fgColor rgb="FFDCFCE7"/><bgColor indexed="64"/></patternFill></fill></fills>' +
   '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
   '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-  '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+  '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
   '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
-  '<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+  '<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+  '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   '</styleSheet>';
 
-function sheetXml(columns: SheetColumn[], rows: string[][]): string {
-  const cell = (value: string, col: number, row: number, style: number) =>
-    value === ''
+function sheetXml(columns: SheetColumn[], rows: SheetCell[][]): string {
+  const cell = (value: SheetCell, col: number, row: number, style: number) =>
+    typeof value === 'number'
+      ? (Number.isFinite(value) ? `<c r="${columnName(col)}${row}" s="3"><v>${value}</v></c>` : '')
+      : value === ''
       ? ''
       : `<c r="${columnName(col)}${row}" t="inlineStr"${style ? ` s="${style}"` : ''}><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
   const cols = columns
@@ -166,9 +181,24 @@ function zip(files: { name: string; text: string }[]): Uint8Array {
   return out;
 }
 
-/** A workbook with one sheet: a styled, frozen header row and the given rows of text. */
-export function buildXlsx(sheetName: string, columns: SheetColumn[], rows: string[][]): Blob {
-  const name = xmlEscape(sheetName.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Sheet1');
+/** A workbook with one sheet: a styled, frozen header row and the given rows. */
+export function buildXlsx(sheetName: string, columns: SheetColumn[], rows: SheetCell[][]): Blob {
+  return buildWorkbook([{ name: sheetName, columns, rows }]);
+}
+
+/** A workbook of several sheets, each with a styled, frozen header row. */
+export function buildWorkbook(sheets: SheetSpec[]): Blob {
+  if (sheets.length === 0) throw new Error('A workbook needs at least one sheet');
+  // Tab names must be unique, case-insensitively, or Excel reports the file as damaged
+  const used = new Set<string>();
+  const names = sheets.map((sheet, i) => {
+    const base = sheet.name.replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || `Sheet${i + 1}`;
+    let name = base;
+    for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base.slice(0, 28)} ${n}`;
+    used.add(name.toLowerCase());
+    return xmlEscape(name);
+  });
+  const WORKSHEET_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
   const bytes = zip([
     {
       name: '[Content_Types].xml',
@@ -176,7 +206,7 @@ export function buildXlsx(sheetName: string, columns: SheetColumn[], rows: strin
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="${WORKSHEET_TYPE}"/>`).join('') +
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
         '</Types>',
     },
@@ -186,16 +216,18 @@ export function buildXlsx(sheetName: string, columns: SheetColumn[], rows: strin
     },
     {
       name: 'xl/workbook.xml',
-      text: `${XML}<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheets><sheet name="${name}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      text: `${XML}<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheets>` +
+        names.map((n, i) => `<sheet name="${n}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') +
+        '</sheets></workbook>',
     },
     {
       name: 'xl/_rels/workbook.xml.rels',
       text: `${XML}<Relationships xmlns="${PKG_REL_NS}">` +
-        `<Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/>` +
-        `<Relationship Id="rId2" Type="${REL_NS}/styles" Target="styles.xml"/></Relationships>`,
+        sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+        `<Relationship Id="rId${sheets.length + 1}" Type="${REL_NS}/styles" Target="styles.xml"/></Relationships>`,
     },
     { name: 'xl/styles.xml', text: STYLES },
-    { name: 'xl/worksheets/sheet1.xml', text: sheetXml(columns, rows) },
+    ...sheets.map((sheet, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, text: sheetXml(sheet.columns, sheet.rows) })),
   ]);
   return new Blob([bytes as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

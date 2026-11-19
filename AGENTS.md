@@ -108,6 +108,24 @@ post-auction corrections on the team page, so both go through
 `assignPlayerToTeam`'s squad-size and purse checks; it WhatsApps the player only
 when their team actually changes, so a price correction never re-announces a sale.
 
+**Every write to an auction result is logged, and the log is append-only.**
+The player PUT and the reset route add a row to `auction_changes` whenever a
+card's team, price or unsold flag actually changes — in `after()`, inside a
+try/catch, so a sale can never fail or slow down because of its log line. The
+client says where the write came from with `source` (`auction`, `correction`,
+`setup`); send it from any new screen that writes these fields. Rows keep the
+player, team and organizer *names* as they were, not ids to join, so the log
+stays readable after any of them is deleted. Never update or delete a row, and
+never serve the log outside `requireLeagueManager` — it names who did what.
+
+**A likely duplicate card is held back, not refused.** The players POST answers
+409 with `duplicate: 'phone' | 'name'` when the new card matches one already in
+the league, and creates it only when the request is repeated with
+`confirmDuplicate: true`. It is a warning to confirm because namesakes and
+shared family phones are real. Any new caller of that POST must handle the 409
+— see the registration form's confirm dialog. The existing card's name is given
+to organizers only on a phone match.
+
 **Player documents are organizer-only, and the two live in different places.**
 The *identity proof* is on the user (`users.idProofType` / `users.idProofUrl`):
 uploaded once from `/profile`, reused by every league they join. The *entry-fee

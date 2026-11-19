@@ -90,6 +90,51 @@ export function whatsappShareLink(message: string): string {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
+/**
+ * WhatsApp click-to-chat link to one Indian mobile number, with the message
+ * already typed. Returns null when the stored value doesn't hold a full
+ * ten-digit number — a link to a wrong number is worse than no link.
+ *
+ * This opens the *organizer's own* WhatsApp, which is the point: a reminder is
+ * free-form text, and the Cloud API in `whatsapp.ts` can only send a
+ * pre-approved template outside a 24-hour reply window.
+ */
+export function whatsappChatLink(contactNumber: string | null | undefined, message: string): string | null {
+  const digits = localPhoneDigits(contactNumber);
+  if (digits.length !== 10) return null;
+  return `https://wa.me/91${digits}?text=${encodeURIComponent(message)}`;
+}
+
+/** What a player on the document register still owes the organizers. */
+export interface ReminderNeeds {
+  /** The organizer hasn't ticked their entry fee as received. */
+  fee: boolean;
+  /** The league requires a payment receipt and the card has none. */
+  receipt: boolean;
+  /** The league requires an identity proof and their account has none. */
+  idProof: boolean;
+}
+
+/**
+ * The reminder an organizer sends a player from the document register. Plain
+ * and specific: it names the league and lists only what is actually missing,
+ * so nobody is chased for something they've already done.
+ */
+export function buildReminderMessage(d: { playerName: string; leagueName: string; needs: ReminderNeeds; leagueUrl?: string }): string {
+  const items: string[] = [];
+  if (d.needs.fee) items.push(d.needs.receipt ? 'Pay the entry fee and upload the payment receipt on your player card' : 'Pay the entry fee');
+  else if (d.needs.receipt) items.push('Upload your entry-fee payment receipt on your player card');
+  if (d.needs.idProof) items.push('Add your identity proof on your Pickbid profile');
+  const first = cleanPlayerName(d.playerName).split(' ')[0] || d.playerName;
+  const list = items.length === 1 ? items[0].charAt(0).toLowerCase() + items[0].slice(1) : `\n${items.map((t) => `• ${t}`).join('\n')}`;
+  return (
+    `Hi ${first}, a reminder from the organizers of ${d.leagueName}. ` +
+    (items.length === 1 ? `Please ${list}.` : `Please complete the following:${list}`) +
+    (d.leagueUrl ? `\n\n${d.leagueUrl}` : '') +
+    '\n\nThank you!'
+  );
+}
+
 // Organizers routinely bake serial numbers and phone numbers into the name they
 // type — "111.Amal Kannan (6282148147)". These two helpers clean that up for
 // display and for matching one person across leagues; the stored name is never
