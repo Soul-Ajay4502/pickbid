@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.12.0...v0.13.0) (2026-11-19)
+
+
+### Features
+
+* add bulk photo upload feature and auction change log ([f972bbd](https://github.com/Soul-Ajay4502/pickbid/commit/f972bbda89b1cbd601baf9ec4735116eb7b1877a))
+* implement auction base price and reserve rule ([3e7670a](https://github.com/Soul-Ajay4502/pickbid/commit/3e7670af18175a4711a60aca7423e015a21f1b18))
+
 ## [0.12.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.11.0...v0.12.0) (2026-11-19)
 
 
