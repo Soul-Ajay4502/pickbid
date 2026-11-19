@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import PlayerFullView from '@/components/PlayerFullView';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cloudinaryImage, copyToClipboard, formatIndianPhone, localPhoneDigits } from '@/lib/utils';
+import { auctionLimits, reserveRuleMessage } from '@/lib/auctionRules';
 import { useLeagueRevision } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, Player, Team, TeamOfficial } from '@/lib/types';
 
@@ -411,7 +412,15 @@ export default function TeamDetailPage() {
           {editPlayer && (() => {
             const price = parsePrice(editPrice);
             const others = spent - (editPlayer.soldPrice ?? 0);
-            const over = price !== null && others + price > team.budget;
+            const overPurse = price !== null && others + price > team.budget;
+            // The reserve rule, exactly as `assignPlayerToTeam` applies it:
+            // the squad without this player, and a price cut always allowed
+            const limits = auctionLimits({
+              budget: team.budget, spent: others, squadSize: squad.length - 1,
+              maxPlayers: team.maxPlayers, basePrice: data.basePrice,
+            });
+            const overReserve = price !== null && !overPurse && price > limits.maxBid && price > (editPlayer.soldPrice ?? 0);
+            const over = overPurse || overReserve;
             return (
               <div className="space-y-4">
                 <label className="block space-y-1.5">
@@ -423,6 +432,8 @@ export default function TeamDetailPage() {
                   <span className={`block text-xs ${over ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
                     {price === null
                       ? 'Whole rupees, no commas'
+                      : overReserve
+                        ? reserveRuleMessage(team.name, limits, fmt)
                       : over
                         ? `${fmt(price)} takes ${team.name} over its ${fmt(team.budget)} purse`
                         : `${fmt(price)} · leaves ${team.name} ${fmt(team.budget - others - price)}`}
@@ -458,7 +469,13 @@ export default function TeamDetailPage() {
             const q = addQuery.trim().toLowerCase();
             const shown = teamless.filter((p) => !q || p.name.toLowerCase().includes(q));
             const price = addPrice.trim() === '' ? 0 : parsePrice(addPrice);
-            const over = price !== null && spent + price > team.budget;
+            const overPurse = price !== null && spent + price > team.budget;
+            const limits = auctionLimits({
+              budget: team.budget, spent, squadSize: squad.length,
+              maxPlayers: team.maxPlayers, basePrice: data.basePrice,
+            });
+            const overReserve = price !== null && !overPurse && price > limits.maxBid;
+            const over = overPurse || overReserve;
             return (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground -mt-2">
@@ -494,7 +511,7 @@ export default function TeamDetailPage() {
                     className="w-full h-11 px-3 rounded-xl border border-border bg-input text-base tabular-nums" />
                   {(price === null || over) && (
                     <span className="block text-xs text-destructive font-semibold">
-                      {price === null ? 'Whole rupees, no commas' : `${fmt(price)} is more than the ${fmt(remaining)} ${team.name} has left`}
+                      {price === null ? 'Whole rupees, no commas' : overReserve ? reserveRuleMessage(team.name, limits, fmt) : `${fmt(price)} is more than the ${fmt(remaining)} ${team.name} has left`}
                     </span>
                   )}
                 </label>

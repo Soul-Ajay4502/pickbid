@@ -68,6 +68,7 @@ export class LeagueModel extends Model<
   declare paymentProofRequired: CreationOptional<boolean>;
   declare rosterVisibleToPlayers: CreationOptional<boolean>;
   declare playersCanDeleteCards: CreationOptional<boolean>;
+  declare basePrice: CreationOptional<number | null>;
   declare createdAt: CreationOptional<Date>;
 }
 
@@ -90,6 +91,8 @@ LeagueModel.init(
     // Both default true — that's how every league behaved before these existed
     rosterVisibleToPlayers: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     playersCanDeleteCards:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Null until an organizer sets it — the reserve-per-slot rule is off until then
+    basePrice:          { type: DataTypes.INTEGER, allowNull: true,  defaultValue: null },
     createdAt:          { type: DataTypes.DATE,    allowNull: true,  defaultValue: DataTypes.NOW },
   },
   { sequelize, tableName: 'leagues', timestamps: false, underscored: true }

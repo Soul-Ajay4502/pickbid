@@ -8,6 +8,7 @@ import Confetti from '@/components/Confetti';
 import type { LeagueWithPlayers, Player, PlayerRole, Team, LiveAuctionState, LivePurse } from '@/lib/types';
 import { toast } from 'sonner';
 import { copyToClipboard, formatINR, buildPlayerSoldMessage, whatsappShareLink } from '@/lib/utils';
+import { auctionLimits, reserveRuleMessage } from '@/lib/auctionRules';
 import { downloadAuctionResults } from '@/lib/auctionExport';
 import { QRCodeSVG } from 'qrcode.react';
 import { Shuffle, Wallet, X, ListChecks, Search, Undo2, FileSpreadsheet, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RotateCcw, Share2, Copy, Sparkles, MessageCircle, Maximize2 } from 'lucide-react';
@@ -60,11 +61,20 @@ function stored<T>(read: () => T, fallback: T): T {
 function teamStats(team: Team, roster: Player[], basePrice: number) {
   const squad = roster.filter(p => p.teamId === team.id);
   const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
-  const balance = team.budget - spent;
   const maxPlayers = team.maxPlayers ?? 11;
-  const slotsLeft = Math.max(0, maxPlayers - squad.length);
-  const maxBid = slotsLeft === 0 ? 0 : Math.max(0, balance - (slotsLeft - 1) * basePrice);
-  return { bought: squad.length, maxPlayers, spent, balance, slotsLeft, maxBid };
+  const limits = auctionLimits({ budget: team.budget, spent, squadSize: squad.length, maxPlayers, basePrice });
+  return { bought: squad.length, maxPlayers, spent, ...limits };
+}
+
+/**
+ * A team's "Max" figure. A team whose purse can no longer fill its open slots
+ * at the base price can't legally buy anyone, so it says by how much it is
+ * short instead of showing a max it could never use.
+ */
+function MaxBidLabel({ st, fullLabel = 'Full' }: { st: ReturnType<typeof teamStats>; fullLabel?: string }) {
+  if (st.slotsLeft === 0) return <>{fullLabel}</>;
+  if (st.shortfall > 0) return <span className="text-red-600 dark:text-red-400" title="The purse can't fill the open slots at the base price — raise the purse or lower the base price">Short {fmt(st.shortfall)}</span>;
+  return <>{fmt(st.maxBid)}</>;
 }
 
 export default function AuctionPage() {
@@ -110,8 +120,12 @@ export default function AuctionPage() {
   const [confettiBurst, setConfettiBurst] = useState(0);
   const confettiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Base price per player — used for the max-bid rule; persisted per league
+  // Base price per player — drives the max-bid rule. The league row is the
+  // source of truth (`league.basePrice`), so every organizer's device and the
+  // server's own check use one number; localStorage only seeds a league that
+  // has never had one saved, from whatever this device was last using.
   const [basePrice, setBasePrice] = useState(() => stored(() => parseInt(localStorage.getItem(`auction_base_${id}`) || '100') || 0, 100));
+  const baseSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Purse sidebar visibility — persisted per league
   const [purseOpen, setPurseOpen] = useState(() => stored(() => localStorage.getItem(`auction_purse_${id}`) !== '0', true));
   function togglePurse() {
@@ -131,6 +145,24 @@ export default function AuctionPage() {
     const n = Math.max(0, parseInt(v) || 0);
     setBasePrice(n);
     try { localStorage.setItem(`auction_base_${id}`, String(n)); } catch { /* private mode */ }
+    // Debounced so typing "500" is one save, not three
+    if (baseSaveTimer.current) clearTimeout(baseSaveTimer.current);
+    baseSaveTimer.current = setTimeout(() => { void saveBasePrice(n); }, 500);
+  }
+  // Stores the base price on the league, where the server's sale check reads it
+  async function saveBasePrice(n: number): Promise<boolean> {
+    if (baseSaveTimer.current) { clearTimeout(baseSaveTimer.current); baseSaveTimer.current = null; }
+    try {
+      const res = await fetch(`/api/leagues/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ basePrice: n }),
+      });
+      if (!res.ok) throw new Error();
+      setLeague(l => (l ? { ...l, basePrice: n } : l));
+      return true;
+    } catch {
+      toast.error('Couldn’t save the base price — check your connection and try again');
+      return false;
+    }
   }
 
   const fetchLeague = useCallback(async () => {
@@ -141,6 +173,11 @@ export default function AuctionPage() {
       if (!json.canManage) { toast.error('Only the league organizers can run auctions'); router.push(`/leagues/${id}`); return; }
       if (json.players.length === 0) { toast.error('Add players first'); router.push(`/leagues/${id}`); return; }
       setLeague(json);
+      // The league's saved base price wins over whatever this device remembers
+      if (json.basePrice != null) {
+        setBasePrice(json.basePrice);
+        try { localStorage.setItem(`auction_base_${id}`, String(json.basePrice)); } catch { /* private mode */ }
+      }
       const s: Record<string, number> = {};
       json.players.forEach(p => { if (p.teamId && p.soldPrice) s[p.teamId] = (s[p.teamId] ?? 0) + p.soldPrice; });
       setSpentByTeam(s);
@@ -168,6 +205,7 @@ export default function AuctionPage() {
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (confettiTimerRef.current) clearTimeout(confettiTimerRef.current);
+    if (baseSaveTimer.current) clearTimeout(baseSaveTimer.current);
   }, []);
 
   // ── Live broadcast ───────────────────────────────────────────────────────
@@ -189,10 +227,8 @@ export default function AuctionPage() {
     const lg = league!;
     const purses: LivePurse[] = (lg.teams ?? []).map(t => {
       const squad = opts.roster.filter(p => p.teamId === t.id);
-      const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
-      const maxPlayers = t.maxPlayers ?? 11;
-      const slotsLeft = Math.max(0, maxPlayers - squad.length);
-      const maxBid = slotsLeft === 0 ? 0 : Math.max(0, (t.budget - spent) - (slotsLeft - 1) * basePrice);
+      // Same helper as the control screen, so spectators see the same max
+      const { spent, maxBid } = teamStats(t, opts.roster, basePrice);
       return {
         id: t.id, name: t.name, color: t.colorHex, budget: t.budget,
         spent, count: squad.length, maxPlayers: t.maxPlayers, maxBid,
@@ -217,8 +253,18 @@ export default function AuctionPage() {
     };
   }, [league, basePrice]);
 
-  function startAuction() {
+  async function startAuction() {
     if (!league) return;
+    // A team that can't fill its open slots at the base price could never
+    // bid — the lobby explains the fix; this is the guard behind its button
+    const blocked = (league.teams ?? []).some(t => {
+      const st = teamStats(t, league.players, basePrice);
+      return st.slotsLeft > 0 && st.shortfall > 0;
+    });
+    if (blocked) { toast.error('Lower the base price or raise the team purses first'); return; }
+    // The server checks every sale against the league's saved base price, so
+    // it has to match the one on this screen before the first player comes up
+    if (league.basePrice !== basePrice && !(await saveBasePrice(basePrice))) return;
     const p = league.players.filter(x => !x.teamId && !x.isUnsold);
     const u = league.players.filter(x => !!x.isUnsold);
     const s = league.players.filter(x => !!x.teamId);
@@ -389,8 +435,13 @@ export default function AuctionPage() {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, source: 'auction' }),
       });
-      if (!res.ok) throw new Error();
-    } catch {
+      if (!res.ok) {
+        // A rule refusal (409) carries a sentence worth showing as it is
+        const json = await res.json().catch(() => ({}));
+        throw new Error(res.status === 409 && typeof json.error === 'string' ? json.error : '');
+      }
+    } catch (err) {
+      const reason = err instanceof Error && err.message ? err.message : null;
       // Nothing was saved — take back the celebration and put the player back
       // on the block rather than leaving a result on the board that isn't real.
       if (toastId !== undefined) toast.dismiss(toastId);
@@ -399,7 +450,7 @@ export default function AuctionPage() {
       setSpentByTeam(prevSpent); setSoldPlayers(prevSold); setUnsoldQueue(prevUnsold);
       setLastAction(null); setCurrent(player); setPhase('showing');
       postLive(buildLive({ phase: 'showing', current: player, roster: prevSold, pool, unsold: prevUnsold, round }));
-      toast.error(`Couldn't save ${player.name} — back on the block, try again`);
+      toast.error(reason ? `${reason} — ${player.name} is back on the block` : `Couldn't save ${player.name} — back on the block, try again`);
     }
   }
 
@@ -446,7 +497,9 @@ export default function AuctionPage() {
     if (team) {
       const st = teamStats(team, soldPlayers, basePrice);
       if (st.slotsLeft === 0) { toast.error(`${team.name} squad is already full (${st.maxPlayers} players)`); return; }
-      if (price > st.maxBid) { toast.error(`Exceeds ${team.name}'s max bid of ${fmt(st.maxBid)}`); return; }
+      if (price < basePrice) { toast.error(`Below the base price of ${fmt(basePrice)}`); return; }
+      if (st.shortfall > 0) { toast.error(`${team.name} is ${fmt(st.shortfall)} short of filling its ${st.slotsLeft} open slots at the base price`); return; }
+      if (price > st.maxBid) { toast.error(reserveRuleMessage(team.name, st, fmt)); return; }
     }
     const action: LastAction = { type: 'sold', player: current, teamId: soldTeamId, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price };
     setSoldTeamId(''); setSoldPrice('');
@@ -474,6 +527,16 @@ export default function AuctionPage() {
   const rightTeams = teams.slice(purseHalf);
   // Auction has results to clear when a non-icon player is on a team or marked unsold
   const hasAuctionData = league.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
+  // Teams whose purse can't fill their open slots at the base price. Such a
+  // team could never legally buy anyone, so the auction would stall on its
+  // first bid — the lobby refuses to start and says how to fix it instead.
+  const lobbyStats = teams.map(t => ({ team: t, st: teamStats(t, league.players, basePrice) })).filter(x => x.st.slotsLeft > 0);
+  const shortTeams = lobbyStats.filter(x => x.st.shortfall > 0);
+  // The highest base price every team can still afford for all its open slots
+  const workableBase = lobbyStats.length > 0 ? Math.max(0, Math.min(...lobbyStats.map(x => Math.floor(x.st.balance / x.st.slotsLeft)))) : basePrice;
+  // The purse each short team would need at the current base price
+  const neededPurses = shortTeams.map(x => x.team.budget + x.st.shortfall);
+  const samePurse = neededPurses.every(n => n === neededPurses[0]);
   // Draw-set players still waiting to come up; the set quietly lapses once it's empty
   const drawSetLeft = [...pool, ...unsoldQueue].filter(p => drawSet.includes(p.id)).length;
   const watchUrl = typeof window !== 'undefined' ? `${window.location.origin}/leagues/${id}/watch` : '';
@@ -543,19 +606,49 @@ export default function AuctionPage() {
                         <td className="px-3 py-2.5 text-right tabular-nums text-foreground/45">{fmt(t.budget)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</td>
                         <td className="px-3 py-2.5 text-center tabular-nums text-foreground/55">{st.bought}/{st.maxPlayers}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-600 dark:text-amber-300">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-600 dark:text-amber-300"><MaxBidLabel st={st} /></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <p className="text-foreground/20 text-[11px] mt-2">Max bid = balance − (remaining slots − 1) × base price</p>
+            <p className="text-foreground/20 text-[11px] mt-2">Max bid = balance − (remaining slots − 1) × base price · saved with the league and enforced on every sale</p>
           </div>
         )}
 
         <div style={{ animation: 'fadeInUp .55s .25s cubic-bezier(.22,1,.36,1) both' }} className="flex flex-col items-center gap-4">
-          <AuctionCTA onClick={startAuction}>{hasAuctionData ? 'Resume Auction' : 'Start Auction'}</AuctionCTA>
+          {shortTeams.length > 0 && (
+            <div role="alert" className="w-full max-w-xl rounded-2xl border border-red-500/30 bg-red-500/8 px-5 py-4 text-left">
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">
+                The auction can’t {hasAuctionData ? 'resume' : 'start'} yet — {shortTeams.length === teams.length ? (teams.length === 1 ? 'the team' : `all ${teams.length} teams`) : `${shortTeams.length} team${shortTeams.length === 1 ? '' : 's'}`} can’t fill {shortTeams.length === 1 ? 'its squad' : 'their squads'} at a base price of {fmt(basePrice)}.
+              </p>
+              <p className="text-xs text-foreground/60 mt-1">
+                Every open squad slot needs at least the base price. Fix it one of these ways:
+              </p>
+              <ul className="mt-2.5 space-y-2 text-sm text-foreground/80">
+                <li className="flex items-center justify-between gap-3 flex-wrap">
+                  <span>Lower the base price to <strong className="tabular-nums">{fmt(workableBase)}</strong> or less</span>
+                  <button onClick={() => changeBasePrice(String(workableBase))}
+                    className="shrink-0 px-3 h-8 rounded-lg border border-foreground/15 bg-foreground/5 hover:bg-foreground/10 text-xs font-semibold text-foreground/80 hover:text-foreground transition-colors">
+                    Use {fmt(workableBase)}
+                  </button>
+                </li>
+                <li className="flex items-center justify-between gap-3 flex-wrap">
+                  <span>
+                    {samePurse
+                      ? <>Raise {shortTeams.length === 1 ? `${shortTeams[0].team.name}’s purse` : 'each short team’s purse'} to at least <strong className="tabular-nums">{fmt(neededPurses[0])}</strong></>
+                      : <>Raise the purses: {shortTeams.map((x, i) => <span key={x.team.id}>{i > 0 && ', '}{x.team.name} to <strong className="tabular-nums">{fmt(neededPurses[i])}</strong></span>)}</>}
+                  </span>
+                  <button onClick={() => router.push(`/leagues/${id}/teams`)}
+                    className="shrink-0 px-3 h-8 rounded-lg border border-foreground/15 bg-foreground/5 hover:bg-foreground/10 text-xs font-semibold text-foreground/80 hover:text-foreground transition-colors">
+                    Edit teams →
+                  </button>
+                </li>
+              </ul>
+            </div>
+          )}
+          <AuctionCTA onClick={startAuction} disabled={shortTeams.length > 0}>{hasAuctionData ? 'Resume Auction' : 'Start Auction'}</AuctionCTA>
           {hasAuctionData && (
             <button onClick={resetAuction} disabled={resetting}
               className="inline-flex items-center gap-2 text-sm text-foreground/40 hover:text-red-500 dark:hover:text-red-300 disabled:opacity-50 transition-colors">
@@ -764,7 +857,7 @@ export default function AuctionPage() {
                                   <div className="w-2 h-2 rounded-full shrink-0" style={{ background: t.colorHex }} />
                                   <span className="truncate flex-1">{t.name}</span>
                                   <span className="text-[10px] opacity-60 text-right leading-tight tabular-nums">
-                                    {full ? 'Full' : `Max ${fmt(st.maxBid)}`}<br />{st.bought}/{st.maxPlayers}
+                                    {full ? 'Full' : st.shortfall > 0 ? <MaxBidLabel st={st} /> : `Max ${fmt(st.maxBid)}`}<br />{st.bought}/{st.maxPlayers}
                                   </span>
                                 </button>
                               );
@@ -784,10 +877,13 @@ export default function AuctionPage() {
                           if (!soldPrice) return null;
                           const price = parseInt(soldPrice) || 0;
                           const team = teams.find(t => t.id === soldTeamId);
-                          const over = team ? price > teamStats(team, soldPlayers, basePrice).maxBid : false;
+                          const st = team ? teamStats(team, soldPlayers, basePrice) : null;
+                          const under = !!team && price < basePrice;
+                          const over = st ? price > st.maxBid : false;
                           return (
-                            <p className={`text-xs ${over ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-foreground/40'}`}>
-                              {fmt(price)}{over && ` — exceeds ${team!.name}'s max bid`}
+                            <p className={`text-xs ${over || under ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-foreground/40'}`}>
+                              {fmt(price)}
+                              {under ? ` — below the base price of ${fmt(basePrice)}` : over && ` — exceeds ${team!.name}'s max bid of ${fmt(st!.maxBid)}`}
                             </p>
                           );
                         })()}
@@ -1016,7 +1112,7 @@ function PurseCard({ team, roster, basePrice, onView }: { team: Team; roster: Pl
       </div>
       <div className="flex items-center justify-between gap-3 text-[11px] tabular-nums whitespace-nowrap">
         <span className="text-foreground/40">Bal <span className="text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</span></span>
-        <span className="text-foreground/40">Max <span className={`font-semibold ${full ? 'text-foreground/25' : 'text-amber-600 dark:text-amber-300'}`}>{full ? '—' : fmt(st.maxBid)}</span></span>
+        <span className="text-foreground/40">Max <span className={`font-semibold ${full ? 'text-foreground/25' : 'text-amber-600 dark:text-amber-300'}`}><MaxBidLabel st={st} fullLabel="—" /></span></span>
       </div>
       <div className="mt-1.5 w-full h-1 rounded-full bg-foreground/10 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: team.colorHex }} />
@@ -1071,7 +1167,7 @@ function TeamSquadModal({ team, roster, basePrice, onClose }: { team: Team; rost
         <div className="grid grid-cols-3 gap-2 px-5 py-4 border-t border-foreground/10 text-center">
           <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Spent</p><p className="text-sm font-bold text-foreground/80 tabular-nums">{fmt(st.spent)}</p></div>
           <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Balance</p><p className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">{fmt(st.balance)}</p></div>
-          <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Max Bid</p><p className="text-sm font-bold text-amber-600 dark:text-amber-300 tabular-nums">{st.slotsLeft === 0 ? 'Full' : fmt(st.maxBid)}</p></div>
+          <div><p className="text-[10px] uppercase tracking-wide text-foreground/35 mb-0.5">Max Bid</p><p className="text-sm font-bold text-amber-600 dark:text-amber-300 tabular-nums"><MaxBidLabel st={st} /></p></div>
         </div>
       </div>
     </div>
@@ -1137,9 +1233,9 @@ function SoldShareActions({ playerName, soldPrice, teamName }: { playerName: str
   );
 }
 
-function AuctionCTA({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function AuctionCTA({ onClick, disabled = false, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} style={{ padding: '24px 64px', borderRadius: 22, border: '2px solid rgba(34,197,94,.45)', cursor: 'pointer', background: 'linear-gradient(135deg,#15803d 0%,#16a34a 50%,#15803d 100%)', color: '#fff', fontSize: 24, fontWeight: 900, letterSpacing: .4, animation: 'lobbyCta 2.2s ease-in-out infinite', transition: 'transform .1s ease', userSelect: 'none', WebkitUserSelect: 'none' }}
+    <button onClick={onClick} disabled={disabled} style={{ padding: '24px 64px', borderRadius: 22, border: '2px solid rgba(34,197,94,.45)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .4 : 1, background: 'linear-gradient(135deg,#15803d 0%,#16a34a 50%,#15803d 100%)', color: '#fff', fontSize: 24, fontWeight: 900, letterSpacing: .4, animation: disabled ? 'none' : 'lobbyCta 2.2s ease-in-out infinite', transition: 'transform .1s ease', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseDown={e => { e.currentTarget.style.transform = 'scale(.96)' }} onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}>
       {children}
     </button>

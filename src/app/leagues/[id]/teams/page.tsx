@@ -42,6 +42,8 @@ export default function TeamsPage() {
   // editing
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editBudget, setEditBudget] = useState('');
+  const [editMaxPlayers, setEditMaxPlayers] = useState('');
 
   // icon player picker
   const [iconPickerTeam, setIconPickerTeam] = useState<string | null>(null);
@@ -227,12 +229,26 @@ export default function TeamsPage() {
 
   async function handleSaveEdit(teamId: string) {
     if (!editName.trim()) return;
+    const body: Record<string, unknown> = { teamId, name: editName.trim() };
+    // Budget and squad size are sent only while the auction still has players
+    // to sell — the fields aren't shown otherwise, and the API refuses them
+    if (data?.players.some(p => !p.teamId)) {
+      const budget = Number(editBudget), maxPlayers = Number(editMaxPlayers);
+      if (!Number.isInteger(budget) || budget < 1) { toast.error('Enter the budget as a whole number'); return; }
+      if (!Number.isInteger(maxPlayers) || maxPlayers < 1 || maxPlayers > 100) { toast.error('Players per team must be between 1 and 100'); return; }
+      body.budget = budget;
+      body.maxPlayers = maxPlayers;
+    }
     const res = await fetch(`/api/leagues/${id}/teams`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId, name: editName.trim() }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) { toast.error('Failed to update'); return; }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      toast.error(json.error ?? 'Failed to update');
+      return;
+    }
     const updated: Team = await res.json();
     setTeams(prev => prev.map(t => t.id === teamId ? updated : t));
     setEditId(null);
@@ -276,6 +292,9 @@ export default function TeamsPage() {
   });
   const unsoldPlayers = data.players.filter(p => p.isUnsold);
   const unpickedPlayers = data.players.filter(p => !p.teamId && !p.isUnsold);
+  // Anyone without a team can still be sold — unsold players re-enter in the
+  // next round — so the purse and squad size stay editable until none are left
+  const playersLeftForAuction = data.players.some(p => !p.teamId);
   // The auction is complete once it has run (a player sold or marked unsold)
   // and no players are left waiting — at that point adding teams makes no sense.
   const hasAuctionData = data.players.some(p => (p.teamId && !p.isIcon) || p.isUnsold);
@@ -366,14 +385,39 @@ export default function TeamsPage() {
                   style={{ background: team.colorHex, boxShadow: `0 0 10px ${team.colorHex}80` }}
                 />
                 {editId === team.id ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(team.id); } if (e.key === 'Escape') setEditId(null); }}
-                      className="flex-1 h-8 px-2 rounded-lg border border-border bg-background text-sm"
-                      autoFocus
-                    />
+                  <div className="flex items-end gap-2 flex-1 flex-wrap"
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(team.id); } if (e.key === 'Escape') setEditId(null); }}>
+                    <label className="flex-1 min-w-40 space-y-1">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Team name</span>
+                      <input
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm"
+                        autoFocus
+                      />
+                    </label>
+                    {/* Purse and squad size are auction rules — editable only
+                        while there is still someone left to auction */}
+                    {playersLeftForAuction && (
+                      <>
+                        <label className="w-28 space-y-1">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Budget (₹)</span>
+                          <input
+                            type="number" min={Math.max(1, spent)} step="1" inputMode="numeric"
+                            value={editBudget} onChange={e => setEditBudget(e.target.value)}
+                            className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
+                          />
+                        </label>
+                        <label className="w-20 space-y-1">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Players</span>
+                          <input
+                            type="number" min={Math.max(1, tPlayers.length)} max="100" step="1" inputMode="numeric"
+                            value={editMaxPlayers} onChange={e => setEditMaxPlayers(e.target.value)}
+                            className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
+                          />
+                        </label>
+                      </>
+                    )}
                     <button onClick={() => handleSaveEdit(team.id)} title="Save"
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-green-600 dark:text-green-400 hover:bg-green-500/10 transition-colors">
                       <Check className="w-4 h-4" />
@@ -431,7 +475,8 @@ export default function TeamsPage() {
                         : <Download className="w-3.5 h-3.5" />}
                     </button>
                     {canEdit && (
-                      <button onClick={() => { setEditId(team.id); setEditName(team.name); }} title="Rename team"
+                      <button onClick={() => { setEditId(team.id); setEditName(team.name); setEditBudget(String(team.budget)); setEditMaxPlayers(String(team.maxPlayers)); }}
+                        title={playersLeftForAuction ? 'Edit team name, budget and squad size' : 'Rename team — budget and squad size are locked once no players are left for auction'}
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>

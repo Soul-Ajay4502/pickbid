@@ -108,6 +108,21 @@ post-auction corrections on the team page, so both go through
 `assignPlayerToTeam`'s squad-size and purse checks; it WhatsApps the player only
 when their team actually changes, so a price correction never re-announces a sale.
 
+**The reserve-per-slot rule has one formula and the server is its authority.**
+A squad size is exact, so a team must keep the base price back for every slot
+it still has to fill: `maxBid = balance − (slotsLeft − 1) × basePrice`. That
+arithmetic lives only in `auctionLimits`
+([auctionRules.ts](src/lib/auctionRules.ts)) — the auction screen, the `/watch`
+broadcast, the team page's dialogs and `assignPlayerToTeam` all call it, so a
+"Max" on screen is always the limit the server enforces; never re-derive it
+inline. The base price is `leagues.basePrice` (null = rule off), set in the
+auction lobby — not localStorage, which made each device compute its own
+limit. Two allowances are deliberate: a card with no price (a pre-assigned
+icon) is exempt, and lowering the price of a player already in the squad always
+passes, so a team that is already short can be corrected. The base-price
+*floor* is enforced only for `source: 'auction'`; the team page keeps its free
+signings.
+
 **Every write to an auction result is logged, and the log is append-only.**
 The player PUT and the reset route add a row to `auction_changes` whenever a
 card's team, price or unsold flag actually changes — in `after()`, inside a

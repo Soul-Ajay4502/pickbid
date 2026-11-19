@@ -37,6 +37,19 @@ export async function PATCH(
     const body = await request.json();
     const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed', 'idProofRequired', 'paymentProofRequired', 'rosterVisibleToPlayers', 'playersCanDeleteCards'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
+    // The auction's base price: whole rupees, or null to switch the reserve
+    // rule off. `assignPlayerToTeam` trusts this number, so it is clamped here.
+    if ('basePrice' in body) {
+      if (body.basePrice === null) {
+        patch.basePrice = null;
+      } else {
+        const basePrice = Number(body.basePrice);
+        if (!Number.isInteger(basePrice) || basePrice < 0 || basePrice > 1_000_000_000) {
+          return NextResponse.json({ error: 'Base price must be a whole number of rupees' }, { status: 400 });
+        }
+        patch.basePrice = basePrice;
+      }
+    }
     let updated = await updateLeague(id, patch);
     // Certificates aren't a plain column write: the client sends a boolean and
     // the store stamps (or clears) the issue date printed on every certificate

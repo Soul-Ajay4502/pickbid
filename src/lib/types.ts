@@ -92,6 +92,14 @@ export interface League {
    * own photo or stats. Defaults to true.
    */
   playersCanDeleteCards: boolean;
+  /**
+   * The auction's base price per player, or null while no organizer has set
+   * one. Drives the reserve-per-slot rule in `auctionLimits`
+   * (`src/lib/auctionRules.ts`): a team must keep this much back for every
+   * squad slot it still has to fill. Stored on the league — not in the
+   * auctioneer's browser — so every screen and the server agree on it.
+   */
+  basePrice: number | null;
   createdAt: string;
 }
 

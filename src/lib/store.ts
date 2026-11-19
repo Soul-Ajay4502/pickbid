@@ -4,7 +4,8 @@ import { sequelize } from './db';
 import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, MatchScorecardModel, TeamOfficialModel, AuctionLiveModel, AuctionChangeModel, SponsorModel, LeagueCoOrganizerModel, LeagueLedgerModel } from './models';
 import { calcStandings } from './standings';
 import { EARLY_ADOPTER_CUTOFF } from './badges';
-import { playerNameKey, localPhoneDigits } from './utils';
+import { playerNameKey, localPhoneDigits, formatINR } from './utils';
+import { auctionLimits, reserveRuleMessage } from './auctionRules';
 import { LIVE_AUCTION_TTL_MS } from './types';
 import type { MatchScoreSummary, MatchSetup, PlayerMatchLine, ScoredMatchLines, ScoringEvent } from './scoring';
 import type { AuctionChange, MatchScorecard, MatchCentre, BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
@@ -29,6 +30,7 @@ function toLeague(row: LeagueModel): League {
     paymentProofRequired: row.paymentProofRequired ?? false,
     rosterVisibleToPlayers: row.rosterVisibleToPlayers ?? true,
     playersCanDeleteCards: row.playersCanDeleteCards ?? true,
+    basePrice:    row.basePrice ?? null,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -415,6 +417,9 @@ export async function cloneLeague(
         // …and one that runs a closed roster keeps running one
         rosterVisibleToPlayers: source.rosterVisibleToPlayers ?? true,
         playersCanDeleteCards: source.playersCanDeleteCards ?? true,
+        // Same teams, same purses, same base price — the new season's auction
+        // runs under the rule the last one did
+        basePrice: source.basePrice ?? null,
       },
       { transaction: t }
     );
@@ -1227,12 +1232,26 @@ export class AuctionRuleError extends Error {}
  * The team row is locked for the duration of the transaction so two
  * simultaneous sales to the same team can't both pass validation and
  * oversell the squad or overspend the purse.
+ *
+ * When the league has a base price, the purse check is the reserve rule from
+ * `auctionLimits`: the team must keep the base price back for every *other*
+ * slot it still has to fill. This is the authoritative copy of that rule —
+ * the screens show the same limit, but a sale from a stale or second device
+ * is refused here. Two deliberate allowances:
+ *  - a player with no price (a pre-assigned icon) is never held to it;
+ *  - lowering the price of a player already in the squad always passes it, so
+ *    a team that is already short can be corrected back into line.
+ *
+ * `enforceBasePrice` additionally refuses a price under the base price. Only
+ * the live auction asks for it — the team page's free signings and
+ * corrections are the organizer's call.
  */
 export async function assignPlayerToTeam(
   playerId: string,
   teamId: string,
   soldPrice: number | null,
-  extra: Partial<Omit<Player, 'id' | 'leagueId' | 'creatorToken' | 'createdAt' | 'teamId' | 'soldPrice'>> = {}
+  extra: Partial<Omit<Player, 'id' | 'leagueId' | 'creatorToken' | 'createdAt' | 'teamId' | 'soldPrice'>> = {},
+  options: { enforceBasePrice?: boolean } = {}
 ): Promise<Player | null> {
   return sequelize.transaction(async (t) => {
     const row = await PlayerModel.findByPk(playerId, { transaction: t });
@@ -1253,9 +1272,22 @@ export async function assignPlayerToTeam(
       throw new AuctionRuleError(`${team.name} squad is already full`);
     }
     if (soldPrice != null) {
+      const league = await LeagueModel.findByPk(row.leagueId!, { attributes: ['basePrice'], transaction: t });
+      const basePrice = Math.max(0, league?.basePrice ?? 0);
+      if (options.enforceBasePrice && soldPrice < basePrice) {
+        throw new AuctionRuleError(`Below the base price of ${formatINR(basePrice)}`);
+      }
       const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
       if (spent + soldPrice > team.budget) {
         throw new AuctionRuleError(`Exceeds ${team.name}'s remaining budget`);
+      }
+      const limits = auctionLimits({
+        budget: team.budget, spent, squadSize: squad.length,
+        maxPlayers: team.maxPlayers ?? 11, basePrice,
+      });
+      const isReduction = row.teamId === teamId && soldPrice <= (row.soldPrice ?? 0);
+      if (soldPrice > limits.maxBid && !isReduction) {
+        throw new AuctionRuleError(reserveRuleMessage(team.name, limits, formatINR));
       }
     }
 

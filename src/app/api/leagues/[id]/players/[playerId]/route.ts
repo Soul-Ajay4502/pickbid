@@ -144,7 +144,11 @@ export async function PUT(
       delete rest.teamId;
       delete rest.soldPrice;
       try {
-        updated = await assignPlayerToTeam(playerId, patch.teamId, soldPrice, rest);
+        // Only the live auction holds a sale to the base-price floor; the team
+        // page's free signings and corrections are the organizer's call
+        updated = await assignPlayerToTeam(playerId, patch.teamId, soldPrice, rest, {
+          enforceBasePrice: body.source === 'auction',
+        });
         // Only joining a team is a sale. Correcting the price of a player
         // already in it comes through here too, and must not message them
         // "you've been sold" a second time.
