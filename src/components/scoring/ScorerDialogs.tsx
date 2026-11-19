@@ -5,7 +5,7 @@ import { UserPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   DISMISSAL_LABELS, SUB_FIELDER, allowedDismissals, ballChip as ballLabel, bowlerOptions, currentInnings, economy, nextBatterOptions,
-  oversText, playerMatchLines, strikeRate, strikerOnly, upcomingInnings,
+  matchImpact, oversText, playerMatchLines, strikeRate, strikerOnly, summarizeMatch, upcomingInnings,
   type CreaseDismissal, type DeliveryDismissal, type Extra, type LineupPlayer, type MatchState, type ScoringEvent,
 } from '@/lib/scoring';
 import type { Player } from '@/lib/types';
@@ -719,16 +719,23 @@ export function AddPlayerSheet({ state, players, send, onClose }: {
   );
 }
 
-/** Player of the match, with a suggestion from a simple impact score. */
+/**
+ * Player of the match by hand. The awards name the top of this list on their
+ * own; picking here overrides that, and picking the same player again is how a
+ * scorer confirms it.
+ */
 export function PotmSheet({ state, send, onClose }: { state: MatchState; send: Send; onClose: () => void }) {
   const bpo = state.setup.rules.ballsPerOver;
   const lines = playerMatchLines(state);
-  const impact = (l: (typeof lines)[number]) =>
-    l.runs + l.fours + l.sixes * 2 + l.wickets * 25 + l.maidens * 8 + (l.catches + l.stumpings + l.runOuts) * 10;
+  const points = new Map(matchImpact(lines, summarizeMatch(state)).map((p) => [p.id, p.total]));
+  const impact = (l: (typeof lines)[number]) => points.get(l.id) ?? 0;
   const ranked = [...lines].sort((a, b) => impact(b) - impact(a));
   const team = (id: string) => state.setup.sides.find((s) => s.teamId === id);
   return (
     <Sheet open onClose={onClose} title="Player of the match" wide>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Ranked by impact points. The top name is awarded automatically — pick someone else to override it.
+      </p>
       <ul className="grid gap-1.5 max-h-[60dvh] overflow-y-auto">
         {ranked.map((l, i) => (
           <li key={l.id}>
@@ -744,6 +751,7 @@ export function PotmSheet({ state, send, onClose }: { state: MatchState; send: S
                   {l.catches ? ` · ${l.catches} ct` : ''}
                 </span>
               </span>
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{impact(l)} pts</span>
             </button>
           </li>
         ))}

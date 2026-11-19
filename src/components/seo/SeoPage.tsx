@@ -70,9 +70,12 @@ export function seoPageMetadata(content: SeoPageContent) {
 export default function SeoPage({
   content,
   extraSchemas = [],
+  afterIntro,
 }: {
   content: SeoPageContent;
   extraSchemas?: object[];
+  /** Optional rich block between the intro and the sections — e.g. a demo. */
+  afterIntro?: React.ReactNode;
 }) {
   const {
     path,
@@ -130,6 +133,8 @@ export default function SeoPage({
           ))}
         </div>
       </header>
+
+      {afterIntro}
 
       <div className="mt-12 space-y-12">
         {sections.map((section) => (

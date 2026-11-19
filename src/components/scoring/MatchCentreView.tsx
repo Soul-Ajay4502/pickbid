@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ArrowLeft, CalendarDays, Coins, Radio, Share2, Trophy, Pencil, Award } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Coins, Radio, Share2, Trophy, Pencil } from 'lucide-react';
 import { formatMatchDay } from '@/lib/fixtures';
 import {
-  nameLookup, oversText, playerMatchLines, statusText, strikeRate, tryReplay,
+  oversText, playerMatchLines, statusText, strikeRate, tryReplay,
   type InningsState, type MatchState,
 } from '@/lib/scoring';
 import type { MatchCentre } from '@/lib/types';
 import { cn, copyToClipboard, whatsappShareLink } from '@/lib/utils';
+import MatchAwards from './MatchAwards';
 import { BallChip, Commentary, CreasePanel, InningsCard, OverStrip, OversList, TeamDot, inningsTitle } from './ScorecardParts';
 
 type Tab = 'live' | 'scorecard' | 'commentary' | 'overs' | 'squads';
@@ -191,7 +192,6 @@ export default function MatchCentreView({ leagueId, initial }: { leagueId: strin
   const shownIndex = pickedInnings !== null && state && pickedInnings <= lastIndex ? pickedInnings : lastIndex;
   const shown = state && shownIndex >= 0 ? state.innings[shownIndex] : null;
   const current = state && phase === 'live' ? state.innings[lastIndex] : null;
-  const nameOf = state ? nameLookup(state) : null;
   const tossLine = state
     ? `${state.setup.sides.find((s) => s.teamId === state.setup.toss.winnerTeamId)?.name} won the toss and chose to ${state.setup.toss.decision}`
     : null;
@@ -241,9 +241,6 @@ export default function MatchCentreView({ leagueId, initial }: { leagueId: strin
             </p>
           )}
           {tossLine && phase !== 'pre' && <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Coins className="w-3.5 h-3.5" />{tossLine}</p>}
-          {state?.playerOfMatchId && nameOf && (
-            <p className="flex items-center gap-1.5 text-xs"><Award className="w-3.5 h-3.5 text-amber-500" />Player of the match: <strong>{nameOf(state.playerOfMatchId)}</strong></p>
-          )}
         </div>
         <div className="flex flex-wrap gap-2 px-4 pb-4">
           <button type="button" onClick={share}
@@ -258,6 +255,8 @@ export default function MatchCentreView({ leagueId, initial }: { leagueId: strin
           )}
         </div>
       </section>
+
+      {state && <MatchAwards state={state} />}
 
       {state && (
         <>

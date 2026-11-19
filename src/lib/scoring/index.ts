@@ -8,3 +8,4 @@ export * from './engine';
 export * from './format';
 export * from './parse';
 export * from './stats';
+export * from './awards';

@@ -1,4 +1,5 @@
 import SeoPage, { seoPageMetadata, type SeoPageContent } from '@/components/seo/SeoPage';
+import HowItWorksDemo from '@/components/seo/HowItWorksDemo';
 import { howToSchema } from '@/lib/jsonLd';
 import { SITE_NAME } from '@/lib/seo';
 
@@ -51,6 +52,44 @@ const STEPS: { name: string; text: string }[] = [
       'recap or let each team reveal its squad as a pack of cards. From there ' +
       'record fixtures and results, and the points table and leaderboards keep ' +
       'themselves up to date.',
+  },
+];
+
+/**
+ * One real screenshot per step, in the same order as `STEPS`. The captions say
+ * what each screen is, not what the step promises — they are captured from a
+ * finished public league, so e.g. the auction shot shows squads already full.
+ */
+const DEMO_SHOTS: { image: string; caption: string }[] = [
+  {
+    image: 'step-1-league.webp',
+    caption:
+      'A league’s home page once it is set up: its name and organizer, how many ' +
+      'players and teams it has, and the navigation to everything else.',
+  },
+  {
+    image: 'step-2-cards.webp',
+    caption:
+      'Player cards in the organizer’s view. Each card is built from the ' +
+      'details and photo a player entered through the registration link.',
+  },
+  {
+    image: 'step-3-teams.webp',
+    caption:
+      'The Teams screen: every team’s purse, owners, icon players and squad, ' +
+      'with what each player was bought for.',
+  },
+  {
+    image: 'step-4-auction.webp',
+    caption:
+      'The auction lobby the organizer starts from: each team’s budget, ' +
+      'balance, squad count and maximum bid at the league’s base price.',
+  },
+  {
+    image: 'step-5-season.webp',
+    caption:
+      'Matches & Standings: the points table works itself out from the ' +
+      'results recorded below it.',
   },
 ];
 
@@ -199,6 +238,12 @@ export default function HowItWorksPage() {
   return (
     <SeoPage
       content={CONTENT}
+      afterIntro={
+        <HowItWorksDemo
+          steps={STEPS.map((step, i) => ({ name: step.name, ...DEMO_SHOTS[i] }))}
+          source="Screens from LAST INNINGS BEFORE TAKEOFF, a public league run on Pickbid."
+        />
+      }
       // The visible step list above and this schema are generated from the same
       // STEPS array. No `totalTime` — the page only claims a duration for step
       // one, which is not the time for the whole procedure.

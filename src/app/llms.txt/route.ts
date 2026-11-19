@@ -72,7 +72,11 @@ shared with a single link. It runs in any modern browser with no app install.
   follow a public match centre with the live score, full scorecard,
   ball-by-ball commentary and over-by-over summary. Results feed the points
   table with net run rate, and the league gets batting, bowling and fielding
-  leaderboards (orange and purple caps).
+  leaderboards (orange and purple caps). Every finished match names a player
+  of the match, best batter, best bowler, best fielder and a fighter of the
+  match (the best performer from the side that didn't win), all from impact
+  points that price each run, wicket and catch against that match's own
+  scoring rate; the same points add up to a season MVP table.
 - **League ledger** — an optional income and expense sheet for organizers.
 - **Identity and payment proof** — players can add a photo of an ID to their
   profile once, and attach an entry-fee receipt when they register. Organizers

@@ -353,6 +353,21 @@ match with a score as played, so a live score must never reach the row.
 Scorecard stats are separate from the self-reported `players.stats*` career
 numbers on a card — don't overwrite those from scorecards.
 
+**Match awards and the league MVP table are derived, never stored, and have one
+formula.** [awards.ts](src/lib/scoring/awards.ts) prices everything a player
+does in *impact points* — runs of that match: batting is runs plus half the
+runs above the match's scoring rate, bowling is wickets (each a sixth of a full
+innings at that rate) plus runs saved, fielding is a share of a wicket, and
+each discipline floors at zero. `matchAwards` names the player of the match,
+best batter, bowler and fielder, and the *fighter* — the top total from the
+side that didn't win — and `aggregateMvp` adds the same points up for
+`/stats`. Both are pure functions of the cached `player_lines` and `summary`,
+which is why there is no awards column and no backfill: don't add one, and
+don't let the result weight the points — the winner only breaks exact ties and
+decides which side the fighter comes from. The scorer's `potm` event still
+overrides the player of the match by hand. Change a weight in `awards.ts` and
+the explainer on the stats page together.
+
 The score GET is public and edge-cached exactly like the auction board
 (`CDN-Cache-Control: s-maxage=1`, no `stale-while-revalidate`), because a
 ground full of phones polls it; the match centre polls with the default cache

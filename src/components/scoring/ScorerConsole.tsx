@@ -16,6 +16,7 @@ import {
 import type { MatchScorecard, Player } from '@/lib/types';
 import { cn, copyToClipboard, whatsappShareLink } from '@/lib/utils';
 import { useScorecardSync, eventId, type SyncStatus } from './useScorecardSync';
+import MatchAwards from './MatchAwards';
 import { InningsCard, OverStrip, TeamDot, currentStand } from './ScorecardParts';
 import {
   AddPlayerSheet, BowlerPicker, CustomRunsSheet, EditBallSheet, EndMatchSheet, ExtrasSheet, PenaltySheet, PotmSheet, ReviseSheet,
@@ -366,9 +367,7 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
               ))}
             </div>
             <p className="text-xl font-black">{statusText(state)}</p>
-            {state.playerOfMatchId && (
-              <p className="text-sm">Player of the match: <strong>{nameLookup(state)(state.playerOfMatchId)}</strong></p>
-            )}
+            <MatchAwards state={state} className="text-left" />
             <div className="grid gap-2">
               {tied && (
                 <button type="button" onClick={() => send({ type: 'super_over' })} className="btn-premium h-12 rounded-xl font-bold">
@@ -381,7 +380,7 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
                 </button>
               )}
               <button type="button" onClick={() => setSheet({ kind: 'potm' })} className="h-11 rounded-xl border border-border bg-card font-semibold text-sm inline-flex items-center justify-center gap-2">
-                <Award className="w-4 h-4" />{state.playerOfMatchId ? 'Change player of the match' : 'Pick player of the match'}
+                <Award className="w-4 h-4" />{state.playerOfMatchId ? 'Change player of the match' : 'Choose a different player of the match'}
               </button>
               <Link href={centreHref} className="h-11 rounded-xl border border-border bg-card font-semibold text-sm inline-flex items-center justify-center">
                 Open the match centre

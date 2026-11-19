@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getLeague, getLeagueScoredLines, getPlayers, getTeams } from '@/lib/store';
 import { aggregateLeagueStats } from '@/lib/scoring';
 
-// Batting, bowling and fielding leaderboards built from the league's ball-by-
-// ball scorecards. As open as the match list and the match centre it is built
+// MVP, batting, bowling and fielding leaderboards built from the league's ball-
+// by-ball scorecards. As open as the match list and the match centre it is built
 // from. It reads the per-player lines each scorecard caches on save, never the
 // event logs, so a season of scored matches stays one light query.
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ export async function GET(
     const [scored, teams, players] = await Promise.all([getLeagueScoredLines(id), getTeams(id), getPlayers(id)]);
     const stats = aggregateLeagueStats(scored);
     // Card photos for the names on the boards — a guest has none
-    const inStats = new Set([...stats.batting, ...stats.bowling, ...stats.fielding].map((r) => r.id));
+    const inStats = new Set([...stats.batting, ...stats.bowling, ...stats.fielding, ...stats.mvp].map((r) => r.id));
     const photos = Object.fromEntries(
       players.filter((p) => inStats.has(p.id) && p.photo).map((p) => [p.id, p.photo]),
     );

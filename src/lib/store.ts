@@ -1788,6 +1788,7 @@ export async function getLeagueScoredLines(leagueId: string): Promise<ScoredMatc
     .map((r) => ({
       ballsPerOver: (r.summary as MatchScoreSummary | null)?.ballsPerOver ?? 6,
       lines: r.playerLines as PlayerMatchLine[],
+      summary: (r.summary as MatchScoreSummary | null) ?? null,
     }));
 }
 
