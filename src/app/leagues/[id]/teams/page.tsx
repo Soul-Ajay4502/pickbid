@@ -89,6 +89,7 @@ export default function TeamsPage() {
 
   async function removeIcon(player: Player) {
     if (iconBusy) return;
+    if (!confirm(`Remove ${player.name} from their team? They will lose icon status and return to the auction pool.`)) return;
     setIconBusy(true);
     try {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
@@ -135,6 +136,7 @@ export default function TeamsPage() {
 
   async function removeOfficial(official: TeamOfficial) {
     if (oBusy) return;
+    if (!confirm(`Delete ${official.name} from the team officials? Their details and photo will no longer appear on the squad poster. This cannot be undone.`)) return;
     setOBusy(true);
     try {
       const res = await fetch(`/api/leagues/${id}/officials`, {

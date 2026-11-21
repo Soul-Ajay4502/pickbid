@@ -21,12 +21,12 @@ for where something lives.
 npm run dev            # dev server
 npm run build          # production build — the only real typecheck (tsc has noEmit)
 npm run lint           # eslint
-npm test               # auction rules + fixture + scoring tests (node:test, compiled by tsc)
+npm test               # auction rules + PDF text + fixture + scoring tests (node:test, compiled by tsc)
 npm run db:migrate     # apply sequelize migrations
 npm run db:status      # show migration state
 ```
 
-Unit tests cover the auction rules, fixture and scoring engines (`npm test`); verify
+Unit tests cover auction rules, PDF text fitting, fixtures and scoring (`npm test`); verify
 everything else with `npm run build` plus the dev server.
 
 ## Next.js 16 specifics that bite

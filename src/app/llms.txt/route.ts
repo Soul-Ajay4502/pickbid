@@ -61,7 +61,9 @@ shared with a single link. It runs in any modern browser with no app install.
   across every public league on the platform, ranked by the share of the team's
   purse a player took so leagues of any budget size compare fairly.
 - **Teams, squads and officials** — manage rosters, budgets and team officials,
-  and export a PDF squad sheet to share on WhatsApp in one tap.
+  and export a PDF squad sheet or photo poster to share on WhatsApp in one tap.
+  Squad posters preserve regional-language team and player names. Deleting
+  matches or officials, or removing icon players, requires confirmation.
 - **Matches and results** — generate a fixture list for the league's teams: a
   full round robin (single or home-and-away), a set number of matches per team,
   a total number of matches, or custom per-team ranges, with optional rest

@@ -2,6 +2,7 @@
 
 import type { Player, Team, TeamOfficial } from '@/lib/types';
 import { cloudinaryImage } from '@/lib/utils';
+import { fitPdfText } from '@/lib/pdfText';
 
 interface LeagueInfo {
   name: string;
@@ -206,8 +207,8 @@ export async function downloadTeamwiseRoster(league: LeagueInfo, teams: Team[], 
  *
  * The grid picks its column count per page — whichever of 3–6 gives the
  * largest tiles that still fit — and centres short rows, so a squad is never
- * split across pages. Only pixels are rasterised (photos, fades, backdrop);
- * every word is vector text, so nothing depends on the device's fonts.
+ * split across pages. Latin text stays vector; regional text is shaped by
+ * the browser and embedded as an image, since Helvetica lacks those glyphs.
  * No bid prices — this is a presentation piece, not a ledger.
  * ──────────────────────────────────────────────────────────────────── */
 
@@ -264,10 +265,11 @@ function css(c: RGB, alpha = 1): string {
 }
 
 function initialsOf(name: string): string {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   return name
     .split(/\s+/)
     .filter(Boolean)
-    .map((w) => w[0])
+    .map((w) => Array.from(segmenter.segment(w))[0].segment)
     .slice(0, 2)
     .join('')
     .toUpperCase() || '?';
@@ -392,23 +394,55 @@ export async function downloadSquadPosters(
 
   let firstPage = true;
 
-  /**
-   * Sets the largest font size from `size` down to `min` at which `text` fits
-   * `maxW`, and returns the text — truncated if it overflows even at `min`.
-   * The font face must already be set.
-   */
+  const textCanvas = document.createElement('canvas');
+  const context = textCanvas.getContext('2d');
+  if (!context) throw new Error('Cannot render squad poster text');
+  const textContext = context;
+  const textScale = 12; // Pixels per millimetre, approximately 300 DPI
+  const needsShaping = (text: string) => /[^\u0020-\u00ff]/u.test(text);
+
+  function setCanvasFont() {
+    const style = doc.getFont().fontStyle;
+    textContext.font = `${style.includes('italic') ? 'italic ' : ''}${style.includes('bold') ? 700 : 400} ${doc.getFontSize() * PT * textScale}px Arial, sans-serif`;
+  }
+
+  function textWidth(text: string, charSpace = 0): number {
+    if (!needsShaping(text)) return doc.getTextWidth(text) + charSpace * Math.max(0, text.length - 1);
+    setCanvasFont();
+    return textContext.measureText(text).width / textScale;
+  }
+
+  function posterText(text: string, x: number, y: number, options: { align?: 'left' | 'center' | 'right'; baseline?: 'middle'; charSpace?: number } = {}) {
+    if (!needsShaping(text)) { doc.text(text, x, y, options); return; }
+    if (!text) return;
+    // ponytail: native shaping covers regional scripts; fonts can vary by OS.
+    // For pixel-identical exports, move to a server renderer with bundled fonts.
+    setCanvasFont();
+    const metrics = textContext.measureText(text);
+    const fontPx = doc.getFontSize() * PT * textScale;
+    const pad = fontPx * 0.1;
+    const left = Math.max(0, metrics.actualBoundingBoxLeft);
+    const right = Math.max(metrics.width, metrics.actualBoundingBoxRight);
+    const ascent = Math.max(fontPx, metrics.actualBoundingBoxAscent);
+    const descent = Math.max(fontPx * 0.4, metrics.actualBoundingBoxDescent);
+    textCanvas.width = Math.ceil(left + right + pad * 2);
+    textCanvas.height = Math.ceil(ascent + descent + pad * 2);
+    setCanvasFont();
+    textContext.fillStyle = doc.getTextColor();
+    textContext.fillText(text, left + pad, ascent + pad);
+    const offset = options.align === 'center' ? metrics.width / 2 : options.align === 'right' ? metrics.width : 0;
+    const imageY = options.baseline === 'middle' ? y - textCanvas.height / textScale / 2 : y - (ascent + pad) / textScale;
+    doc.addImage(textCanvas.toDataURL('image/png'), 'PNG', x - (offset + left + pad) / textScale, imageY, textCanvas.width / textScale, textCanvas.height / textScale);
+    textCanvas.width = textCanvas.height = 0;
+  }
+
   function fitText(text: string, maxW: number, size: number, min: number, charSpace = 0): string {
-    const width = (s: string) => doc.getTextWidth(s) + charSpace * Math.max(0, s.length - 1);
-    let fs = size;
-    doc.setFontSize(fs);
-    while (fs > min && width(text) > maxW) {
-      fs = Math.max(min, fs - 0.25);
-      doc.setFontSize(fs);
-    }
-    if (width(text) <= maxW) return text;
-    let cut = text;
-    while (cut.length > 1 && width(cut + '…') > maxW) cut = cut.slice(0, -1);
-    return cut.trimEnd() + '…';
+    const fitted = fitPdfText(text, maxW, size, min, (value, fontSize) => {
+      doc.setFontSize(fontSize);
+      return textWidth(value, charSpace);
+    });
+    doc.setFontSize(fitted.fontSize);
+    return fitted.text;
   }
 
   function drawTeamHeader(team: Team, squad: Player[], officialCount: number): number {
@@ -423,11 +457,11 @@ export async function downloadSquadPosters(
     // Eyebrow: league name in team colour
     doc.setTextColor(...legible(rgb));
     doc.setFont('helvetica', 'bold');
-    doc.text(fitText(league.name.toUpperCase(), GRID_W, 9, 7, 0.8), GRID_X, 17, { charSpace: 0.8 });
+    posterText(fitText(league.name.toUpperCase(), GRID_W, 9, 7, 0.8), GRID_X, 17, { charSpace: 0.8 });
 
     // Team name — the hero
     doc.setTextColor(...TEXT_WHITE);
-    doc.text(fitText(team.name.toUpperCase(), GRID_W, 30, 16), GRID_X, 30);
+    posterText(fitText(team.name.toUpperCase(), GRID_W, 30, 16), GRID_X, 30);
 
     // Squad meta — same order as the sections below
     const iconCount = squad.filter((p) => p.isIcon).length;
@@ -454,7 +488,7 @@ export async function downloadSquadPosters(
     doc.setTextColor(...TEXT_GRAY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`${league.name}  ·  Conducted by ${league.conductedBy}`, GRID_X, pageH - 8);
+    posterText(fitText(`${league.name}  ·  Conducted by ${league.conductedBy}`, GRID_W - 38, 7, 5), GRID_X, pageH - 8);
     doc.text(
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       pageW - GRID_X, pageH - 8, { align: 'right' }
@@ -513,7 +547,7 @@ export async function downloadSquadPosters(
       doc.setTextColor(...TEXT_WHITE);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize((w * 0.32) / PT);
-      doc.text(initialsOf(t.name), cx, y + h * 0.38, { align: 'center', baseline: 'middle' });
+      posterText(initialsOf(t.name), cx, y + h * 0.38, { align: 'center', baseline: 'middle' });
     }
 
     doc.setDrawColor(...(icon ? GOLD : dim(t.accent, 0.5)));
@@ -526,7 +560,7 @@ export async function downloadSquadPosters(
     if (t.skill) {
       doc.setTextColor(...TEXT_SOFT);
       doc.setFont('helvetica', 'normal');
-      doc.text(fitText(t.skill, maxW, 6 * k, 4), cx, baseY, { align: 'center' });
+      posterText(fitText(t.skill, maxW, 6 * k, 4), cx, baseY, { align: 'center' });
       baseY -= 3.8 * k;
     }
     const roleCs = 0.35 * k;
@@ -534,11 +568,11 @@ export async function downloadSquadPosters(
     doc.setFont('helvetica', 'bold');
     const role = fitText(t.role.toUpperCase(), maxW, 6.2 * k, 4, roleCs);
     // jsPDF centres on the unspaced width, so letter-spaced text is centred by hand
-    const roleW = doc.getTextWidth(role) + roleCs * (role.length - 1);
-    doc.text(role, cx - roleW / 2, baseY, { charSpace: roleCs });
+    const roleW = textWidth(role, roleCs);
+    posterText(role, cx - roleW / 2, baseY, { charSpace: roleCs });
     baseY -= 4.6 * k;
     doc.setTextColor(...TEXT_WHITE);
-    doc.text(fitText(t.name, maxW, 10.5 * k, 5.5), cx, baseY, { align: 'center' });
+    posterText(fitText(t.name, maxW, 10.5 * k, 5.5), cx, baseY, { align: 'center' });
 
     const inset = 2 * k;
     if (icon) drawChip('ICON', x + inset, y + inset, k, GOLD, false, true);
