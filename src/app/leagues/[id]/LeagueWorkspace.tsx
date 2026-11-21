@@ -810,6 +810,9 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
                 <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}`, 'View link'); setShareOpen(false); }}>
                   <Link2 className="w-3.5 h-3.5 text-muted-foreground" />Copy View Link
                 </button>
+                <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}/register`, 'Registration form'); setShareOpen(false); }}>
+                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Registration Form
+                </button>
                 {canManage && (
                   <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}?open=true`, 'Register link'); setShareOpen(false); }}>
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Register Link
