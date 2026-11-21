@@ -28,12 +28,21 @@ function batShort(t: Player['battingType']): string {
   return t === 'Right-Hand Bat' ? 'RHB' : 'LHB';
 }
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+function loadImage(url: string, signal?: AbortSignal): Promise<HTMLImageElement> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    const abort = () => {
+      cleanup();
+      img.onload = img.onerror = null;
+      img.src = '';
+      reject(signal?.reason);
+    };
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onload = () => { cleanup(); resolve(img); };
+    img.onerror = error => { cleanup(); reject(error); };
+    signal?.addEventListener('abort', abort, { once: true });
     img.src = url;
   });
 }
@@ -207,8 +216,8 @@ export async function downloadTeamwiseRoster(league: LeagueInfo, teams: Team[], 
  *
  * The grid picks its column count per page — whichever of 3–6 gives the
  * largest tiles that still fit — and centres short rows, so a squad is never
- * split across pages. Latin text stays vector; regional text is shaped by
- * the browser and embedded as an image, since Helvetica lacks those glyphs.
+ * split across pages. The same 300-DPI image is used for the in-app preview
+ * and the PDF, including the browser's shaping of regional-language text.
  * No bid prices — this is a presentation piece, not a ledger.
  * ──────────────────────────────────────────────────────────────────── */
 
@@ -289,12 +298,14 @@ interface Portrait {
   hasPhoto: boolean;
 }
 
-async function makePortrait(photo: string, accent: RGB): Promise<Portrait> {
+async function makePortrait(photo: string, accent: RGB, signal?: AbortSignal): Promise<Portrait> {
+  signal?.throwIfAborted();
   let img: HTMLImageElement | null = null;
   if (photo) {
     try {
-      img = await loadImage(portraitUrl(photo));
+      img = await loadImage(portraitUrl(photo), signal);
     } catch {
+      signal?.throwIfAborted();
       /* fall through to the placeholder */
     }
   }
@@ -333,7 +344,9 @@ async function makePortrait(photo: string, accent: RGB): Promise<Portrait> {
   } catch (err) {
     // A photo host without CORS taints the canvas — fall back to the placeholder
     if (!img) throw err;
-    return makePortrait('', accent);
+    return makePortrait('', accent, signal);
+  } finally {
+    canvas.width = canvas.height = 0;
   }
 }
 
@@ -354,7 +367,9 @@ function makeBackdrop(rgb: RGB): string {
   glow.addColorStop(1, css(rgb, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
-  return canvas.toDataURL('image/jpeg', 0.92);
+  const src = canvas.toDataURL('image/jpeg', 0.92);
+  canvas.width = canvas.height = 0;
+  return src;
 }
 
 interface Tile {
@@ -369,18 +384,24 @@ interface Tile {
   portrait: Portrait;
 }
 
-export async function downloadSquadPosters(
+export interface SquadPosterPage {
+  teamId: string;
+  teamName: string;
+  src: string;
+}
+
+export async function renderSquadPosters(
   league: LeagueInfo,
   teams: Team[],
   players: Player[],
   officials: TeamOfficial[] = [],
-  onlyTeamId?: string
-) {
+  onlyTeamId?: string,
+  signal?: AbortSignal,
+): Promise<SquadPosterPage[]> {
+  signal?.throwIfAborted();
   const targetTeams = onlyTeamId ? teams.filter((t) => t.id === onlyTeamId) : teams;
-  if (targetTeams.length === 0) return;
+  if (targetTeams.length === 0) throw new Error('No teams available for squad posters');
 
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = 210;
   const pageH = 297;
 
@@ -392,75 +413,64 @@ export async function downloadSquadPosters(
   const LABEL_H = 8;
   const SECTION_GAP = 5;
 
-  let firstPage = true;
-
-  const textCanvas = document.createElement('canvas');
-  const context = textCanvas.getContext('2d');
+  const canvas = document.createElement('canvas');
+  const scale = 12;
+  canvas.width = pageW * scale;
+  canvas.height = pageH * scale;
+  const context = canvas.getContext('2d');
   if (!context) throw new Error('Cannot render squad poster text');
-  const textContext = context;
-  const textScale = 12; // Pixels per millimetre, approximately 300 DPI
+  const ctx = context;
+  ctx.scale(scale, scale);
+  const pages: SquadPosterPage[] = [];
   const needsShaping = (text: string) => /[^\u0020-\u00ff]/u.test(text);
+  let fontStyle: 'bold' | 'normal' | 'italic' = 'normal';
 
-  function setCanvasFont() {
-    const style = doc.getFont().fontStyle;
-    textContext.font = `${style.includes('italic') ? 'italic ' : ''}${style.includes('bold') ? 700 : 400} ${doc.getFontSize() * PT * textScale}px Arial, sans-serif`;
+  function setFont(size: number, style = fontStyle) {
+    fontStyle = style;
+    ctx.font = `${style === 'normal' ? '' : `${style} `}${size * PT}px Arial, sans-serif`;
   }
 
   function textWidth(text: string, charSpace = 0): number {
-    if (!needsShaping(text)) return doc.getTextWidth(text) + charSpace * Math.max(0, text.length - 1);
-    setCanvasFont();
-    return textContext.measureText(text).width / textScale;
+    ctx.letterSpacing = needsShaping(text) ? '0px' : `${charSpace}px`;
+    return ctx.measureText(text).width;
   }
 
   function posterText(text: string, x: number, y: number, options: { align?: 'left' | 'center' | 'right'; baseline?: 'middle'; charSpace?: number } = {}) {
-    if (!needsShaping(text)) { doc.text(text, x, y, options); return; }
-    if (!text) return;
     // ponytail: native shaping covers regional scripts; fonts can vary by OS.
     // For pixel-identical exports, move to a server renderer with bundled fonts.
-    setCanvasFont();
-    const metrics = textContext.measureText(text);
-    const fontPx = doc.getFontSize() * PT * textScale;
-    const pad = fontPx * 0.1;
-    const left = Math.max(0, metrics.actualBoundingBoxLeft);
-    const right = Math.max(metrics.width, metrics.actualBoundingBoxRight);
-    const ascent = Math.max(fontPx, metrics.actualBoundingBoxAscent);
-    const descent = Math.max(fontPx * 0.4, metrics.actualBoundingBoxDescent);
-    textCanvas.width = Math.ceil(left + right + pad * 2);
-    textCanvas.height = Math.ceil(ascent + descent + pad * 2);
-    setCanvasFont();
-    textContext.fillStyle = doc.getTextColor();
-    textContext.fillText(text, left + pad, ascent + pad);
-    const offset = options.align === 'center' ? metrics.width / 2 : options.align === 'right' ? metrics.width : 0;
-    const imageY = options.baseline === 'middle' ? y - textCanvas.height / textScale / 2 : y - (ascent + pad) / textScale;
-    doc.addImage(textCanvas.toDataURL('image/png'), 'PNG', x - (offset + left + pad) / textScale, imageY, textCanvas.width / textScale, textCanvas.height / textScale);
-    textCanvas.width = textCanvas.height = 0;
+    ctx.save();
+    ctx.textAlign = options.align ?? 'left';
+    ctx.textBaseline = options.baseline ?? 'alphabetic';
+    textWidth(text, options.charSpace);
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   function fitText(text: string, maxW: number, size: number, min: number, charSpace = 0): string {
     const fitted = fitPdfText(text, maxW, size, min, (value, fontSize) => {
-      doc.setFontSize(fontSize);
+      setFont(fontSize);
       return textWidth(value, charSpace);
     });
-    doc.setFontSize(fitted.fontSize);
+    setFont(fitted.fontSize);
     return fitted.text;
   }
 
-  function drawTeamHeader(team: Team, squad: Player[], officialCount: number): number {
+  async function drawTeamHeader(team: Team, squad: Player[], officialCount: number): Promise<number> {
     const rgb = hexToRgb(team.colorHex);
 
-    doc.addImage(makeBackdrop(rgb), 'JPEG', 0, 0, pageW, pageH);
+    ctx.drawImage(await loadImage(makeBackdrop(rgb), signal), 0, 0, pageW, pageH);
 
     // Team-colour accent bar across the very top
-    doc.setFillColor(...rgb);
-    doc.rect(0, 0, pageW, 2.2, 'F');
+    ctx.fillStyle = css(rgb);
+    ctx.fillRect(0, 0, pageW, 2.2);
 
     // Eyebrow: league name in team colour
-    doc.setTextColor(...legible(rgb));
-    doc.setFont('helvetica', 'bold');
+    ctx.fillStyle = css(legible(rgb));
+    setFont(9, 'bold');
     posterText(fitText(league.name.toUpperCase(), GRID_W, 9, 7, 0.8), GRID_X, 17, { charSpace: 0.8 });
 
     // Team name — the hero
-    doc.setTextColor(...TEXT_WHITE);
+    ctx.fillStyle = css(TEXT_WHITE);
     posterText(fitText(team.name.toUpperCase(), GRID_W, 30, 16), GRID_X, 30);
 
     // Squad meta — same order as the sections below
@@ -469,27 +479,31 @@ export async function downloadSquadPosters(
     if (officialCount > 0) metaParts.push(`${officialCount} OFFICIAL${officialCount !== 1 ? 'S' : ''}`);
     if (iconCount > 0) metaParts.push(`${iconCount} ICON${iconCount !== 1 ? 'S' : ''}`);
     metaParts.push(`${squad.length} PLAYER${squad.length !== 1 ? 'S' : ''}`);
-    doc.setTextColor(...TEXT_GRAY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text(`OFFICIAL SQUAD   ·   ${metaParts.join('   ·   ')}`, GRID_X, 37.5, { charSpace: 0.5 });
+    ctx.fillStyle = css(TEXT_GRAY);
+    setFont(8.5, 'normal');
+    posterText(`OFFICIAL SQUAD   ·   ${metaParts.join('   ·   ')}`, GRID_X, 37.5, { charSpace: 0.5 });
 
     // Accent underline
-    doc.setFillColor(...rgb);
-    doc.roundedRect(GRID_X, 41, 26, 1.2, 0.6, 0.6, 'F');
+    ctx.fillStyle = css(rgb);
+    ctx.beginPath();
+    ctx.roundRect(GRID_X, 41, 26, 1.2, 0.6);
+    ctx.fill();
 
     return 48;
   }
 
   function drawFooter() {
-    doc.setDrawColor(...CARD_BORDER);
-    doc.setLineWidth(0.25);
-    doc.line(GRID_X, pageH - 13, pageW - GRID_X, pageH - 13);
-    doc.setTextColor(...TEXT_GRAY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
+    ctx.strokeStyle = css(CARD_BORDER);
+    ctx.lineWidth = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(GRID_X, pageH - 13);
+    ctx.lineTo(pageW - GRID_X, pageH - 13);
+    ctx.stroke();
+    ctx.fillStyle = css(TEXT_GRAY);
+    setFont(7, 'normal');
     posterText(fitText(`${league.name}  ·  Conducted by ${league.conductedBy}`, GRID_W - 38, 7, 5), GRID_X, pageH - 8);
-    doc.text(
+    setFont(7);
+    posterText(
       new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       pageW - GRID_X, pageH - 8, { align: 'right' }
     );
@@ -504,9 +518,12 @@ export async function downloadSquadPosters(
       const a = -Math.PI / 2 + (i * Math.PI) / 5;
       pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
     }
-    const rel = pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]] as [number, number]);
-    doc.setFillColor(...color);
-    doc.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
+    ctx.fillStyle = css(color);
+    ctx.beginPath();
+    ctx.moveTo(...pts[0]);
+    for (const point of pts.slice(1)) ctx.lineTo(...point);
+    ctx.closePath();
+    ctx.fill();
   }
 
   /** Pill badge in a tile corner; `x` is its left edge, or its right edge when `alignRight` */
@@ -516,19 +533,20 @@ export async function downloadSquadPosters(
     const padX = 1.6 * k;
     const starW = star ? 2.9 * k : 0;
     const cs = 0.3 * k;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(fs);
-    const w = padX * 2 + starW + doc.getTextWidth(label) + cs * (label.length - 1);
+    setFont(fs, 'bold');
+    const w = padX * 2 + starW + textWidth(label, cs);
     const left = alignRight ? x - w : x;
-    doc.setFillColor(...fill);
-    doc.roundedRect(left, y, w, h, h / 2, h / 2, 'F');
+    ctx.fillStyle = css(fill);
+    ctx.beginPath();
+    ctx.roundRect(left, y, w, h, h / 2);
+    ctx.fill();
     const ink = textOn(fill);
     if (star) drawStar(left + padX + 1.1 * k, y + h / 2 + 0.1 * k, 1.35 * k, ink);
-    doc.setTextColor(...ink);
-    doc.text(label, left + padX + starW, y + h / 2 + (fs * PT * 0.72) / 2, { charSpace: cs });
+    ctx.fillStyle = css(ink);
+    posterText(label, left + padX + starW, y + h / 2 + (fs * PT * 0.72) / 2, { charSpace: cs });
   }
 
-  function drawTile(t: Tile, x: number, y: number, w: number) {
+  async function drawTile(t: Tile, x: number, y: number, w: number) {
     const h = w * TILE_ASPECT;
     const r = w * TILE_RADIUS;
     const k = w / 42; // type is tuned for a 42mm tile and scales with it
@@ -536,42 +554,42 @@ export async function downloadSquadPosters(
     const icon = t.kind === 'icon';
 
     // Photo, clipped to the rounded tile
-    doc.saveGraphicsState();
-    doc.roundedRect(x, y, w, h, r, r, null);
-    doc.clip();
-    doc.discardPath();
-    doc.addImage(t.portrait.src, 'JPEG', x, y, w, h);
-    doc.restoreGraphicsState();
+    const photo = await loadImage(t.portrait.src, signal);
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.clip();
+    ctx.drawImage(photo, x, y, w, h);
+    ctx.restore();
 
     if (!t.portrait.hasPhoto) {
-      doc.setTextColor(...TEXT_WHITE);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize((w * 0.32) / PT);
+      ctx.fillStyle = css(TEXT_WHITE);
+      setFont((w * 0.32) / PT, 'bold');
       posterText(initialsOf(t.name), cx, y + h * 0.38, { align: 'center', baseline: 'middle' });
     }
 
-    doc.setDrawColor(...(icon ? GOLD : dim(t.accent, 0.5)));
-    doc.setLineWidth(icon ? 0.7 : 0.3);
-    doc.roundedRect(x, y, w, h, r, r, 'S');
+    ctx.strokeStyle = css(icon ? GOLD : dim(t.accent, 0.5));
+    ctx.lineWidth = icon ? 0.7 : 0.3;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.stroke();
 
     // Name plate over the fade, built bottom-up
     const maxW = w - 4 * k;
     let baseY = y + h - 3.6 * k;
     if (t.skill) {
-      doc.setTextColor(...TEXT_SOFT);
-      doc.setFont('helvetica', 'normal');
+      ctx.fillStyle = css(TEXT_SOFT);
+      setFont(6 * k, 'normal');
       posterText(fitText(t.skill, maxW, 6 * k, 4), cx, baseY, { align: 'center' });
       baseY -= 3.8 * k;
     }
     const roleCs = 0.35 * k;
-    doc.setTextColor(...legible(t.accent));
-    doc.setFont('helvetica', 'bold');
+    ctx.fillStyle = css(legible(t.accent));
+    setFont(6.2 * k, 'bold');
     const role = fitText(t.role.toUpperCase(), maxW, 6.2 * k, 4, roleCs);
-    // jsPDF centres on the unspaced width, so letter-spaced text is centred by hand
-    const roleW = textWidth(role, roleCs);
-    posterText(role, cx - roleW / 2, baseY, { charSpace: roleCs });
+    posterText(role, cx, baseY, { align: 'center', charSpace: roleCs });
     baseY -= 4.6 * k;
-    doc.setTextColor(...TEXT_WHITE);
+    ctx.fillStyle = css(TEXT_WHITE);
     posterText(fitText(t.name, maxW, 10.5 * k, 5.5), cx, baseY, { align: 'center' });
 
     const inset = 2 * k;
@@ -582,28 +600,34 @@ export async function downloadSquadPosters(
   function drawSectionLabel(label: string, color: RGB, count: number, y: number, left: number, right: number) {
     const base = y + 4.6;
     // Leading colour bar
-    doc.setFillColor(...color);
-    doc.roundedRect(left, base - 3.3, 2.4, 4.4, 0.8, 0.8, 'F');
+    ctx.fillStyle = css(color);
+    ctx.beginPath();
+    ctx.roundRect(left, base - 3.3, 2.4, 4.4, 0.8);
+    ctx.fill();
     // Label
-    doc.setTextColor(...TEXT_WHITE);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.text(label, left + 5, base, { charSpace: 0.9 });
-    const labelW = doc.getTextWidth(label) + label.length * 0.9;
+    ctx.fillStyle = css(TEXT_WHITE);
+    setFont(8.5, 'bold');
+    posterText(label, left + 5, base, { charSpace: 0.9 });
+    const labelW = textWidth(label, 0.9);
     // Count chip pinned to the right edge
     const chip = String(count);
-    doc.setFontSize(7);
+    setFont(7);
     const chipH = 4.6;
-    const cw = Math.max(chipH + 1.4, doc.getTextWidth(chip) + 4.4);
+    const cw = Math.max(chipH + 1.4, textWidth(chip) + 4.4);
     const chipX = right - cw;
-    doc.setFillColor(...color);
-    doc.roundedRect(chipX, base - 3.4, cw, chipH, chipH / 2, chipH / 2, 'F');
-    doc.setTextColor(...textOn(color));
-    doc.text(chip, chipX + cw / 2, base - 0.2, { align: 'center' });
+    ctx.fillStyle = css(color);
+    ctx.beginPath();
+    ctx.roundRect(chipX, base - 3.4, cw, chipH, chipH / 2);
+    ctx.fill();
+    ctx.fillStyle = css(textOn(color));
+    posterText(chip, chipX + cw / 2, base - 0.2, { align: 'center' });
     // Rule between label and chip
-    doc.setDrawColor(...CARD_BORDER);
-    doc.setLineWidth(0.25);
-    doc.line(left + 8 + labelW, base - 1.1, chipX - 3, base - 1.1);
+    ctx.strokeStyle = css(CARD_BORDER);
+    ctx.lineWidth = 0.25;
+    ctx.beginPath();
+    ctx.moveTo(left + 8 + labelW, base - 1.1);
+    ctx.lineTo(chipX - 3, base - 1.1);
+    ctx.stroke();
   }
 
   /** The column count (3–6) giving the widest tiles at which every section still fits */
@@ -622,90 +646,111 @@ export async function downloadSquadPosters(
     return best;
   }
 
-  for (const team of targetTeams) {
-    const squad = players.filter((p) => p.teamId === team.id);
-    const teamOfficials = officials.filter((o) => o.teamId === team.id);
-    const rgb = hexToRgb(team.colorHex);
+  try {
+    for (const team of targetTeams) {
+      signal?.throwIfAborted();
+      const squad = players.filter((p) => p.teamId === team.id);
+      const teamOfficials = officials.filter((o) => o.teamId === team.id);
+      const rgb = hexToRgb(team.colorHex);
 
-    if (!firstPage) doc.addPage();
-    firstPage = false;
+      const gridTop = await drawTeamHeader(team, squad, teamOfficials.length);
+      drawFooter();
 
-    const gridTop = drawTeamHeader(team, squad, teamOfficials.length);
-    drawFooter();
+      if (squad.length === 0 && teamOfficials.length === 0) {
+        ctx.fillStyle = css(TEXT_GRAY);
+        setFont(11, 'italic');
+        posterText('No players in this squad yet', pageW / 2, pageH / 2, { align: 'center' });
+        pages.push({ teamId: team.id, teamName: team.name, src: canvas.toDataURL('image/jpeg', 0.92) });
+        continue;
+      }
 
-    if (squad.length === 0 && teamOfficials.length === 0) {
-      doc.setTextColor(...TEXT_GRAY);
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(11);
-      doc.text('No players in this squad yet', pageW / 2, pageH / 2, { align: 'center' });
-      continue;
-    }
+      const icons = squad.filter((p) => p.isIcon);
+      const others = squad.filter((p) => !p.isIcon);
 
-    const icons = squad.filter((p) => p.isIcon);
-    const others = squad.filter((p) => !p.isIcon);
+      // Pre-render portraits in parallel — photo fetch is the slow part
+      const [officialPortraits, iconPortraits, otherPortraits] = await Promise.all([
+        Promise.all(teamOfficials.map((o) => makePortrait(o.photo, SILVER, signal))),
+        Promise.all(icons.map((p) => makePortrait(p.photo, GOLD, signal))),
+        Promise.all(others.map((p) => makePortrait(p.photo, rgb, signal))),
+      ]);
 
-    // Pre-render portraits in parallel — photo fetch is the slow part
-    const [officialPortraits, iconPortraits, otherPortraits] = await Promise.all([
-      Promise.all(teamOfficials.map((o) => makePortrait(o.photo, SILVER))),
-      Promise.all(icons.map((p) => makePortrait(p.photo, GOLD))),
-      Promise.all(others.map((p) => makePortrait(p.photo, rgb))),
-    ]);
+      const playerTile = (p: Player, kind: Tile['kind'], accent: RGB, portrait: Portrait): Tile => ({
+        name: p.name,
+        role: p.role,
+        skill: p.bowlingType === 'N/A' ? batShort(p.battingType) : `${batShort(p.battingType)} · ${p.bowlingType}`,
+        accent,
+        kind,
+        wk: p.isWicketKeeper,
+        portrait,
+      });
 
-    const playerTile = (p: Player, kind: Tile['kind'], accent: RGB, portrait: Portrait): Tile => ({
-      name: p.name,
-      role: p.role,
-      skill: p.bowlingType === 'N/A' ? batShort(p.battingType) : `${batShort(p.battingType)} · ${p.bowlingType}`,
-      accent,
-      kind,
-      wk: p.isWicketKeeper,
-      portrait,
-    });
+      // Reading order: officials (silver) → icons (gold) → other players (team colour)
+      const sections = [
+        {
+          label: 'TEAM OFFICIALS', color: SILVER,
+          tiles: teamOfficials.map((o, i): Tile => ({
+            name: o.name, role: o.role || 'Official', accent: SILVER, kind: 'official', portrait: officialPortraits[i],
+          })),
+        },
+        { label: 'ICON PLAYERS', color: GOLD, tiles: icons.map((p, i) => playerTile(p, 'icon', GOLD, iconPortraits[i])) },
+        { label: 'PLAYERS', color: rgb, tiles: others.map((p, i) => playerTile(p, 'player', rgb, otherPortraits[i])) },
+      ].filter((sec) => sec.tiles.length > 0);
 
-    // Reading order: officials (silver) → icons (gold) → other players (team colour)
-    const sections = [
-      {
-        label: 'TEAM OFFICIALS', color: SILVER,
-        tiles: teamOfficials.map((o, i): Tile => ({
-          name: o.name, role: o.role || 'Official', accent: SILVER, kind: 'official', portrait: officialPortraits[i],
-        })),
-      },
-      { label: 'ICON PLAYERS', color: GOLD, tiles: icons.map((p, i) => playerTile(p, 'icon', GOLD, iconPortraits[i])) },
-      { label: 'PLAYERS', color: rgb, tiles: others.map((p, i) => playerTile(p, 'player', rgb, otherPortraits[i])) },
-    ].filter((sec) => sec.tiles.length > 0);
-
-    const availH = GRID_BOTTOM - gridTop;
-    const { cols, tileW } = planGrid(sections.map((sec) => sec.tiles.length), availH);
-    const tileH = tileW * TILE_ASPECT;
-    const totalRows = sections.reduce((n, sec) => n + Math.ceil(sec.tiles.length / cols), 0);
-    const usedH =
+      const availH = GRID_BOTTOM - gridTop;
+      const { cols, tileW } = planGrid(sections.map((sec) => sec.tiles.length), availH);
+      const tileH = tileW * TILE_ASPECT;
+      const totalRows = sections.reduce((n, sec) => n + Math.ceil(sec.tiles.length / cols), 0);
+      const usedH =
       sections.length * LABEL_H + (sections.length - 1) * SECTION_GAP +
       totalRows * tileH + (totalRows - sections.length) * GAP;
-    // Labels line up with the grid's outer edges, which move in when height is what limits the tiles
-    const gridW = cols * tileW + (cols - 1) * GAP;
-    const left = GRID_X + (GRID_W - gridW) / 2;
+      // Labels line up with the grid's outer edges, which move in when height is what limits the tiles
+      const gridW = cols * tileW + (cols - 1) * GAP;
+      const left = GRID_X + (GRID_W - gridW) / 2;
 
-    // A small squad sits a little lower rather than hugging the header
-    let curY = gridTop + Math.min(14, (availH - usedH) / 2);
-    sections.forEach((sec, si) => {
-      if (si > 0) curY += SECTION_GAP;
-      drawSectionLabel(sec.label, sec.color, sec.tiles.length, curY, left, left + gridW);
-      curY += LABEL_H;
-      for (let i = 0; i < sec.tiles.length; i += cols) {
-        const row = sec.tiles.slice(i, i + cols);
-        // Short rows are centred, so a lone icon or a part-filled last row stays balanced
-        let x = GRID_X + (GRID_W - (row.length * tileW + (row.length - 1) * GAP)) / 2;
-        for (const tile of row) {
-          drawTile(tile, x, curY, tileW);
-          x += tileW + GAP;
+      // A small squad sits a little lower rather than hugging the header
+      let curY = gridTop + Math.min(14, (availH - usedH) / 2);
+      for (const [si, sec] of sections.entries()) {
+        if (si > 0) curY += SECTION_GAP;
+        drawSectionLabel(sec.label, sec.color, sec.tiles.length, curY, left, left + gridW);
+        curY += LABEL_H;
+        for (let i = 0; i < sec.tiles.length; i += cols) {
+          const row = sec.tiles.slice(i, i + cols);
+          // Short rows are centred, so a lone icon or a part-filled last row stays balanced
+          let x = GRID_X + (GRID_W - (row.length * tileW + (row.length - 1) * GAP)) / 2;
+          for (const tile of row) {
+            await drawTile(tile, x, curY, tileW);
+            x += tileW + GAP;
+          }
+          curY += tileH + GAP;
         }
-        curY += tileH + GAP;
+        curY -= GAP;
       }
-      curY -= GAP;
-    });
+      pages.push({ teamId: team.id, teamName: team.name, src: canvas.toDataURL('image/jpeg', 0.92) });
+    }
+    return pages;
+  } finally {
+    canvas.width = canvas.height = 0;
   }
+}
 
-  const fileName = onlyTeamId && targetTeams.length === 1
-    ? `${safeFileName(targetTeams[0].name)}_squad.pdf`
-    : `${safeFileName(league.name)}_squads.pdf`;
-  doc.save(fileName);
+export async function saveSquadPosters(pages: SquadPosterPage[], name: string) {
+  if (!pages.length) throw new Error('No squad posters to download');
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  pages.forEach((page, index) => {
+    if (index > 0) doc.addPage();
+    doc.addImage(page.src, 'JPEG', 0, 0, 210, 297);
+  });
+  doc.save(`${safeFileName(name)}.pdf`);
+}
+
+export async function downloadSquadPosters(
+  league: LeagueInfo,
+  teams: Team[],
+  players: Player[],
+  officials: TeamOfficial[] = [],
+  onlyTeamId?: string,
+) {
+  const pages = await renderSquadPosters(league, teams, players, officials, onlyTeamId);
+  await saveSquadPosters(pages, onlyTeamId ? `${pages[0].teamName}_squad` : `${league.name}_squads`);
 }

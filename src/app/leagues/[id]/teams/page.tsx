@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus, FileSpreadsheet, History } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus, FileSpreadsheet, History, Eye } from 'lucide-react';
 import { downloadAuctionResults } from '@/lib/auctionExport';
 import AuctionChangeLogDialog from '@/components/league/AuctionChangeLogDialog';
+import SquadPosterDialog from '@/components/league/SquadPosterDialog';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
 import { useLeagueRevision } from '@/components/league/LeagueChrome';
@@ -49,6 +50,7 @@ export default function TeamsPage() {
   const [iconPickerTeam, setIconPickerTeam] = useState<string | null>(null);
   const [iconBusy, setIconBusy] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [posterPreview, setPosterPreview] = useState<{ teamId?: string } | null>(null);
 
   // team officials editor (squad-poster only; never affects the auction)
   const [officialTeam, setOfficialTeam] = useState<string | null>(null);
@@ -335,6 +337,9 @@ export default function TeamsPage() {
                   : <ImageDown className="w-3.5 h-3.5" />}
                 Squad Posters
               </button>
+              <button onClick={() => setPosterPreview({})} disabled={!!exporting} className="toolbar-btn">
+                <Eye className="w-3.5 h-3.5" />Preview Posters
+              </button>
               <button
                 onClick={() => {
                   try {
@@ -476,6 +481,11 @@ export default function TeamsPage() {
                         <Briefcase className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    <button onClick={() => setPosterPreview({ teamId: team.id })} disabled={!!exporting}
+                      title={`Preview ${team.name} squad poster`}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     <button onClick={() => handleExport('posters', team.id)} disabled={!!exporting}
                       title={`Download ${team.name} squad poster`}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
@@ -741,6 +751,16 @@ export default function TeamsPage() {
         </div>
       )}
 
+      {posterPreview && (
+        <SquadPosterDialog
+          league={data}
+          teams={teams}
+          players={data.players}
+          officials={data.officials}
+          teamId={posterPreview.teamId}
+          onClose={() => setPosterPreview(null)}
+        />
+      )}
       {canEdit && <AuctionChangeLogDialog leagueId={id} open={logOpen} onClose={() => setLogOpen(false)} />}
     </div>
   );

@@ -10,6 +10,7 @@ import DownloadPDFButton from '@/components/DownloadPDFButton';
 import CertificateDownloadButtons from '@/components/CertificateDownloadButtons';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import LiveAuctionBanner from '@/components/league/LiveAuctionBanner';
+import SquadPosterDialog from '@/components/league/SquadPosterDialog';
 import { useLeagueRevision, useLeagueScroller } from '@/components/league/LeagueChrome';
 import type { LeagueWithPlayers, UserProfile, Player, LiveAuctionSummary } from '@/lib/types';
 import { generateToken, copyToClipboard } from '@/lib/utils';
@@ -18,7 +19,7 @@ import { toast } from 'sonner';
 import {
   ArrowDown, ArrowUp, Search, X, Users, Globe, Lock, Unlock,
   ImageDown, Share2, ChevronDown, Copy, Link2, FileText, Gavel,
-  UsersRound, Images, UserPlus, Trophy, Sparkles, EyeOff,
+  UsersRound, Images, UserPlus, Trophy, Sparkles, EyeOff, Eye,
 } from 'lucide-react';
 
 interface WorkspaceProps {
@@ -265,6 +266,7 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
   // ── Share & Export menu ────────────────────────────────────────────────────
   const [shareOpen, setShareOpen] = useState(false);
   const [teamExporting, setTeamExporting] = useState<'roster' | 'posters' | null>(null);
+  const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   async function handleTeamExport(kind: 'roster' | 'posters') {
@@ -839,6 +841,9 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
                       <>
                         <div className="my-1.5 h-px bg-border/70" />
                         <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Teams</p>
+                        <button className="menu-item" disabled={!!teamExporting} onClick={() => { setPosterPreviewOpen(true); setShareOpen(false); }}>
+                          <Eye className="w-3.5 h-3.5 text-muted-foreground" />Preview Squad Posters
+                        </button>
                         <button className="menu-item" disabled={!!teamExporting} onClick={() => handleTeamExport('roster')}>
                           {teamExporting === 'roster'
                             ? <span className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
@@ -1032,6 +1037,16 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
             onDelete={handleDeletePlayer}
           />
         </>
+      )}
+
+      {posterPreviewOpen && (
+        <SquadPosterDialog
+          league={data}
+          teams={data.teams}
+          players={data.players}
+          officials={data.officials}
+          onClose={() => setPosterPreviewOpen(false)}
+        />
       )}
 
       {/* Full player view */}

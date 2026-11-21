@@ -21,7 +21,7 @@ Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of loca
 | 👥 **Teams & officials** | Manage rosters, owners and non-playing team officials (coach, manager) with budget tracking. |
 | 🗓️ **Matches** | Generate fixtures — full round robin, a set number of matches per team, a total, or custom per-team ranges — preview them, download them as a PNG poster in thirteen templates, then record scores and winners. |
 | 🏏 **Live scoring** | Score a match ball by ball from a phone — extras, every mode of dismissal, free hits, retirements, late arrivals, rain revisions and super overs — and works offline. A public match centre shows the live score, scorecard, commentary and overs; the result lands on the points table with net run rate, and batting, bowling and fielding boards build themselves. |
-| 📄 **Export & share** | One-tap PDF squad sheets, squad posters with regional-language names, and WhatsApp sharing for cards, results and links. |
+| 📄 **Export & share** | One-tap PDF squad sheets, in-app previews of squad posters with regional-language names, and WhatsApp sharing for cards, results and links. Downloading a poster is optional. |
 | 🌍 **Discover** | A public directory of leagues that opt in. |
 | 🌓 **Polish** | Installable PWA, light/dark themes, Google sign-in, full SEO/OG image support. |
 
@@ -84,6 +84,13 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run start` | Serve the production build. |
 | `npm run lint` | Run ESLint. |
 | `npm test` | Auction-rule, PDF text-fitting, fixture and scoring engine unit tests (Node's built-in runner, compiled with `tsc`). |
+
+On **Teams**, use **Preview Posters** to browse every team's poster, or the eye
+button on a team to preview just that squad. The league's export menu also offers
+**Preview Squad Posters**. Previewing never downloads a file; **Download PDF**
+exports the displayed poster. Preview and PDF use the same approximately 300-DPI
+image. Run [scripts/check-squad-preview.js](scripts/check-squad-preview.js) in the
+browser console on a Teams screen for a preview/navigation/no-download check.
 
 ## Project structure
 
