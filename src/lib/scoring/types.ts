@@ -67,6 +67,8 @@ export interface SideSetup {
 }
 
 export interface MatchSetup {
+  /** Server-stamped roster policy. Absent on legacy guest/borrowed-player matches. */
+  squadOnly?: boolean;
   rules: ScoringRules;
   /** `sides[0]` is the match's team 1. */
   sides: [SideSetup, SideSetup];

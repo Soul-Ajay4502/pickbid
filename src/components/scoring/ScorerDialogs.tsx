@@ -130,22 +130,27 @@ export function QuickAddPlayer({ state, teamId, players, send, onAdded }: {
   const [cardId, setCardId] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const teamName = state.setup.sides.find((s) => s.teamId === teamId)?.name ?? 'this team';
+  const squadOnly = !!state.setup.squadOnly;
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
         className="w-full min-h-10 inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-muted/50">
-        <UserPlus className="w-4 h-4" />Not in the list? Add a new player
+        <UserPlus className="w-4 h-4" />{squadOnly ? 'Add an available team member' : 'Not in the list? Add a new player'}
       </button>
     );
   }
 
   const taken = new Set(Object.values(state.squads).flat().map((p) => p.id));
-  const available = players.filter((p) => !taken.has(p.id))
+  const available = players.filter((p) => !taken.has(p.id) && (!squadOnly || p.teamId === teamId))
     .sort((a, b) => Number(b.teamId === teamId) - Number(a.teamId === teamId) || a.name.localeCompare(b.name));
 
   function add() {
     const card = players.find((p) => p.id === cardId);
+    if (squadOnly && (!card || card.teamId !== teamId)) {
+      setProblem('Choose a player from this team’s existing squad');
+      return;
+    }
     const typed = name.trim().slice(0, 80);
     if (!card && !typed) return;
     const player = card ? { id: card.id, name: card.name } : { id: `guest:${eventId()}`, name: typed };
@@ -158,24 +163,25 @@ export function QuickAddPlayer({ state, teamId, players, send, onAdded }: {
   return (
     <div className="rounded-xl border border-primary/40 bg-primary/5 p-3 space-y-2.5">
       <p className="text-xs font-semibold text-foreground">New player for {teamName}</p>
-      <input value={name} autoFocus
+      {!squadOnly && <input value={name} autoFocus
         onChange={(e) => { setName(e.target.value); if (e.target.value) setCardId(null); }}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
         placeholder="Player name" maxLength={80}
-        className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm" />
+        className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm" />}
       {available.length > 0 && (
         <select value={cardId ?? ''} onChange={(e) => { setCardId(e.target.value || null); if (e.target.value) setName(''); }}
-          aria-label="Or pick a league player who isn't in a squad"
+          aria-label={squadOnly ? 'Pick an available team member' : "Or pick a league player who isn't in a squad"}
           className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm">
-          <option value="">…or pick from the league</option>
+          <option value="">{squadOnly ? 'Choose a team member…' : '…or pick from the league'}</option>
           {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       )}
+      {squadOnly && available.length === 0 && <p className="text-xs text-muted-foreground">No other team members are available.</p>}
       <Problem text={problem} />
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => { setOpen(false); setProblem(null); }}
           className="h-10 rounded-xl border border-border bg-card text-sm font-semibold hover:bg-muted">Cancel</button>
-        <button type="button" onClick={add} disabled={!cardId && !name.trim()}
+        <button type="button" onClick={add} disabled={!cardId && (squadOnly || !name.trim())}
           className="h-10 rounded-xl btn-premium text-sm font-bold text-white disabled:opacity-40">Add to squad</button>
       </div>
     </div>
@@ -688,26 +694,32 @@ export function AddPlayerSheet({ state, players, send, onClose }: {
   const [guest, setGuest] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const taken = new Set(Object.values(state.squads).flat().map((p) => p.id));
-  const available = players.filter((p) => !taken.has(p.id))
+  const squadOnly = !!state.setup.squadOnly;
+  const available = players.filter((p) => !taken.has(p.id) && (!squadOnly || p.teamId === teamId))
     .sort((a, b) => Number(b.teamId === teamId) - Number(a.teamId === teamId) || a.name.localeCompare(b.name));
   return (
     <Sheet open onClose={onClose} title="Add a late arrival" description="Joins the squad for the rest of the match — one more wicket for that side.">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-1.5">
-          {state.setup.sides.map((s) => <Choice key={s.teamId} active={teamId === s.teamId} onClick={() => setTeamId(s.teamId)}>{s.name}</Choice>)}
+          {state.setup.sides.map((s) => <Choice key={s.teamId} active={teamId === s.teamId} onClick={() => { setTeamId(s.teamId); setCardId(null); setProblem(null); }}>{s.name}</Choice>)}
         </div>
         {available.length > 0 && (
-          <PlayerSelect label="From the league" value={cardId} onChange={(v) => { setCardId(v); if (v) setGuest(''); }}
+          <PlayerSelect label={squadOnly ? 'From this team’s squad' : 'From the league'} value={cardId} onChange={(v) => { setCardId(v); if (v) setGuest(''); }}
             players={available.map((p) => ({ id: p.id, name: p.name }))} placeholder="Choose a player…" />
         )}
-        <label className="block">
+        {!squadOnly && <label className="block">
           <Label>Or a guest</Label>
           <input value={guest} onChange={(e) => { setGuest(e.target.value); if (e.target.value) setCardId(null); }}
             placeholder="Name" className="w-full h-11 px-3 rounded-xl border border-border bg-input text-sm" />
-        </label>
+        </label>}
+        {squadOnly && available.length === 0 && <p className="text-xs text-muted-foreground">No other team members are available.</p>}
         <Problem text={problem} />
-        <Submit disabled={!cardId && !guest.trim()} onClick={() => {
+        <Submit disabled={!cardId && (squadOnly || !guest.trim())} onClick={() => {
           const card = players.find((p) => p.id === cardId);
+          if (squadOnly && (!card || card.teamId !== teamId)) {
+            setProblem('Choose a player from this team’s existing squad');
+            return;
+          }
           const player = card ? { id: card.id, name: card.name } : { id: `guest:${eventId()}`, name: guest.trim().slice(0, 80) };
           const err = send({ type: 'add_player', teamId, player });
           if (err) setProblem(err); else onClose();

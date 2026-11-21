@@ -501,7 +501,11 @@ export default function AdminDashboard() {
                         />
                         {l.hasLiveAuction && (
                           <button
-                            onClick={() => act(l, { action: 'clear-live' }, 'Live broadcast cleared')}
+                            onClick={() => {
+                              if (confirm(`Clear the live broadcast for "${l.name}"? Spectators will no longer see its current auction board.`)) {
+                                act(l, { action: 'clear-live' }, 'Live broadcast cleared');
+                              }
+                            }}
                             disabled={busyId === l.id}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400 disabled:opacity-50"
                           >

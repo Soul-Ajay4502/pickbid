@@ -11,7 +11,7 @@ import {
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import {
   DISMISSAL_LABELS, ballChip, currentInnings, economy, nameLookup, oversText, runRate, statusText, strikeRate,
-  teamNameLookup, tryReplay, type BallRecord, type Extra, type MatchState, type ScoringEvent,
+  teamNameLookup, teamSquadPlayer, tryReplay, type BallRecord, type Extra, type MatchState, type ScoringEvent,
 } from '@/lib/scoring';
 import type { MatchScorecard, Player } from '@/lib/types';
 import { cn, copyToClipboard, whatsappShareLink } from '@/lib/utils';
@@ -132,10 +132,19 @@ export default function ScorerConsole({ leagueId, card, players, onEditSetup }: 
   const close = useCallback(() => setSheet(null), []);
 
   const send: Send = useCallback((d: Draft) => {
+    if (setup.squadOnly && d.type === 'add_player') {
+      try {
+        d.player = teamSquadPlayer(d.player.id, d.teamId, players);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not add this player';
+        toast.error(message);
+        return message;
+      }
+    }
     const err = record({ ...d, id: eventId(), at: Date.now() } as ScoringEvent);
     if (err) toast.error(err);
     return err;
-  }, [record]);
+  }, [record, setup.squadOnly, players]);
 
   const preview: Preview = useCallback((d: Draft) => {
     const r = tryReplay(setup, [...events, { ...d, id: '__preview__', at: 0 } as ScoringEvent]);

@@ -62,8 +62,8 @@ function teamStats(team: Team, roster: Player[], basePrice: number) {
   const squad = roster.filter(p => p.teamId === team.id);
   const spent = squad.reduce((s, p) => s + (p.soldPrice ?? 0), 0);
   const maxPlayers = team.maxPlayers ?? 11;
-  const limits = auctionLimits({ budget: team.budget, spent, squadSize: squad.length, maxPlayers, basePrice });
-  return { bought: squad.length, maxPlayers, spent, ...limits };
+  const limits = auctionLimits({ budget: team.budget, spent, squadSize: squad.length, minPlayers: team.minPlayers, maxPlayers, basePrice });
+  return { bought: squad.length, minPlayers: team.minPlayers, maxPlayers, spent, ...limits };
 }
 
 /**
@@ -73,7 +73,7 @@ function teamStats(team: Team, roster: Player[], basePrice: number) {
  */
 function MaxBidLabel({ st, fullLabel = 'Full' }: { st: ReturnType<typeof teamStats>; fullLabel?: string }) {
   if (st.slotsLeft === 0) return <>{fullLabel}</>;
-  if (st.shortfall > 0) return <span className="text-red-600 dark:text-red-400" title="The purse can't fill the open slots at the base price — raise the purse or lower the base price">Short {fmt(st.shortfall)}</span>;
+  if (st.shortfall > 0) return <span className="text-red-600 dark:text-red-400" title="The purse can't reach the minimum squad at the base price — raise the purse or lower the base price">Short {fmt(st.shortfall)}</span>;
   return <>{fmt(st.maxBid)}</>;
 }
 
@@ -231,7 +231,7 @@ export default function AuctionPage() {
       const { spent, maxBid } = teamStats(t, opts.roster, basePrice);
       return {
         id: t.id, name: t.name, color: t.colorHex, budget: t.budget,
-        spent, count: squad.length, maxPlayers: t.maxPlayers, maxBid,
+        spent, count: squad.length, minPlayers: t.minPlayers, maxPlayers: t.maxPlayers, maxBid,
         players: squad.map(p => ({ name: p.name, price: p.soldPrice ?? 0 })),
       };
     });
@@ -498,7 +498,7 @@ export default function AuctionPage() {
       const st = teamStats(team, soldPlayers, basePrice);
       if (st.slotsLeft === 0) { toast.error(`${team.name} squad is already full (${st.maxPlayers} players)`); return; }
       if (price < basePrice) { toast.error(`Below the base price of ${fmt(basePrice)}`); return; }
-      if (st.shortfall > 0) { toast.error(`${team.name} is ${fmt(st.shortfall)} short of filling its ${st.slotsLeft} open slots at the base price`); return; }
+      if (st.shortfall > 0) { toast.error(`${team.name} is ${fmt(st.shortfall)} short of filling its ${st.requiredSlots} required slots at the base price`); return; }
       if (price > st.maxBid) { toast.error(reserveRuleMessage(team.name, st, fmt)); return; }
     }
     const action: LastAction = { type: 'sold', player: current, teamId: soldTeamId, teamName: team?.name ?? soldTeamId, teamColor: team?.colorHex ?? '#22c55e', price };
@@ -530,10 +530,10 @@ export default function AuctionPage() {
   // Teams whose purse can't fill their open slots at the base price. Such a
   // team could never legally buy anyone, so the auction would stall on its
   // first bid — the lobby refuses to start and says how to fix it instead.
-  const lobbyStats = teams.map(t => ({ team: t, st: teamStats(t, league.players, basePrice) })).filter(x => x.st.slotsLeft > 0);
+  const lobbyStats = teams.map(t => ({ team: t, st: teamStats(t, league.players, basePrice) })).filter(x => x.st.requiredSlots > 0);
   const shortTeams = lobbyStats.filter(x => x.st.shortfall > 0);
   // The highest base price every team can still afford for all its open slots
-  const workableBase = lobbyStats.length > 0 ? Math.max(0, Math.min(...lobbyStats.map(x => Math.floor(x.st.balance / x.st.slotsLeft)))) : basePrice;
+  const workableBase = lobbyStats.length > 0 ? Math.max(0, Math.min(...lobbyStats.map(x => Math.floor(x.st.balance / x.st.requiredSlots)))) : basePrice;
   // The purse each short team would need at the current base price
   const neededPurses = shortTeams.map(x => x.team.budget + x.st.shortfall);
   const samePurse = neededPurses.every(n => n === neededPurses[0]);
@@ -563,6 +563,7 @@ export default function AuctionPage() {
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight mb-2">{league.name}</h1>
           <p className="text-foreground/40 text-lg">Player Auction · {totalPlayers} players</p>
           {teams.length > 0 && <p className="text-foreground/30 mt-1 text-sm">{teams.length} teams · Budget tracking on</p>}
+          {league.minSquadSize !== null && <p className="text-foreground/50 mt-1 text-sm">Squad: minimum {league.minSquadSize} · maximum {league.maxSquadSize}</p>}
           {teams.length === 0 && <button onClick={() => router.push(`/leagues/${id}/teams`)} className="mt-3 text-sm text-amber-600 dark:text-amber-400/80 underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-300">Set up teams →</button>}
         </div>
 
@@ -605,7 +606,10 @@ export default function AuctionPage() {
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-foreground/45">{fmt(t.budget)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</td>
-                        <td className="px-3 py-2.5 text-center tabular-nums text-foreground/55">{st.bought}/{st.maxPlayers}</td>
+                        <td className="px-3 py-2.5 text-center tabular-nums text-foreground/55">
+                          {st.bought}/{st.maxPlayers}
+                          {st.requiredSlots === 0 && st.slotsLeft > 0 && <span className="block text-[10px] text-green-600 dark:text-green-400">Minimum reached</span>}
+                        </td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-bold text-amber-600 dark:text-amber-300"><MaxBidLabel st={st} /></td>
                       </tr>
                     );
@@ -613,7 +617,7 @@ export default function AuctionPage() {
                 </tbody>
               </table>
             </div>
-            <p className="text-foreground/20 text-[11px] mt-2">Max bid = balance − (remaining slots − 1) × base price · saved with the league and enforced on every sale</p>
+            <p className="text-foreground/40 text-[11px] mt-2">Reserve only for the minimum squad · extra players use the remaining purse up to the maximum · enforced on every sale</p>
           </div>
         )}
 
@@ -624,7 +628,7 @@ export default function AuctionPage() {
                 The auction can’t {hasAuctionData ? 'resume' : 'start'} yet — {shortTeams.length === teams.length ? (teams.length === 1 ? 'the team' : `all ${teams.length} teams`) : `${shortTeams.length} team${shortTeams.length === 1 ? '' : 's'}`} can’t fill {shortTeams.length === 1 ? 'its squad' : 'their squads'} at a base price of {fmt(basePrice)}.
               </p>
               <p className="text-xs text-foreground/60 mt-1">
-                Every open squad slot needs at least the base price. Fix it one of these ways:
+                Every slot needed to reach the minimum needs at least the base price. Fix it one of these ways:
               </p>
               <ul className="mt-2.5 space-y-2 text-sm text-foreground/80">
                 <li className="flex items-center justify-between gap-3 flex-wrap">
@@ -1114,6 +1118,7 @@ function PurseCard({ team, roster, basePrice, onView }: { team: Team; roster: Pl
         <span className="text-foreground/40">Bal <span className="text-green-600 dark:text-green-400 font-semibold">{fmt(st.balance)}</span></span>
         <span className="text-foreground/40">Max <span className={`font-semibold ${full ? 'text-foreground/25' : 'text-amber-600 dark:text-amber-300'}`}><MaxBidLabel st={st} fullLabel="—" /></span></span>
       </div>
+      {st.requiredSlots === 0 && !full && <p className="text-[10px] text-green-600 dark:text-green-400">Minimum reached · extras available</p>}
       <div className="mt-1.5 w-full h-1 rounded-full bg-foreground/10 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: team.colorHex }} />
       </div>

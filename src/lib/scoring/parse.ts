@@ -88,6 +88,17 @@ export function parseLineupPlayer(raw: unknown): LineupPlayer {
   return { id: str(p.id, 'Player id'), name: str(p.name, 'Player name', 80) };
 }
 
+/** Resolves a match selection against its team's registered squad, never a guest. */
+export function teamSquadPlayer(
+  id: string,
+  teamId: string,
+  roster: readonly { id: string; name: string; teamId?: string | null }[]
+): LineupPlayer {
+  const card = roster.find((p) => p.id === id && p.teamId === teamId);
+  if (!card) fail('Match players must come from this team’s existing squad');
+  return { id: card.id, name: card.name };
+}
+
 function parseSide(raw: unknown, label: string): SideSetup {
   const s = obj(raw, label);
   if (!Array.isArray(s.players)) fail(`${label} has no squad`);
@@ -122,6 +133,7 @@ export function parseSetup(raw: unknown): MatchSetup {
   const winnerTeamId = str(toss.winnerTeamId, 'Toss winner');
   if (winnerTeamId !== sides[0].teamId && winnerTeamId !== sides[1].teamId) fail('The toss winner must be one of the two teams');
   return {
+    ...(r.squadOnly === true ? { squadOnly: true } : {}),
     rules: parseRules(r.rules),
     sides,
     toss: { winnerTeamId, decision: oneOf(toss.decision, ['bat', 'bowl'] as const, 'Toss decision') },

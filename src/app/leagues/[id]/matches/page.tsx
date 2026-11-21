@@ -9,6 +9,7 @@ import { formatMatchDay } from '@/lib/fixtures';
 import { calcStandings, formatNrr } from '@/lib/standings';
 import FixturePosterDialog, { type PosterSourceMatch } from '@/components/fixtures/FixturePosterDialog';
 import FixtureGeneratorPanel from './FixtureGeneratorPanel';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import type { LeagueWithPlayers, Match } from '@/lib/types';
 
 const isPlayed = (m: Match) => !!(m.team1Score || m.team2Score || m.winnerTeamId);
@@ -57,6 +58,7 @@ export default function MatchesPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
   const [form, setForm] = useState({ team1Id: '', team2Id: '', team1Score: '', team2Score: '', winnerTeamId: '', matchDate: '' });
 
   const fetchAll = useCallback(async () => {
@@ -104,14 +106,22 @@ export default function MatchesPage() {
   }
 
   async function handleDelete(matchId: string) {
-    const res = await fetch(`/api/leagues/${id}/matches`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ matchId }),
-    });
-    if (!res.ok) { toast.error('Failed to delete'); return; }
-    setMatches(prev => prev.filter(m => m.id !== matchId));
-    toast.success('Match removed');
+    try {
+      const res = await fetch(`/api/leagues/${id}/matches`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || 'Failed to delete match');
+      }
+      setMatches(prev => prev.filter(m => m.id !== matchId));
+      setMatchToDelete(null);
+      toast.success('Match removed');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete match');
+    }
   }
 
   if (loading || !data) {
@@ -181,7 +191,7 @@ export default function MatchesPage() {
         </div>
         {!isCreator && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
         {isCreator && (
-          <button onClick={() => handleDelete(m.id)} title="Delete match"
+          <button onClick={() => setMatchToDelete(m)} title="Delete match" aria-label={`Delete match: ${t1.name} vs ${t2.name}`}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
             <Trash2 className="w-3.5 h-3.5"/>
           </button>
@@ -369,6 +379,17 @@ export default function MatchesPage() {
           </form>
         </div>
       )}
+      <ConfirmDialog
+        open={matchToDelete !== null}
+        title="Delete this match?"
+        description={matchToDelete
+          ? `${teamById[matchToDelete.team1Id]?.name ?? 'Team 1'} vs ${teamById[matchToDelete.team2Id]?.name ?? 'Team 2'} will be deleted, including its scorecard, ball-by-ball history and player statistics. Standings and awards will be recalculated. This cannot be undone.`
+          : undefined}
+        confirmLabel="Delete match"
+        pendingLabel="Deleting…"
+        onConfirm={() => { if (matchToDelete) return handleDelete(matchToDelete.id); }}
+        onClose={() => setMatchToDelete(null)}
+      />
     </div>
   );
 }
