@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPlayers, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages } from '@/lib/store';
+import { getPlayers, updateLeague, setCertificatesReleased, deleteLeague, cleanupImages, AuctionRuleError } from '@/lib/store';
+import { validSquadRange } from '@/lib/auctionRules';
 import { getLeagueView } from '@/lib/leagueView';
 import { requireLeagueManager, requireLeagueCreator } from '@/lib/leagueAuth';
 import { isAdmin } from '@/lib/adminAuth';
@@ -32,11 +33,20 @@ export async function PATCH(
   try {
     const { id } = await params;
     // League settings are shared management — co-organizers may edit them too
-    const { error, status } = await requireLeagueManager(id);
-    if (error) return NextResponse.json({ error }, { status });
+    const { error, status, league } = await requireLeagueManager(id);
+    if (error !== null) return NextResponse.json({ error }, { status });
     const body = await request.json();
     const allowed = ['templateId', 'isPublic', 'joinCode', 'name', 'conductedBy', 'totalPlayers', 'logoUrl', 'registrationClosed', 'idProofRequired', 'paymentProofRequired', 'rosterVisibleToPlayers', 'playersCanDeleteCards'];
     const patch = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)));
+    if ('minSquadSize' in body || 'maxSquadSize' in body) {
+      const min = body.minSquadSize === undefined ? league.minSquadSize : body.minSquadSize;
+      const max = body.maxSquadSize === undefined ? league.maxSquadSize : body.maxSquadSize;
+      if (!validSquadRange(min, max)) {
+        return NextResponse.json({ error: 'Squad sizes must be whole numbers: 11 ≤ minimum ≤ maximum ≤ 100' }, { status: 400 });
+      }
+      patch.minSquadSize = min;
+      patch.maxSquadSize = max;
+    }
     // The auction's base price: whole rupees, or null to switch the reserve
     // rule off. `assignPlayerToTeam` trusts this number, so it is clamped here.
     if ('basePrice' in body) {
@@ -58,6 +68,7 @@ export async function PATCH(
     }
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof AuctionRuleError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error updating league:', error);
     return NextResponse.json({ error: 'Failed to update league' }, { status: 500 });
   }

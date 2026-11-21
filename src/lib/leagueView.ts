@@ -23,7 +23,7 @@ export async function getLeagueView(
   if (!league) return null;
 
   const [players, teams, officials, coOrganizers, ledgerPublished, liveAuction] = await Promise.all([
-    getPlayers(id), getTeams(id), getOfficials(id), getCoOrganizers(id), hasPublishedLedger(id),
+    getPlayers(id), getTeams(id, league), getOfficials(id), getCoOrganizers(id), hasPublishedLedger(id),
     getAuctionLiveSummary(id),
   ]);
   const isCreator = !!userId && userId === league.creatorId;

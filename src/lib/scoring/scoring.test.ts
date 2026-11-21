@@ -23,6 +23,7 @@ import {
   statusText,
   summarizeMatch,
   teamNameLookup,
+  teamSquadPlayer,
   tryReplay,
   type BallEvent,
   type MatchSetup,
@@ -32,6 +33,20 @@ import {
 } from './index';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
+
+test('team-only match selections reject outsiders and use canonical card names', () => {
+  const roster = [
+    { id: 'a', name: 'Asha', teamId: 'A' },
+    { id: 'b', name: 'Ben', teamId: 'B' },
+    { id: 'c', name: 'Chris', teamId: null },
+  ];
+  assert.deepEqual(teamSquadPlayer('a', 'A', roster), { id: 'a', name: 'Asha' });
+  for (const id of ['b', 'c', 'guest:outsider', 'missing']) {
+    assert.throws(() => teamSquadPlayer(id, 'A', roster), ScoringError);
+  }
+  assert.equal(parseSetup({ ...setup(), squadOnly: true }).squadOnly, true);
+  assert.equal(parseSetup(setup()).squadOnly, undefined);
+});
 
 const squad = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix.toUpperCase()}${i + 1}` }));

@@ -93,6 +93,7 @@ export default function ScoreMatchPage() {
             teams={league.teams}
             players={league.players}
             existing={card}
+            squadOnly={league.minSquadSize !== null}
             onSaved={(saved: MatchScorecard) => { setCentre({ ...centre, scorecard: saved }); setEditing(false); }}
           />
         </main>

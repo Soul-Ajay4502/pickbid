@@ -5,7 +5,7 @@ import {
 } from '@/lib/store';
 import { requireLeagueManager } from '@/lib/leagueAuth';
 import {
-  LIMITS, ScoringError, matchRowResult, parseEvents, parseSetup, playerMatchLines, replay, summarizeMatch,
+  LIMITS, ScoringError, matchRowResult, parseEvents, parseSetup, playerMatchLines, replay, summarizeMatch, teamSquadPlayer,
   type MatchSetup, type MatchState,
 } from '@/lib/scoring';
 
@@ -82,7 +82,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     const { id, matchId } = await params;
-    const { error, status, userId } = await requireLeagueManager(id);
+    const { error, status, userId, league } = await requireLeagueManager(id);
     if (error !== null) return NextResponse.json({ error }, { status });
 
     const match = await getMatch(id, matchId);
@@ -99,6 +99,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     // without a card plays as a guest.
     const [players, teams, existing] = await Promise.all([getPlayers(id), getTeams(id), getScorecard(matchId)]);
     const cardName = new Map(players.map((p) => [p.id, p.name]));
+    const squadOnly = league.minSquadSize !== null;
     const sides = parsed.sides.map((side) => {
       const team = teams.find((t) => t.id === side.teamId);
       return {
@@ -106,6 +107,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         name: team?.name ?? side.name,
         color: team?.colorHex ?? side.color,
         players: side.players.map((p) => {
+          if (squadOnly) return teamSquadPlayer(p.id, side.teamId, players);
           if (p.id.startsWith('guest:')) return p;
           const name = cardName.get(p.id);
           if (!name) throw new ScoringError(`${p.name} isn't a player in this league — add them as a guest`);
@@ -113,7 +115,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
         }),
       };
     }) as MatchSetup['sides'];
-    const setup: MatchSetup = { ...parsed, sides };
+    const setup: MatchSetup = { ...parsed, sides, squadOnly };
 
     const baseVersion = Number(body?.baseVersion ?? 0);
     if (existing) {
@@ -167,6 +169,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Invalid keep count' }, { status: 400 });
     }
     const append = parseEvents(body?.append ?? []);
+    if (existing.setup.squadOnly && append.some((e) => e.type === 'add_player')) {
+      const players = await getPlayers(id);
+      for (const event of append) {
+        if (event.type === 'add_player') event.player = teamSquadPlayer(event.player.id, event.teamId, players);
+      }
+    }
     const events = [...existing.events.slice(0, keep), ...append];
     if (events.length > LIMITS.events) throw new ScoringError('This scorecard has too many events');
     if (new Set(events.map((e) => e.id)).size !== events.length) throw new ScoringError('An event appears twice');

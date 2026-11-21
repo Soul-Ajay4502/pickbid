@@ -44,7 +44,11 @@ shared with a single link. It runs in any modern browser with no app install.
   is matched to its player by file name. A card that looks like someone already
   in the league (same phone or name) is flagged before it is added.
 - **Live auctions** — run a real-time auction with team budgets, icon players
-  and bidding, mirrored to a public spectator screen as it happens. The next
+  and bidding, mirrored to a public spectator screen as it happens. Organizers
+  can set league-wide minimum and maximum squad sizes: purse reserves cover only
+  the minimum, and spare purse can buy extra players up to the maximum. These
+  leagues select match players from their own extended team squads, not outsiders.
+  The next
   player is drawn at random, drawn at random from a set the auctioneer picks,
   or chosen by name. After the auction, organizers can still correct a sale
   price or place an unsold player in a team — every such change is kept in a

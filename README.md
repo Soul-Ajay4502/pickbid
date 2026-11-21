@@ -13,7 +13,7 @@ Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of loca
 | Area | What it does |
 | --- | --- |
 | 🎴 **Player cards** | Upload a photo, add stats and ratings, and get gorgeous cards rendered from 12 colour templates. |
-| 🔨 **Live auctions** | Put players under the hammer in a real-time bidding room. Budgets, squads and reserve-per-slot limits update instantly. |
+| 🔨 **Live auctions** | Put players under the hammer in a real-time bidding room. League-wide minimum/maximum squads reserve purse only for the minimum; extra players can be bought up to the maximum. |
 | 📺 **Watch mode** | Broadcast a public link so fans mirror every bid and reveal live — no sign-in required. Optional gavel sound on every sale. |
 | 🏆 **Leaderboard** | Standings that recompute the moment a match result lands. |
 | 🏅 **Badges & streaks** | A private trophy cabinet of bronze, silver and gold badges for playing, getting bought, winning and organizing, plus a weekly streak. |
@@ -83,7 +83,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Production build. |
 | `npm run start` | Serve the production build. |
 | `npm run lint` | Run ESLint. |
-| `npm test` | Fixture and scoring engine unit tests (Node's built-in runner, compiled with `tsc`). |
+| `npm test` | Auction-rule, fixture and scoring engine unit tests (Node's built-in runner, compiled with `tsc`). |
 
 ## Project structure
 
@@ -146,6 +146,27 @@ The ledger (`/leagues/[id]/ledger`) is the one feature gated on league **members
 ### Auth model
 
 Sign-in is Google-only via NextAuth. **Player and upload APIs do not require a session** — anonymous players create cards using a per-card `creatorToken`, so anyone with a league's join link can add their own card. Don't add session gating to those routes.
+
+### Minimum and extended squads
+
+Organizers set **Manage → Squad Limits** once for the whole league: minimum
+11 or more, maximum at least the minimum and at most 100. Existing leagues keep
+their per-team exact sizes until this setting is saved. A clone inherits it.
+The maximum cannot drop below any team's current player count.
+
+For the next purchase, reserve `max(0, minimum − current squad − 1) × basePrice`.
+After reaching the minimum, a team may spend its remaining purse on extra players
+until the maximum. Auction purchases still meet the base-price floor; icons count
+towards the squad and existing price-reduction/free-signing allowances remain.
+
+New match setups in these leagues select available players only from their own
+team's squad. Eleven are selected initially; organizers can change the lineup
+before scoring, leaving other members on the bench. Playing-lineup sizes remain
+under the scoring engine's existing 2–25 limits, independent of auction sizes.
+Late arrivals must also belong to that team. No auction ownership or price is
+changed. Existing scorecards retain their recorded roster policy and history.
+
+Apply `npm run db:migrate` before running the updated app.
 
 ## Deployment
 

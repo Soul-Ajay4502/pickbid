@@ -21,12 +21,12 @@ for where something lives.
 npm run dev            # dev server
 npm run build          # production build — the only real typecheck (tsc has noEmit)
 npm run lint           # eslint
-npm test               # fixture + scoring engine unit tests (node:test, compiled by tsc)
+npm test               # auction rules + fixture + scoring tests (node:test, compiled by tsc)
 npm run db:migrate     # apply sequelize migrations
 npm run db:status      # show migration state
 ```
 
-The only unit tests cover the fixture and scoring engines (`npm test`); verify
+Unit tests cover the auction rules, fixture and scoring engines (`npm test`); verify
 everything else with `npm run build` plus the dev server.
 
 ## Next.js 16 specifics that bite
@@ -109,8 +109,8 @@ post-auction corrections on the team page, so both go through
 when their team actually changes, so a price correction never re-announces a sale.
 
 **The reserve-per-slot rule has one formula and the server is its authority.**
-A squad size is exact, so a team must keep the base price back for every slot
-it still has to fill: `maxBid = balance − (slotsLeft − 1) × basePrice`. That
+A team must keep the base price back for slots needed to reach its minimum:
+`maxBid = balance − max(0, minPlayers − squadSize − 1) × basePrice`. That
 arithmetic lives only in `auctionLimits`
 ([auctionRules.ts](src/lib/auctionRules.ts)) — the auction screen, the `/watch`
 broadcast, the team page's dialogs and `assignPlayerToTeam` all call it, so a
@@ -122,6 +122,22 @@ icon) is exempt, and lowering the price of a player already in the squad always
 passes, so a team that is already short can be corrected. The base-price
 *floor* is enforced only for `source: 'auction'`; the team page keeps its free
 signings.
+
+`leagues.minSquadSize` / `maxSquadSize` are league-wide, set under *Manage →
+Squad Limits* (`11 ≤ minimum ≤ maximum ≤ 100`). Both null preserves each
+legacy team's exact `maxPlayers`. `getTeams` maps effective `minPlayers` and
+`maxPlayers`; callers must not read the raw team's maximum as the shared rule.
+Settings cannot lower maximum below a roster's current size. Signings hold a
+shared league lock before the team's update lock; settings take the league's
+update lock, so concurrent sales cannot cross a new maximum.
+After minimum is reached, remaining purse buys extras until maximum.
+
+New match setups in these leagues carry a server-stamped `setup.squadOnly`.
+The setup and late-arrival APIs validate every new selection against that team's
+cards via `teamSquadPlayer`; no guests or borrowed cards. Existing scorecards
+keep their policy and event history. Match lineups remain independent of auction
+sizes (the scoring engine's 2–25 limit); selecting a bench member changes no
+auction result.
 
 **Every write to an auction result is logged, and the log is append-only.**
 The player PUT and the reset route add a row to `auction_changes` whenever a

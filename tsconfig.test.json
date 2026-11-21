@@ -13,5 +13,5 @@
     "incremental": false,
     "plugins": []
   },
-  "include": ["src/lib/fixtures/**/*.ts", "src/lib/scoring/**/*.ts"]
+  "include": ["src/lib/fixtures/**/*.ts", "src/lib/scoring/**/*.ts", "src/lib/auctionRules*.ts"]
 }

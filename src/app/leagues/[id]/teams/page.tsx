@@ -202,7 +202,7 @@ export default function TeamsPage() {
           name: newName.trim(),
           colorHex: newColor,
           budget: parseInt(newBudget) || 10000000,
-          maxPlayers: parseInt(newMaxPlayers) || 11,
+          ...(data?.maxSquadSize === null ? { maxPlayers: parseInt(newMaxPlayers) || 11 } : {}),
         }),
       });
       if (!res.ok) throw new Error('Failed to add team');
@@ -235,9 +235,9 @@ export default function TeamsPage() {
     if (data?.players.some(p => !p.teamId)) {
       const budget = Number(editBudget), maxPlayers = Number(editMaxPlayers);
       if (!Number.isInteger(budget) || budget < 1) { toast.error('Enter the budget as a whole number'); return; }
-      if (!Number.isInteger(maxPlayers) || maxPlayers < 1 || maxPlayers > 100) { toast.error('Players per team must be between 1 and 100'); return; }
+      if (data.maxSquadSize === null && (!Number.isInteger(maxPlayers) || maxPlayers < 1 || maxPlayers > 100)) { toast.error('Players per team must be between 1 and 100'); return; }
       body.budget = budget;
-      body.maxPlayers = maxPlayers;
+      if (data.maxSquadSize === null) body.maxPlayers = maxPlayers;
     }
     const res = await fetch(`/api/leagues/${id}/teams`, {
       method: 'PATCH',
@@ -354,6 +354,12 @@ export default function TeamsPage() {
       </div>
 
       {/* Teams list */}
+      {data.minSquadSize !== null && (
+        <p className="text-sm text-muted-foreground mb-4">
+          Every team: minimum {data.minSquadSize}, maximum {data.maxSquadSize} players. Purse reserves cover only the minimum.
+          {canEdit && ' Change these under Manage → Squad Limits.'}
+        </p>
+      )}
       <div className="space-y-3 mb-8">
         {teams.length === 0 && (
           <div className="flex flex-col items-center justify-center py-14 gap-4 animate-fade-in-up">
@@ -408,14 +414,14 @@ export default function TeamsPage() {
                             className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
                           />
                         </label>
-                        <label className="w-20 space-y-1">
+                        {data.maxSquadSize === null && <label className="w-20 space-y-1">
                           <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Players</span>
                           <input
                             type="number" min={Math.max(1, tPlayers.length)} max="100" step="1" inputMode="numeric"
                             value={editMaxPlayers} onChange={e => setEditMaxPlayers(e.target.value)}
                             className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
                           />
-                        </label>
+                        </label>}
                       </>
                     )}
                     <button onClick={() => handleSaveEdit(team.id)} title="Save"
@@ -445,6 +451,7 @@ export default function TeamsPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground tabular-nums mr-1">
                         {tPlayers.length}/{team.maxPlayers} players
+                        {tPlayers.length >= team.minPlayers && <span className="block text-green-600 dark:text-green-400">Minimum reached</span>}
                       </span>
                     )}
                     {canEdit && (
@@ -685,7 +692,7 @@ export default function TeamsPage() {
                   className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
-              <div className="space-y-1">
+              {data.maxSquadSize === null && <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Players per Team</label>
                 <input
                   value={newMaxPlayers} onChange={e => setNewMaxPlayers(e.target.value)}
@@ -694,7 +701,7 @@ export default function TeamsPage() {
                   className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <p className="text-[11px] text-muted-foreground/70">Used in the auction to cap squads and work out each team&apos;s max bid</p>
-              </div>
+              </div>}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colour</label>
                 <div className="flex flex-wrap gap-2 pt-1">

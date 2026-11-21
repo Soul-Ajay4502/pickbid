@@ -47,6 +47,8 @@ export async function GET(
       certificatesReleasedAt: league.certificatesReleasedAt,
       rosterVisibleToPlayers: league.rosterVisibleToPlayers,
       playersCanDeleteCards: league.playersCanDeleteCards,
+      minSquadSize: league.minSquadSize,
+      maxSquadSize: league.maxSquadSize,
       isCreator,
       canManage,
       isMember,
