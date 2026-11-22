@@ -1,4 +1,5 @@
 import { nameLookup, oversText, resultText, scoreLine, scoreText, statusText, teamNameLookup } from './format';
+import { aggregateMvp, type MvpRow } from './awards';
 import type { InningsState, MatchResult, MatchState } from './types';
 
 // What a scored match contributes outside its own screen: a compact summary
@@ -225,11 +226,15 @@ export interface LeagueStats {
   batting: BattingRow[];
   bowling: BowlingRow[];
   fielding: FieldingRow[];
+  /** Impact points across the season — see awards.ts. */
+  mvp: MvpRow[];
 }
 
 export interface ScoredMatchLines {
   ballsPerOver: number;
   lines: PlayerMatchLine[];
+  /** The match's cached summary: the scale its impact points are priced on. */
+  summary?: MatchScoreSummary | null;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -333,5 +338,5 @@ export function aggregateLeagueStats(matches: readonly ScoredMatchLines[]): Leag
     .filter((f) => f.dismissals > 0)
     .sort((a, b) => b.dismissals - a.dismissals || b.catches - a.catches);
 
-  return { matches: matches.length, batting, bowling, fielding };
+  return { matches: matches.length, batting, bowling, fielding, mvp: aggregateMvp(matches) };
 }

@@ -42,6 +42,7 @@ export function auctionResultSheets(teams: Team[], players: Player[]): SheetSpec
     summary.push([
       team.name,
       squad.length,
+      team.minPlayers,
       team.maxPlayers,
       Math.max(0, team.maxPlayers - squad.length),
       team.budget,
@@ -70,7 +71,8 @@ export function auctionResultSheets(teams: Team[], players: Player[]): SheetSpec
     {
       name: 'Teams',
       columns: [
-        { header: 'Team', width: 24 }, { header: 'Players', width: 10 }, { header: 'Squad size', width: 12 },
+        { header: 'Team', width: 24 }, { header: 'Players', width: 10 },
+        { header: 'Minimum squad', width: 16 }, { header: 'Maximum squad', width: 16 },
         { header: 'Slots left', width: 11 }, { header: 'Budget (₹)', width: 14 }, { header: 'Spent (₹)', width: 14 },
         { header: 'Purse left (₹)', width: 16 }, { header: 'Average price (₹)', width: 18 }, { header: 'Top buy (₹)', width: 14 },
       ],

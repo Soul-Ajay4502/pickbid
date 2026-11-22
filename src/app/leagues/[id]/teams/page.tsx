@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus, FileSpreadsheet, History } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Users, Wallet, Edit2, Check, X, Shield, FileText, ImageDown, Download, Star, Briefcase, ImagePlus, FileSpreadsheet, History, Eye } from 'lucide-react';
 import { downloadAuctionResults } from '@/lib/auctionExport';
 import AuctionChangeLogDialog from '@/components/league/AuctionChangeLogDialog';
+import SquadPosterDialog from '@/components/league/SquadPosterDialog';
 import { downloadTeamwiseRoster, downloadSquadPosters } from '@/lib/squadPdf';
 import { sanitizeFolder, uploadFile, formatIndianPhone, checkImageFile } from '@/lib/utils';
 import { useLeagueRevision } from '@/components/league/LeagueChrome';
@@ -49,6 +50,7 @@ export default function TeamsPage() {
   const [iconPickerTeam, setIconPickerTeam] = useState<string | null>(null);
   const [iconBusy, setIconBusy] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [posterPreview, setPosterPreview] = useState<{ teamId?: string } | null>(null);
 
   // team officials editor (squad-poster only; never affects the auction)
   const [officialTeam, setOfficialTeam] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export default function TeamsPage() {
 
   async function removeIcon(player: Player) {
     if (iconBusy) return;
+    if (!confirm(`Remove ${player.name} from their team? They will lose icon status and return to the auction pool.`)) return;
     setIconBusy(true);
     try {
       const res = await fetch(`/api/leagues/${id}/players/${player.id}`, {
@@ -135,6 +138,7 @@ export default function TeamsPage() {
 
   async function removeOfficial(official: TeamOfficial) {
     if (oBusy) return;
+    if (!confirm(`Delete ${official.name} from the team officials? Their details and photo will no longer appear on the squad poster. This cannot be undone.`)) return;
     setOBusy(true);
     try {
       const res = await fetch(`/api/leagues/${id}/officials`, {
@@ -202,7 +206,7 @@ export default function TeamsPage() {
           name: newName.trim(),
           colorHex: newColor,
           budget: parseInt(newBudget) || 10000000,
-          maxPlayers: parseInt(newMaxPlayers) || 11,
+          ...(data?.maxSquadSize === null ? { maxPlayers: parseInt(newMaxPlayers) || 11 } : {}),
         }),
       });
       if (!res.ok) throw new Error('Failed to add team');
@@ -235,9 +239,9 @@ export default function TeamsPage() {
     if (data?.players.some(p => !p.teamId)) {
       const budget = Number(editBudget), maxPlayers = Number(editMaxPlayers);
       if (!Number.isInteger(budget) || budget < 1) { toast.error('Enter the budget as a whole number'); return; }
-      if (!Number.isInteger(maxPlayers) || maxPlayers < 1 || maxPlayers > 100) { toast.error('Players per team must be between 1 and 100'); return; }
+      if (data.maxSquadSize === null && (!Number.isInteger(maxPlayers) || maxPlayers < 1 || maxPlayers > 100)) { toast.error('Players per team must be between 1 and 100'); return; }
       body.budget = budget;
-      body.maxPlayers = maxPlayers;
+      if (data.maxSquadSize === null) body.maxPlayers = maxPlayers;
     }
     const res = await fetch(`/api/leagues/${id}/teams`, {
       method: 'PATCH',
@@ -333,6 +337,9 @@ export default function TeamsPage() {
                   : <ImageDown className="w-3.5 h-3.5" />}
                 Squad Posters
               </button>
+              <button onClick={() => setPosterPreview({})} disabled={!!exporting} className="toolbar-btn">
+                <Eye className="w-3.5 h-3.5" />Preview Posters
+              </button>
               <button
                 onClick={() => {
                   try {
@@ -354,6 +361,12 @@ export default function TeamsPage() {
       </div>
 
       {/* Teams list */}
+      {data.minSquadSize !== null && (
+        <p className="text-sm text-muted-foreground mb-4">
+          Every team: minimum {data.minSquadSize}, maximum {data.maxSquadSize} players. Purse reserves cover only the minimum.
+          {canEdit && ' Change these under Manage → Squad Limits.'}
+        </p>
+      )}
       <div className="space-y-3 mb-8">
         {teams.length === 0 && (
           <div className="flex flex-col items-center justify-center py-14 gap-4 animate-fade-in-up">
@@ -408,14 +421,14 @@ export default function TeamsPage() {
                             className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
                           />
                         </label>
-                        <label className="w-20 space-y-1">
+                        {data.maxSquadSize === null && <label className="w-20 space-y-1">
                           <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Players</span>
                           <input
                             type="number" min={Math.max(1, tPlayers.length)} max="100" step="1" inputMode="numeric"
                             value={editMaxPlayers} onChange={e => setEditMaxPlayers(e.target.value)}
                             className="w-full h-8 px-2 rounded-lg border border-border bg-background text-sm tabular-nums"
                           />
-                        </label>
+                        </label>}
                       </>
                     )}
                     <button onClick={() => handleSaveEdit(team.id)} title="Save"
@@ -445,6 +458,7 @@ export default function TeamsPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground tabular-nums mr-1">
                         {tPlayers.length}/{team.maxPlayers} players
+                        {tPlayers.length >= team.minPlayers && <span className="block text-green-600 dark:text-green-400">Minimum reached</span>}
                       </span>
                     )}
                     {canEdit && (
@@ -467,6 +481,11 @@ export default function TeamsPage() {
                         <Briefcase className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    <button onClick={() => setPosterPreview({ teamId: team.id })} disabled={!!exporting}
+                      title={`Preview ${team.name} squad poster`}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     <button onClick={() => handleExport('posters', team.id)} disabled={!!exporting}
                       title={`Download ${team.name} squad poster`}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
@@ -685,7 +704,7 @@ export default function TeamsPage() {
                   className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
-              <div className="space-y-1">
+              {data.maxSquadSize === null && <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Players per Team</label>
                 <input
                   value={newMaxPlayers} onChange={e => setNewMaxPlayers(e.target.value)}
@@ -694,7 +713,7 @@ export default function TeamsPage() {
                   className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <p className="text-[11px] text-muted-foreground/70">Used in the auction to cap squads and work out each team&apos;s max bid</p>
-              </div>
+              </div>}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colour</label>
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -732,6 +751,16 @@ export default function TeamsPage() {
         </div>
       )}
 
+      {posterPreview && (
+        <SquadPosterDialog
+          league={data}
+          teams={teams}
+          players={data.players}
+          officials={data.officials}
+          teamId={posterPreview.teamId}
+          onClose={() => setPosterPreview(null)}
+        />
+      )}
       {canEdit && <AuctionChangeLogDialog leagueId={id} open={logOpen} onClose={() => setLogOpen(false)} />}
     </div>
   );

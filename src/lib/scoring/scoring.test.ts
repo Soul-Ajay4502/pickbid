@@ -8,6 +8,9 @@ import {
   bowlerOptions,
   commentary,
   dismissalText,
+  impactContext,
+  matchAwards,
+  matchImpact,
   matchRowResult,
   nameLookup,
   nextBatterOptions,
@@ -20,6 +23,7 @@ import {
   statusText,
   summarizeMatch,
   teamNameLookup,
+  teamSquadPlayer,
   tryReplay,
   type BallEvent,
   type MatchSetup,
@@ -29,6 +33,20 @@ import {
 } from './index';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
+
+test('team-only match selections reject outsiders and use canonical card names', () => {
+  const roster = [
+    { id: 'a', name: 'Asha', teamId: 'A' },
+    { id: 'b', name: 'Ben', teamId: 'B' },
+    { id: 'c', name: 'Chris', teamId: null },
+  ];
+  assert.deepEqual(teamSquadPlayer('a', 'A', roster), { id: 'a', name: 'Asha' });
+  for (const id of ['b', 'c', 'guest:outsider', 'missing']) {
+    assert.throws(() => teamSquadPlayer(id, 'A', roster), ScoringError);
+  }
+  assert.equal(parseSetup({ ...setup(), squadOnly: true }).squadOnly, true);
+  assert.equal(parseSetup(setup()).squadOnly, undefined);
+});
 
 const squad = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, name: `${prefix.toUpperCase()}${i + 1}` }));
@@ -552,6 +570,73 @@ describe('summaries and stats', () => {
     const b1 = stats.bowling.find((b) => b.id === 'b1')!;
     assert.deepEqual([b1.wickets, b1.overs, b1.economy, b1.best], [2, '2', 4, { wickets: 1, runs: 4 }]);
     assert.equal(stats.fielding[0].id, 'b3');
+  });
+
+  // Aces 17/1 (a1 17 off 10), Bulls 14/1 chasing: Aces win by 3 runs.
+  const awardsMatch = (): ScoringEvent[] => [
+    ...innings(['a1', 'a2'], ['b1', 'b2'],
+      [six(), six(), four(), ball(1), ball(0), out({ kind: 'bowled', outId: 'a2', nextBatterId: 'a3' })], dots(6)),
+    ...innings(['b1', 'b2'], ['a1', 'a2'],
+      [four(), four(), four(), out({ kind: 'caught', outId: 'b1', fielderId: 'a3', nextBatterId: 'b3' }), ...dots(2)],
+      [ball(1), ball(1), ...dots(4)]),
+  ];
+
+  test('match awards come from impact points, and the fighter from the beaten side', () => {
+    const s = replay(setup(), awardsMatch());
+    assert.equal(s.phase, 'completed');
+    const lines = playerMatchLines(s);
+    const awards = matchAwards(lines, summarizeMatch(s))!;
+    assert.deepEqual(
+      [awards.playerOfMatch?.id, awards.bestBatter?.id, awards.bestBowler?.id, awards.bestFielder?.id, awards.fighter?.id],
+      ['a1', 'a1', 'b2', 'a3', 'b1'],
+    );
+    assert.equal(awards.playerOfMatch!.picked, false);
+    assert.equal(awards.playerOfMatch!.detail, '17* (10) · 1/12 (1)');
+    assert.equal(awards.bestBowler!.detail, '0/0 (1)');
+    assert.equal(awards.bestFielder!.detail, '1 ct');
+    // Total is the three disciplines added up, and nobody goes below zero
+    for (const p of matchImpact(lines, summarizeMatch(s))) {
+      assert.ok(p.batting >= 0 && p.bowling >= 0 && p.fielding >= 0);
+      assert.ok(Math.abs(p.total - (p.batting + p.bowling + p.fielding)) < 0.11);
+    }
+  });
+
+  test('a hand-picked player of the match stands, and the fighter is someone else', () => {
+    const s = replay(setup(), [...awardsMatch(), { id: id(), at: 0, type: 'potm', playerId: 'b1' }]);
+    const awards = matchAwards(playerMatchLines(s), summarizeMatch(s))!;
+    assert.deepEqual([awards.playerOfMatch?.id, awards.playerOfMatch?.picked], ['b1', true]);
+    assert.equal(awards.fighter?.id, 'b2');
+    assert.equal(awards.bestBatter?.id, 'a1');
+  });
+
+  test('no awards until the match is over', () => {
+    const live = replay(setup(), awardsMatch().slice(0, -1));
+    assert.equal(matchAwards(playerMatchLines(live), summarizeMatch(live)), null);
+    const off = replay(setup(), [{ id: id(), at: 0, type: 'end_match', result: 'abandoned' }]);
+    assert.equal(matchAwards(playerMatchLines(off), summarizeMatch(off)), null);
+  });
+
+  test('the same innings is worth more in a lower-scoring match', () => {
+    const s = replay(setup(), awardsMatch());
+    const lines = playerMatchLines(s);
+    const sum = summarizeMatch(s);
+    const highScoring = { ...sum, innings: sum.innings.map((i) => ({ ...i, runs: i.runs * 2 })) };
+    const a1 = (m: typeof sum) => matchImpact(lines, m).find((p) => p.id === 'a1')!.batting;
+    assert.ok(a1(sum) > a1(highScoring));
+    assert.ok(impactContext(highScoring)!.wicketValue >= impactContext(sum)!.wicketValue);
+  });
+
+  test('the league MVP table adds up every match', () => {
+    const s = replay(setup(), awardsMatch());
+    const one = { ballsPerOver: 6, lines: playerMatchLines(s), summary: summarizeMatch(s) };
+    const single = matchImpact(one.lines, one.summary).find((p) => p.id === 'a1')!;
+    const { mvp } = aggregateLeagueStats([one, one, { ballsPerOver: 6, lines: one.lines }]);
+    assert.equal(mvp[0].id, 'a1');
+    // The third match has no summary to price it on, so it isn't counted
+    assert.deepEqual([mvp[0].matches, mvp[0].playerOfMatch, mvp[0].bestBatter, mvp[0].fighter], [2, 2, 2, 0]);
+    assert.equal(mvp[0].points, Math.round(single.total * 2 * 10) / 10);
+    assert.equal(mvp.find((r) => r.id === 'b1')!.fighter, 2);
+    assert.ok(mvp.every((r, i) => i === 0 || r.points <= mvp[i - 1].points));
   });
 
   test('next-batter options leave out who is in or out', () => {

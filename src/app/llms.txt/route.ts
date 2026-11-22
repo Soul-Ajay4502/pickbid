@@ -44,7 +44,11 @@ shared with a single link. It runs in any modern browser with no app install.
   is matched to its player by file name. A card that looks like someone already
   in the league (same phone or name) is flagged before it is added.
 - **Live auctions** — run a real-time auction with team budgets, icon players
-  and bidding, mirrored to a public spectator screen as it happens. The next
+  and bidding, mirrored to a public spectator screen as it happens. Organizers
+  can set league-wide minimum and maximum squad sizes: purse reserves cover only
+  the minimum, and spare purse can buy extra players up to the maximum. These
+  leagues select match players from their own extended team squads, not outsiders.
+  The next
   player is drawn at random, drawn at random from a set the auctioneer picks,
   or chosen by name. After the auction, organizers can still correct a sale
   price or place an unsold player in a team — every such change is kept in a
@@ -57,7 +61,11 @@ shared with a single link. It runs in any modern browser with no app install.
   across every public league on the platform, ranked by the share of the team's
   purse a player took so leagues of any budget size compare fairly.
 - **Teams, squads and officials** — manage rosters, budgets and team officials,
-  and export a PDF squad sheet to share on WhatsApp in one tap.
+  and export a PDF squad sheet or photo poster to share on WhatsApp in one tap.
+  Preview squad posters inside the app without downloading, browse between
+  teams, and optionally download the displayed poster as a PDF. Squad posters
+  preserve regional-language team and player names. Deleting
+  matches or officials, or removing icon players, requires confirmation.
 - **Matches and results** — generate a fixture list for the league's teams: a
   full round robin (single or home-and-away), a set number of matches per team,
   a total number of matches, or custom per-team ranges, with optional rest
@@ -72,7 +80,11 @@ shared with a single link. It runs in any modern browser with no app install.
   follow a public match centre with the live score, full scorecard,
   ball-by-ball commentary and over-by-over summary. Results feed the points
   table with net run rate, and the league gets batting, bowling and fielding
-  leaderboards (orange and purple caps).
+  leaderboards (orange and purple caps). Every finished match names a player
+  of the match, best batter, best bowler, best fielder and a fighter of the
+  match (the best performer from the side that didn't win), all from impact
+  points that price each run, wicket and catch against that match's own
+  scoring rate; the same points add up to a season MVP table.
 - **League ledger** — an optional income and expense sheet for organizers.
 - **Identity and payment proof** — players can add a photo of an ID to their
   profile once, and attach an entry-fee receipt when they register. Organizers
@@ -94,7 +106,9 @@ shared with a single link. It runs in any modern browser with no app install.
 - **Auction Wrapped** — a shareable end-of-auction recap, plus holographic
   pack-opening squad reveals and a sponsor marquee display board.
 - **One-link sharing** — every league gets a link; make it public to list it in
-  the discover directory or let people join with a code.
+  the discover directory or let people join with a code. Organizers can also
+  share a registration form that players fill in without an account: photo,
+  playing style and phone, plus the entry-fee receipt if the league asks for one.
 - Full feature list: ${SITE_URL}/features
 
 ## Who it is for
@@ -135,8 +149,8 @@ cards without spreadsheets, WhatsApp threads or paper chits.
   real-money betting product. Auctions use league budgets, not real currency.
 - Organizer pages (creating leagues, running an auction, analytics) require
   sign-in and are excluded from crawling; public league pages, watch mode,
-  match centres (live scores and scorecards) and the recap are shareable
-  without an account.
+  match centres (live scores and scorecards), the recap and a league's player
+  registration form are shareable without an account.
 
 ## Optional
 

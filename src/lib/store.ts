@@ -5,7 +5,7 @@ import { UserModel, LeagueModel, PlayerModel, TeamModel, MatchModel, MatchScorec
 import { calcStandings } from './standings';
 import { EARLY_ADOPTER_CUTOFF } from './badges';
 import { playerNameKey, localPhoneDigits, formatINR } from './utils';
-import { auctionLimits, reserveRuleMessage } from './auctionRules';
+import { auctionLimits, reserveRuleMessage, squadLimits, validSquadRange } from './auctionRules';
 import { LIVE_AUCTION_TTL_MS } from './types';
 import type { MatchScoreSummary, MatchSetup, PlayerMatchLine, ScoredMatchLines, ScoringEvent } from './scoring';
 import type { AuctionChange, MatchScorecard, MatchCentre, BadgeTier, EarnedBadge, StoredRewardMetrics, IdProofType, PlayerDocuments, LeagueUserCandidate, League, Player, Team, Match, UserProfile, TeamOfficial, LiveAuctionState, LiveAuctionSummary, TopBid, PlatformStats, Sponsor, CoOrganizer, LeagueLedger, LeagueCertificate, PublicLeagueView, PublicPlayer, PublicTeam, PublicMatch, PublicStanding, AdminOverview, AdminLeagueRow, AdminUserRow, AdminTrendPoint } from './types';
@@ -31,6 +31,8 @@ function toLeague(row: LeagueModel): League {
     rosterVisibleToPlayers: row.rosterVisibleToPlayers ?? true,
     playersCanDeleteCards: row.playersCanDeleteCards ?? true,
     basePrice:    row.basePrice ?? null,
+    minSquadSize: row.minSquadSize ?? null,
+    maxSquadSize: row.maxSquadSize ?? null,
     createdAt:    row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -62,14 +64,14 @@ function toPlayer(row: PlayerModel): Player {
   };
 }
 
-function toTeam(row: TeamModel): Team {
+function toTeam(row: TeamModel, league: Pick<League, 'minSquadSize' | 'maxSquadSize'>): Team {
   return {
     id:         row.id,
     leagueId:   row.leagueId!,
     name:       row.name,
     colorHex:   row.colorHex ?? '#22c55e',
     budget:     row.budget ?? 10000000,
-    maxPlayers: row.maxPlayers ?? 11,
+    ...squadLimits(row.maxPlayers ?? 11, league),
     createdAt:  row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
@@ -165,7 +167,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
 
   const [players, teams, officials, matches, sponsors, liveAuction] = await Promise.all([
     getPlayers(id),
-    getTeams(id),
+    getTeams(id, league),
     getOfficials(id),
     getMatches(id),
     getSponsors(id),
@@ -206,6 +208,7 @@ export async function getPublicLeagueView(id: string): Promise<PublicLeagueView 
       name:       team.name,
       colorHex:   team.colorHex,
       budget:     team.budget,
+      minPlayers: team.minPlayers,
       maxPlayers: team.maxPlayers,
       spent:      squad.reduce((sum, p) => sum + (p.soldPrice ?? 0), 0),
       players:    squad
@@ -331,6 +334,26 @@ export async function updateLeague(
   id: string,
   data: Partial<Omit<League, 'id' | 'creatorId' | 'createdAt' | 'certificatesReleasedAt'>>
 ): Promise<League | null> {
+  if (data.minSquadSize !== undefined || data.maxSquadSize !== undefined) {
+    return sequelize.transaction(async (transaction) => {
+      const row = await LeagueModel.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!row) return null;
+      const min = data.minSquadSize ?? row.minSquadSize;
+      const max = data.maxSquadSize ?? row.maxSquadSize;
+      if (typeof max !== 'number' || !validSquadRange(min, max)) throw new AuctionRuleError('Squad sizes must be whole numbers: 11 ≤ minimum ≤ maximum ≤ 100');
+      const [overfull] = await sequelize.query<{ name: string; count: number }>(
+        `SELECT t.name, count(p.id)::int AS count
+           FROM teams t JOIN players p ON p.team_id = t.id
+          WHERE t.league_id = :id
+          GROUP BY t.id HAVING count(p.id) > :max LIMIT 1`,
+        { replacements: { id, max }, type: QueryTypes.SELECT, transaction },
+      );
+      if (overfull) throw new AuctionRuleError(`${overfull.name} already has ${overfull.count} players — maximum cannot be lower`);
+      if (data.isPublic && !row.joinCode) data.joinCode = generateJoinCode();
+      await row.update(data, { transaction });
+      return toLeague(row);
+    });
+  }
   const row = await LeagueModel.findByPk(id);
   if (!row) return null;
   // Auto-generate joinCode when making public if not already set
@@ -420,6 +443,8 @@ export async function cloneLeague(
         // Same teams, same purses, same base price — the new season's auction
         // runs under the rule the last one did
         basePrice: source.basePrice ?? null,
+        minSquadSize: source.minSquadSize ?? null,
+        maxSquadSize: source.maxSquadSize ?? null,
       },
       { transaction: t }
     );
@@ -690,12 +715,19 @@ export async function searchUserCandidatesForLeague(
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
-export async function getTeams(leagueId: string): Promise<Team[]> {
-  const rows = await TeamModel.findAll({ where: { leagueId }, order: [['createdAt', 'ASC']] });
-  return rows.map(toTeam);
+export async function getTeams(
+  leagueId: string,
+  limits?: Pick<League, 'minSquadSize' | 'maxSquadSize'>
+): Promise<Team[]> {
+  const [rows, league] = await Promise.all([
+    TeamModel.findAll({ where: { leagueId }, order: [['createdAt', 'ASC']] }),
+    limits ?? getLeague(leagueId),
+  ]);
+  if (!league) return [];
+  return rows.map((row) => toTeam(row, league));
 }
 
-export async function createTeam(data: Omit<Team, 'id' | 'createdAt'>): Promise<Team> {
+export async function createTeam(data: Omit<Team, 'id' | 'createdAt' | 'minPlayers'>): Promise<Team> {
   const row = await TeamModel.create({
     id:         uuidv4(),
     leagueId:   data.leagueId,
@@ -704,14 +736,18 @@ export async function createTeam(data: Omit<Team, 'id' | 'createdAt'>): Promise<
     budget:     data.budget,
     maxPlayers: data.maxPlayers,
   });
-  return toTeam(row);
+  const league = await getLeague(data.leagueId);
+  if (!league) throw new Error('League not found');
+  return toTeam(row, league);
 }
 
-export async function updateTeam(id: string, data: Partial<Omit<Team, 'id' | 'leagueId' | 'createdAt'>>): Promise<Team | null> {
+export async function updateTeam(id: string, data: Partial<Omit<Team, 'id' | 'leagueId' | 'createdAt' | 'minPlayers'>>): Promise<Team | null> {
   const row = await TeamModel.findByPk(id);
   if (!row) return null;
   await row.update(data);
-  return toTeam(row);
+  const league = await getLeague(row.leagueId!);
+  if (!league) throw new Error('League not found');
+  return toTeam(row, league);
 }
 
 export async function deleteTeam(id: string): Promise<boolean> {
@@ -1256,6 +1292,10 @@ export async function assignPlayerToTeam(
   return sequelize.transaction(async (t) => {
     const row = await PlayerModel.findByPk(playerId, { transaction: t });
     if (!row) return null;
+    // Settings and signings take this lock in the same order, so a concurrent
+    // sale cannot exceed a freshly lowered league maximum.
+    const league = await LeagueModel.findByPk(row.leagueId!, { transaction: t, lock: t.LOCK.SHARE });
+    if (!league) throw new AuctionRuleError('League not found');
     const team = await TeamModel.findOne({
       where: { id: teamId, leagueId: row.leagueId! },
       transaction: t,
@@ -1268,12 +1308,12 @@ export async function assignPlayerToTeam(
       attributes: ['soldPrice'],
       transaction: t,
     });
-    if (squad.length >= (team.maxPlayers ?? 11)) {
+    const bounds = squadLimits(team.maxPlayers ?? 11, league);
+    if (squad.length >= bounds.maxPlayers) {
       throw new AuctionRuleError(`${team.name} squad is already full`);
     }
     if (soldPrice != null) {
-      const league = await LeagueModel.findByPk(row.leagueId!, { attributes: ['basePrice'], transaction: t });
-      const basePrice = Math.max(0, league?.basePrice ?? 0);
+      const basePrice = Math.max(0, league.basePrice ?? 0);
       if (options.enforceBasePrice && soldPrice < basePrice) {
         throw new AuctionRuleError(`Below the base price of ${formatINR(basePrice)}`);
       }
@@ -1283,7 +1323,7 @@ export async function assignPlayerToTeam(
       }
       const limits = auctionLimits({
         budget: team.budget, spent, squadSize: squad.length,
-        maxPlayers: team.maxPlayers ?? 11, basePrice,
+        ...bounds, basePrice,
       });
       const isReduction = row.teamId === teamId && soldPrice <= (row.soldPrice ?? 0);
       if (soldPrice > limits.maxBid && !isReduction) {
@@ -1788,6 +1828,7 @@ export async function getLeagueScoredLines(leagueId: string): Promise<ScoredMatc
     .map((r) => ({
       ballsPerOver: (r.summary as MatchScoreSummary | null)?.ballsPerOver ?? 6,
       lines: r.playerLines as PlayerMatchLine[],
+      summary: (r.summary as MatchScoreSummary | null) ?? null,
     }));
 }
 
@@ -2156,7 +2197,7 @@ export async function getRewardMetrics(
      owned AS (
        SELECT l.id, l.total_players, l.is_public, l.logo_url, l.id_proof_required,
               l.payment_proof_required, l.certificates_released_at, l.registration_closed,
-              l.pick_preference, l.template_id, l.created_at,
+              l.pick_preference, l.template_id, l.created_at, l.min_squad_size,
               (SELECT count(*) FROM players p WHERE p.league_id = l.id) AS registered
          FROM leagues l
         WHERE l.creator_id = :userId
@@ -2323,7 +2364,7 @@ export async function getRewardMetrics(
          WHERE (SELECT count(*) FROM teams t WHERE t.league_id = o.id) >= 2
            AND NOT EXISTS (SELECT 1 FROM teams t
                             WHERE t.league_id = o.id
-                              AND (SELECT count(*) FROM players p WHERE p.team_id = t.id) < t.max_players))::int AS "fullStrengths",
+                              AND (SELECT count(*) FROM players p WHERE p.team_id = t.id) < coalesce(o.min_squad_size, t.max_players)))::int AS "fullStrengths",
        (SELECT count(*) FROM matches m JOIN owned o ON o.id = m.league_id
          WHERE m.match_date IS NOT NULL)::int AS "fixturesScheduled",
        (SELECT count(*)

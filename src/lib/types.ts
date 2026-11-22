@@ -96,10 +96,13 @@ export interface League {
    * The auction's base price per player, or null while no organizer has set
    * one. Drives the reserve-per-slot rule in `auctionLimits`
    * (`src/lib/auctionRules.ts`): a team must keep this much back for every
-   * squad slot it still has to fill. Stored on the league — not in the
+   * squad slot needed to reach the minimum. Stored on the league — not in the
    * auctioneer's browser — so every screen and the server agree on it.
    */
   basePrice: number | null;
+  /** League-wide auction limits. Both null preserves legacy per-team sizes. */
+  minSquadSize: number | null;
+  maxSquadSize: number | null;
   createdAt: string;
 }
 
@@ -154,7 +157,9 @@ export interface Team {
   name: string;
   colorHex: string;
   budget: number;
-  /** Squad size — how many players this team can buy in the auction */
+  /** Effective minimum: league setting, or the legacy exact squad size. */
+  minPlayers: number;
+  /** Effective maximum: league setting, or the legacy team limit. */
   maxPlayers: number;
   createdAt: string;
 }
@@ -471,6 +476,8 @@ export interface LeagueNavSummary {
   certificatesReleasedAt: string | null;
   rosterVisibleToPlayers: boolean;
   playersCanDeleteCards: boolean;
+  minSquadSize: number | null;
+  maxSquadSize: number | null;
   /** Strictly the true creator — never the platform owner. Gates Delete and Co-Organizers. */
   isCreator: boolean;
   /** Creator, co-organizer or platform owner. Gates the whole Manage group. */
@@ -563,6 +570,7 @@ export interface PublicTeam {
   name: string;
   colorHex: string;
   budget: number;
+  minPlayers: number;
   maxPlayers: number;
   spent: number;
   players: PublicPlayer[];
@@ -692,6 +700,8 @@ export interface LivePurse {
   budget: number | null;
   spent: number;
   count: number;
+  /** Optional for live snapshots written before minimum/maximum support. */
+  minPlayers?: number;
   maxPlayers: number | null;
   /** Highest bid this team can still place under the reserve-per-slot rule */
   maxBid: number | null;

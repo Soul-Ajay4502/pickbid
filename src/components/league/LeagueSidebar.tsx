@@ -18,6 +18,7 @@ import ImportPlayersModal from '@/components/league/ImportPlayersModal';
 import BulkPhotoUploadModal from '@/components/league/BulkPhotoUploadModal';
 import TemplateSelector from '@/components/TemplateSelector';
 import type { LeagueNavSummary } from '@/lib/types';
+import { validSquadRange } from '@/lib/auctionRules';
 
 /** One navigation destination in the rail. */
 interface NavLink {
@@ -71,6 +72,10 @@ export default function LeagueSidebar({
   const [importOpen, setImportOpen] = useState(false);
   const [bulkPhotosOpen, setBulkPhotosOpen] = useState(false);
   const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
+  const [squadOpen, setSquadOpen] = useState(false);
+  const [squadMin, setSquadMin] = useState('11');
+  const [squadMax, setSquadMax] = useState('15');
+  const [squadSaving, setSquadSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -152,14 +157,35 @@ export default function LeagueSidebar({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error('Request failed');
-    return res.json();
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error ?? 'Request failed');
+    return result;
   }
 
   /** Any action that changed the league: re-read the rail *and* the page. */
   function changed() {
     refresh();
     notifyChanged();
+  }
+
+  async function saveSquadLimits(e: React.FormEvent) {
+    e.preventDefault();
+    const minSquadSize = Number(squadMin), maxSquadSize = Number(squadMax);
+    if (!validSquadRange(minSquadSize, maxSquadSize)) {
+      toast.error('Squad sizes must be whole numbers: 11 ≤ minimum ≤ maximum ≤ 100');
+      return;
+    }
+    setSquadSaving(true);
+    try {
+      await patchLeague({ minSquadSize, maxSquadSize });
+      toast.success('Squad limits updated for every team');
+      changed();
+      setSquadOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save squad limits');
+    } finally {
+      setSquadSaving(false);
+    }
   }
 
   async function handleTemplateChange(templateId: string) {
@@ -307,6 +333,17 @@ export default function LeagueSidebar({
                 <button onClick={() => setTemplateOpen(true)} className="rail-link">
                   <Palette className="w-4 h-4 shrink-0" />Card Template
                 </button>
+                <button
+                  onClick={() => {
+                    setSquadMin(String(nav.minSquadSize ?? 11));
+                    setSquadMax(String(nav.maxSquadSize ?? 15));
+                    setSquadOpen(true);
+                  }}
+                  title="Minimum squad for purse reserves; maximum for extended squads"
+                  className="rail-link"
+                >
+                  <Users className="w-4 h-4 shrink-0" />Squad Limits
+                </button>
 
                 <button
                   onClick={() => setPlayerAccessOpen(true)}
@@ -383,6 +420,42 @@ export default function LeagueSidebar({
           </div>
         )}
       </nav>
+
+      <Dialog open={squadOpen} onOpenChange={(open) => { if (!squadSaving) setSquadOpen(open); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>League Squad Limits</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Applies to every team. Reserve money only to reach the minimum; buy extra players up to the maximum with the remaining purse.
+          </p>
+          {nav.minSquadSize === null && (
+            <p className="text-xs text-muted-foreground">
+              Until you save, each team keeps its existing exact squad size. Saving also restricts new match setups to that team&apos;s own players.
+            </p>
+          )}
+          <form onSubmit={saveSquadLimits} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold">Minimum players</span>
+                <input type="number" min="11" max="100" step="1" required value={squadMin}
+                  onChange={(e) => setSquadMin(e.target.value)} disabled={squadSaving}
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold">Maximum players</span>
+                <input type="number" min={Math.max(11, Number(squadMin) || 11)} max="100" step="1" required value={squadMax}
+                  onChange={(e) => setSquadMax(e.target.value)} disabled={squadSaving}
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm" />
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Maximum cannot be lower than any team&apos;s current squad. Match lineups are selected separately; auction signings and prices stay unchanged.
+            </p>
+            <button type="submit" disabled={squadSaving} className="btn-premium w-full h-10 rounded-xl text-sm font-semibold disabled:opacity-50">
+              {squadSaving ? 'Saving…' : 'Save for every team'}
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Card template. A dialog rather than the inline panel it replaces — the
           rail is on every screen, and only the league page had room below its

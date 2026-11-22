@@ -18,14 +18,15 @@ const TONE: Record<ReturnType<typeof ballTone>, string> = {
   run: 'bg-card text-foreground border-border',
 };
 
-export function BallChip({ ball, size = 'md' }: { ball: BallRecord; size?: 'sm' | 'md' }) {
+export function BallChip({ ball, size = 'md', className }: { ball: BallRecord; size?: 'sm' | 'md' | 'lg'; className?: string }) {
   const label = ballChip(ball);
   return (
     <span
       className={cn(
         'inline-flex items-center justify-center rounded-full border font-bold tabular-nums shrink-0',
-        size === 'sm' ? 'h-6 min-w-6 px-1.5 text-[10px]' : 'h-8 min-w-8 px-2 text-xs',
+        size === 'sm' ? 'h-6 min-w-6 px-1.5 text-[10px]' : size === 'lg' ? 'h-9 min-w-9 px-2 text-[13px]' : 'h-8 min-w-8 px-2 text-xs',
         TONE[ballTone(ball)],
+        className,
       )}
       title={ball.label}
     >

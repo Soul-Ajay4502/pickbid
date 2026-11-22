@@ -21,12 +21,12 @@ for where something lives.
 npm run dev            # dev server
 npm run build          # production build — the only real typecheck (tsc has noEmit)
 npm run lint           # eslint
-npm test               # fixture + scoring engine unit tests (node:test, compiled by tsc)
+npm test               # auction rules + PDF text + fixture + scoring tests (node:test, compiled by tsc)
 npm run db:migrate     # apply sequelize migrations
 npm run db:status      # show migration state
 ```
 
-The only unit tests cover the fixture and scoring engines (`npm test`); verify
+Unit tests cover auction rules, PDF text fitting, fixtures and scoring (`npm test`); verify
 everything else with `npm run build` plus the dev server.
 
 ## Next.js 16 specifics that bite
@@ -109,8 +109,8 @@ post-auction corrections on the team page, so both go through
 when their team actually changes, so a price correction never re-announces a sale.
 
 **The reserve-per-slot rule has one formula and the server is its authority.**
-A squad size is exact, so a team must keep the base price back for every slot
-it still has to fill: `maxBid = balance − (slotsLeft − 1) × basePrice`. That
+A team must keep the base price back for slots needed to reach its minimum:
+`maxBid = balance − max(0, minPlayers − squadSize − 1) × basePrice`. That
 arithmetic lives only in `auctionLimits`
 ([auctionRules.ts](src/lib/auctionRules.ts)) — the auction screen, the `/watch`
 broadcast, the team page's dialogs and `assignPlayerToTeam` all call it, so a
@@ -122,6 +122,22 @@ icon) is exempt, and lowering the price of a player already in the squad always
 passes, so a team that is already short can be corrected. The base-price
 *floor* is enforced only for `source: 'auction'`; the team page keeps its free
 signings.
+
+`leagues.minSquadSize` / `maxSquadSize` are league-wide, set under *Manage →
+Squad Limits* (`11 ≤ minimum ≤ maximum ≤ 100`). Both null preserves each
+legacy team's exact `maxPlayers`. `getTeams` maps effective `minPlayers` and
+`maxPlayers`; callers must not read the raw team's maximum as the shared rule.
+Settings cannot lower maximum below a roster's current size. Signings hold a
+shared league lock before the team's update lock; settings take the league's
+update lock, so concurrent sales cannot cross a new maximum.
+After minimum is reached, remaining purse buys extras until maximum.
+
+New match setups in these leagues carry a server-stamped `setup.squadOnly`.
+The setup and late-arrival APIs validate every new selection against that team's
+cards via `teamSquadPlayer`; no guests or borrowed cards. Existing scorecards
+keep their policy and event history. Match lineups remain independent of auction
+sizes (the scoring engine's 2–25 limit); selecting a bench member changes no
+auction result.
 
 **Every write to an auction result is logged, and the log is append-only.**
 The player PUT and the reset route add a row to `auction_changes` whenever a
@@ -191,6 +207,15 @@ requirements whoever they are; without it, it is the organizer's blank
 add-someone-else form, exempt exactly like the API. Don't collapse those two
 modes back onto `canManage` — organizers play in their own leagues, so "can
 manage this league" is a different question from "whose card is this".
+
+The third way in is the no-account form at
+[leagues/[id]/register](src/app/leagues/[id]/register/page.tsx), public in
+`proxy.ts` and offered only in the organizers' share menu. It posts as an
+anonymous player, so it carries the entry-fee receipt when the league asks for
+one — but it can never satisfy an identity-proof requirement, which lives on an
+account, so for those leagues the page shows a sign-in screen pointing at
+`players/new?self=1` instead of the form. The page is a server component that
+reads only the league's own scalars; don't hand it the league GET's roster.
 
 **`contactNumber` is organizer-only.** The players GET handler strips it for
 everyone who can't manage the league — the platform owner included in "can
@@ -280,7 +305,9 @@ panel's top edge, so it no longer needs to clear the nav bar.
 list of screens that run with no chrome — auction, watch, wrapped, sponsors,
 squad reveal, and the ball-by-ball scorer. `NavBar` and `LeagueChrome` both read it so they can't disagree,
 and `LeagueChrome` returns early on a match: that is what keeps the rail's fetch
-off `/watch`, which a whole hall loads at once.
+off `/watch`, which a whole hall loads at once. `isStandaloneLeaguePath` is
+the smaller list of screens that keep `NavBar` but drop the rail, for visitors
+who aren't in the league yet — today only the public registration form.
 
 **Badges are derived lazily, never awarded from write paths.**
 `evaluateRewards` ([rewards.ts](src/lib/rewards.ts)) recomputes a user's
@@ -353,6 +380,21 @@ match with a score as played, so a live score must never reach the row.
 Scorecard stats are separate from the self-reported `players.stats*` career
 numbers on a card — don't overwrite those from scorecards.
 
+**Match awards and the league MVP table are derived, never stored, and have one
+formula.** [awards.ts](src/lib/scoring/awards.ts) prices everything a player
+does in *impact points* — runs of that match: batting is runs plus half the
+runs above the match's scoring rate, bowling is wickets (each a sixth of a full
+innings at that rate) plus runs saved, fielding is a share of a wicket, and
+each discipline floors at zero. `matchAwards` names the player of the match,
+best batter, bowler and fielder, and the *fighter* — the top total from the
+side that didn't win — and `aggregateMvp` adds the same points up for
+`/stats`. Both are pure functions of the cached `player_lines` and `summary`,
+which is why there is no awards column and no backfill: don't add one, and
+don't let the result weight the points — the winner only breaks exact ties and
+decides which side the fighter comes from. The scorer's `potm` event still
+overrides the player of the match by hand. Change a weight in `awards.ts` and
+the explainer on the stats page together.
+
 The score GET is public and edge-cached exactly like the auction board
 (`CDN-Cache-Control: s-maxage=1`, no `stale-while-revalidate`), because a
 ground full of phones polls it; the match centre polls with the default cache
@@ -363,8 +405,9 @@ Scorecards carry names and card ids only; keep anything organizer-only out of
 
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
-`/sponsors`, match centres (`/leagues/[id]/matches/[matchId]`, not its
-`/score` console) and the OG image routes are public today. The proxy is
+`/sponsors`, `/register` (the no-account registration form), match centres
+(`/leagues/[id]/matches/[matchId]`, not its `/score` console) and the OG image
+routes are public today. The proxy is
 defence-in-depth for navigation only — real enforcement lives in the API
 handlers via `auth()`.
 

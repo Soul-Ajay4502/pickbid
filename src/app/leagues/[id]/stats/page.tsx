@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, BarChart3, Crown } from 'lucide-react';
-import type { BattingRow, BowlingRow, FieldingRow, LeagueStats } from '@/lib/scoring';
+import type { BattingRow, BowlingRow, FieldingRow, LeagueStats, MvpRow } from '@/lib/scoring';
 import type { LeagueNavSummary } from '@/lib/types';
 import { cloudinaryImage, cn } from '@/lib/utils';
 import { useLeagueRevision } from '@/components/league/LeagueChrome';
@@ -15,7 +15,14 @@ interface StatsPayload extends LeagueStats {
   photos: Record<string, string>;
 }
 
-type Board = 'batting' | 'bowling' | 'fielding';
+type Board = 'mvp' | 'batting' | 'bowling' | 'fielding';
+
+const BOARDS: { id: Board; label: string }[] = [
+  { id: 'mvp', label: 'MVP' },
+  { id: 'batting', label: 'Batting' },
+  { id: 'bowling', label: 'Bowling' },
+  { id: 'fielding', label: 'Fielding' },
+];
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
@@ -56,7 +63,7 @@ export default function LeagueStatsPage() {
   const router = useRouter();
   const revision = useLeagueRevision();
   const [data, setData] = useState<StatsPayload | null>(null);
-  const [board, setBoard] = useState<Board>('batting');
+  const [board, setBoard] = useState<Board>('mvp');
 
   useEffect(() => {
     let active = true;
@@ -68,7 +75,8 @@ export default function LeagueStatsPage() {
       // Open on public leagues, organizers-only on private ones — as the leaderboard
       if (!nav.canManage && !nav.isPublic) { router.push(`/leagues/${id}`); return; }
       const stats = (await sr.json()) as StatsPayload;
-      if (active) setData(stats);
+      // `mvp` is absent from a response the edge cached before the board existed
+      if (active) setData({ ...stats, mvp: stats.mvp ?? [] });
     })().catch(() => { /* leave the skeleton; the rail still works */ });
     return () => { active = false; };
   }, [id, router, revision]);
@@ -77,13 +85,14 @@ export default function LeagueStatsPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-10 space-y-3">
         <div className="h-8 w-56 bg-muted rounded-lg shimmer" />
-        <div className="grid sm:grid-cols-3 gap-3">{[1, 2, 3].map((n) => <div key={n} className="h-24 rounded-2xl bg-muted shimmer" />)}</div>
+        <div className="grid sm:grid-cols-2 gap-3">{[1, 2, 3, 4].map((n) => <div key={n} className="h-24 rounded-2xl bg-muted shimmer" />)}</div>
         {[1, 2, 3, 4, 5].map((n) => <div key={n} className="h-12 rounded-xl bg-muted shimmer" />)}
       </div>
     );
   }
 
   const team = (teamId: string) => data.teams.find((t) => t.id === teamId) ?? { id: teamId, name: '—', colorHex: '#64748b' };
+  const topMvp: MvpRow | undefined = data.mvp[0];
   const topBat: BattingRow | undefined = data.batting[0];
   const topBowl: BowlingRow | undefined = data.bowling[0];
   const topField: FieldingRow | undefined = data.fielding[0];
@@ -110,7 +119,12 @@ export default function LeagueStatsPage() {
         </div>
       ) : (
         <>
-          <div className="grid sm:grid-cols-3 gap-3 mb-6">
+          <div className="grid sm:grid-cols-2 gap-3 mb-6">
+            {topMvp && (
+              <CapCard title="Most valuable player" accent="border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-300"
+                name={topMvp.name} teamName={team(topMvp.teamId).name} color={team(topMvp.teamId).colorHex} photo={data.photos[topMvp.id]}
+                value={String(topMvp.points)} detail={`${topMvp.matches} match${topMvp.matches === 1 ? '' : 'es'} · ${topMvp.playerOfMatch} POTM`} />
+            )}
             {topBat && (
               <CapCard title="Orange cap" accent="border-orange-500/40 bg-orange-500/5 text-orange-700 dark:text-orange-300"
                 name={topBat.name} teamName={team(topBat.teamId).name} color={team(topBat.teamId).colorHex} photo={data.photos[topBat.id]}
@@ -129,14 +143,36 @@ export default function LeagueStatsPage() {
           </div>
 
           <nav className="flex gap-1 rounded-xl border border-border bg-card p-1 mb-4" aria-label="Stats boards">
-            {(['batting', 'bowling', 'fielding'] as const).map((b) => (
-              <button key={b} type="button" onClick={() => setBoard(b)} aria-current={board === b ? 'page' : undefined}
-                className={cn('flex-1 h-9 rounded-lg text-sm font-semibold capitalize transition-colors',
-                  board === b ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
-                {b}
+            {BOARDS.map((b) => (
+              <button key={b.id} type="button" onClick={() => setBoard(b.id)} aria-current={board === b.id ? 'page' : undefined}
+                className={cn('flex-1 h-9 rounded-lg text-sm font-semibold transition-colors',
+                  board === b.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                {b.label}
               </button>
             ))}
           </nav>
+
+          {board === 'mvp' && (
+            <details className="rounded-2xl border border-border bg-card px-4 py-3 mb-4 text-sm">
+              <summary className="cursor-pointer font-semibold select-none">How impact points work</summary>
+              <div className="mt-2 space-y-2 text-muted-foreground leading-relaxed">
+                <p>
+                  One point is one run, and everything is priced against the match it happened in — so a quick 30 in a
+                  low-scoring game counts for more than the same 30 in a run-fest, and short and long matches sit on one scale.
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><strong className="text-foreground">Batting</strong> — runs scored, plus half of the runs made above (or minus half of those below) the match&apos;s scoring rate for the balls faced.</li>
+                  <li><strong className="text-foreground">Bowling</strong> — each wicket is worth a sixth of a full innings at the match&apos;s scoring rate, plus every run saved against that rate for the balls bowled.</li>
+                  <li><strong className="text-foreground">Fielding</strong> — a catch earns 40% of a wicket, a stumping 50%, a run out 60%.</li>
+                </ul>
+                <p>
+                  A bad day in one discipline scores zero there — it never takes away from the others. Winning adds nothing:
+                  in each match the top total is the Player of the Match, and the top total from the side that didn&apos;t win
+                  is the Fighter of the Match.
+                </p>
+              </div>
+            </details>
+          )}
 
           <div className="rounded-2xl border border-border bg-card overflow-x-auto">
             <table className="w-full text-sm">
@@ -144,12 +180,27 @@ export default function LeagueStatsPage() {
                 <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="py-2.5 pl-4 pr-2 text-left font-semibold w-8">#</th>
                   <th className="py-2.5 px-2 text-left font-semibold">Player</th>
+                  {board === 'mvp' && ['Mat', 'Bat', 'Bowl', 'Field', 'POTM', 'Fighter', 'Per match', 'Points'].map((h) => <th key={h} className="py-2.5 px-2 last:pr-4 text-right font-semibold whitespace-nowrap">{h}</th>)}
                   {board === 'batting' && ['Inns', 'Runs', 'HS', 'Avg', 'SR', '4s', '6s', '50s'].map((h) => <th key={h} className="py-2.5 px-2 text-right font-semibold">{h}</th>)}
                   {board === 'bowling' && ['Inns', 'Overs', 'Wkts', 'Runs', 'Best', 'Econ', 'Avg', 'Mdns'].map((h) => <th key={h} className="py-2.5 px-2 text-right font-semibold">{h}</th>)}
                   {board === 'fielding' && ['Catches', 'Run outs', 'Stumpings', 'Total'].map((h) => <th key={h} className="py-2.5 px-2 text-right font-semibold">{h}</th>)}
                 </tr>
               </thead>
               <tbody>
+                {board === 'mvp' && data.mvp.map((r, i) => (
+                  <tr key={r.id} className="border-b border-border/50 last:border-0">
+                    <td className="py-2.5 pl-4 pr-2 tabular-nums text-muted-foreground">{i + 1}</td>
+                    <td className="py-2.5 px-2"><PlayerCell name={r.name} team={team(r.teamId)} photo={data.photos[r.id]} /></td>
+                    <td className="py-2.5 px-2 text-right tabular-nums text-muted-foreground">{r.matches}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{r.batting}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{r.bowling}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums">{r.fielding}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums text-muted-foreground">{r.playerOfMatch || '—'}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums text-muted-foreground">{r.fighter || '—'}</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums text-muted-foreground">{r.perMatch}</td>
+                    <td className="py-2.5 px-2 pr-4 text-right tabular-nums font-black">{r.points}</td>
+                  </tr>
+                ))}
                 {board === 'batting' && data.batting.map((r, i) => (
                   <tr key={r.id} className="border-b border-border/50 last:border-0">
                     <td className="py-2.5 pl-4 pr-2 tabular-nums text-muted-foreground">{i + 1}</td>
@@ -190,7 +241,7 @@ export default function LeagueStatsPage() {
                 ))}
               </tbody>
             </table>
-            {((board === 'batting' && data.batting.length === 0) || (board === 'bowling' && data.bowling.length === 0) || (board === 'fielding' && data.fielding.length === 0)) && (
+            {((board === 'mvp' && data.mvp.length === 0) || (board === 'batting' && data.batting.length === 0) || (board === 'bowling' && data.bowling.length === 0) || (board === 'fielding' && data.fielding.length === 0)) && (
               <p className="py-8 text-center text-sm text-muted-foreground">Nothing here yet.</p>
             )}
           </div>
