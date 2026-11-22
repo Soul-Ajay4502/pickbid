@@ -15,25 +15,29 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const { error, status } = await requireLeagueManager(id);
-  if (error) return NextResponse.json({ error }, { status });
+  try {
+    const { id } = await params;
+    const { error, status, league } = await requireLeagueManager(id);
+    if (error !== null) return NextResponse.json({ error }, { status });
+    const { name, colorHex, budget, maxPlayers } = await request.json();
+    if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
+    const squadSize = maxPlayers === undefined ? 11 : Number(maxPlayers);
+    if (!Number.isInteger(squadSize) || squadSize < 1 || squadSize > 100) {
+      return NextResponse.json({ error: 'maxPlayers must be a whole number between 1 and 100' }, { status: 400 });
+    }
 
-  const { name, colorHex, budget, maxPlayers } = await request.json();
-  if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-  const squadSize = parseInt(maxPlayers, 10);
-  if (maxPlayers !== undefined && (isNaN(squadSize) || squadSize < 1 || squadSize > 100)) {
-    return NextResponse.json({ error: 'maxPlayers must be between 1 and 100' }, { status: 400 });
+    const team = await createTeam({
+      leagueId: id,
+      name,
+      colorHex: colorHex ?? '#22c55e',
+      budget: budget ?? 10000000,
+      maxPlayers: league.maxSquadSize ?? squadSize,
+    });
+    return NextResponse.json(team, { status: 201 });
+  } catch (error) {
+    console.error('Error creating team:', error);
+    return NextResponse.json({ error: 'Failed to create team' }, { status: 500 });
   }
-
-  const team = await createTeam({
-    leagueId: id,
-    name,
-    colorHex: colorHex ?? '#22c55e',
-    budget: budget ?? 10000000,
-    maxPlayers: isNaN(squadSize) ? 11 : squadSize,
-  });
-  return NextResponse.json(team, { status: 201 });
 }
 
 export async function PATCH(
@@ -41,8 +45,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error, status } = await requireLeagueManager(id);
-  if (error) return NextResponse.json({ error }, { status });
+  const { error, status, league } = await requireLeagueManager(id);
+  if (error !== null) return NextResponse.json({ error }, { status });
 
   try {
     const { teamId, name, colorHex, budget, maxPlayers } = await request.json();
@@ -76,6 +80,9 @@ export async function PATCH(
       patch.budget = next;
     }
     if (maxPlayers !== undefined && Number(maxPlayers) !== current.maxPlayers) {
+      if (league.maxSquadSize !== null) {
+        return NextResponse.json({ error: 'Squad limits are shared — edit Manage → Squad Limits instead' }, { status: 409 });
+      }
       const next = Number(maxPlayers);
       if (!Number.isInteger(next) || next < 1 || next > 100) {
         return NextResponse.json({ error: 'Players per team must be between 1 and 100' }, { status: 400 });

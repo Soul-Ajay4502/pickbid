@@ -227,6 +227,7 @@ export default function TeamDetailPage() {
             <Users className="w-3.5 h-3.5" /><span className="text-[10.5px] font-semibold uppercase tracking-wide">Squad</span>
           </div>
           <p className="text-2xl font-black tabular-nums leading-none">{squad.length}<span className="text-muted-foreground/50 text-lg">/{team.maxPlayers}</span></p>
+          {team.minPlayers < team.maxPlayers && <p className="text-xs text-muted-foreground mt-2">Minimum {team.minPlayers}{squad.length >= team.minPlayers ? ' · reached' : ''}</p>}
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center gap-1.5 mb-2 text-muted-foreground">
@@ -301,7 +302,7 @@ export default function TeamDetailPage() {
           {data.canManage && (
             <button onClick={openAdd} disabled={teamless.length === 0 || squadFull} className="toolbar-btn disabled:opacity-50 disabled:cursor-not-allowed"
               title={squadFull
-                ? `Squad is full (${team.maxPlayers}) — raise the squad size on the Teams page first`
+                ? `Squad is full (${team.maxPlayers}) — raise the ${data.maxSquadSize !== null ? 'league maximum under Manage → Squad Limits' : 'squad size on the Teams page'} first`
                 : teamless.length === 0
                   ? 'Every player in the league is already in a team'
                   : 'Place an unsold or unassigned player in this team'}>
@@ -417,7 +418,7 @@ export default function TeamDetailPage() {
             // the squad without this player, and a price cut always allowed
             const limits = auctionLimits({
               budget: team.budget, spent: others, squadSize: squad.length - 1,
-              maxPlayers: team.maxPlayers, basePrice: data.basePrice,
+              minPlayers: team.minPlayers, maxPlayers: team.maxPlayers, basePrice: data.basePrice,
             });
             const overReserve = price !== null && !overPurse && price > limits.maxBid && price > (editPlayer.soldPrice ?? 0);
             const over = overPurse || overReserve;
@@ -472,7 +473,7 @@ export default function TeamDetailPage() {
             const overPurse = price !== null && spent + price > team.budget;
             const limits = auctionLimits({
               budget: team.budget, spent, squadSize: squad.length,
-              maxPlayers: team.maxPlayers, basePrice: data.basePrice,
+              minPlayers: team.minPlayers, maxPlayers: team.maxPlayers, basePrice: data.basePrice,
             });
             const overReserve = price !== null && !overPurse && price > limits.maxBid;
             const over = overPurse || overReserve;

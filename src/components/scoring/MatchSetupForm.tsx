@@ -31,22 +31,25 @@ function lastRules(leagueId: string): ScoringRules {
   return DEFAULT_RULES;
 }
 
-function draftFor(team: Team, players: Player[], existing: MatchSetup['sides'][number] | null): SideDraft {
+function draftFor(team: Team, players: Player[], existing: MatchSetup['sides'][number] | null, squadOnly: boolean): SideDraft {
   if (existing) {
+    const ownIds = new Set(players.filter((p) => p.teamId === team.id).map((p) => p.id));
+    const cardIds = existing.players.filter((p) => !p.id.startsWith('guest:') && (!squadOnly || ownIds.has(p.id))).map((p) => p.id);
     return {
-      cardIds: existing.players.filter((p) => !p.id.startsWith('guest:')).map((p) => p.id),
-      guests: existing.players.filter((p) => p.id.startsWith('guest:')),
-      captainId: existing.captainId,
-      keeperId: existing.keeperId,
+      cardIds,
+      guests: squadOnly ? [] : existing.players.filter((p) => p.id.startsWith('guest:')),
+      captainId: !squadOnly || cardIds.includes(existing.captainId ?? '') ? existing.captainId : null,
+      keeperId: !squadOnly || cardIds.includes(existing.keeperId ?? '') ? existing.keeperId : null,
     };
   }
   const squad = players.filter((p) => p.teamId === team.id);
   const icons = squad.filter((p) => p.isIcon);
+  const selected = squadOnly ? squad.slice(0, 11) : squad;
   return {
-    cardIds: squad.map((p) => p.id),
+    cardIds: selected.map((p) => p.id),
     guests: [],
-    captainId: icons.length === 1 ? icons[0].id : null,
-    keeperId: squad.find((p) => p.isWicketKeeper)?.id ?? null,
+    captainId: icons.length === 1 && selected.some((p) => p.id === icons[0].id) ? icons[0].id : null,
+    keeperId: selected.find((p) => p.isWicketKeeper)?.id ?? null,
   };
 }
 
@@ -100,7 +103,7 @@ function Section({ icon: Icon, title, subtitle, children }: { icon: typeof Users
 }
 
 function SquadPicker({
-  team, draft, onChange, roster, borrowable,
+  team, draft, onChange, roster, borrowable, squadOnly,
 }: {
   team: Team;
   draft: SideDraft;
@@ -108,6 +111,7 @@ function SquadPicker({
   roster: Player[];
   /** League players on neither squad — borrowed or unsold. */
   borrowable: Player[];
+  squadOnly: boolean;
 }) {
   const [guestName, setGuestName] = useState('');
   const chosen = new Set(draft.cardIds);
@@ -186,7 +190,12 @@ function SquadPicker({
         ))}
       </ul>
 
-      <div className="grid sm:grid-cols-2 gap-2">
+      {squadOnly && (
+        <p className="text-xs text-muted-foreground">
+          Select available players from this team. Unselected squad members stay on the bench; change the lineup before scoring starts.
+        </p>
+      )}
+      {!squadOnly && <div className="grid sm:grid-cols-2 gap-2">
         {borrowable.length > 0 && (
           <select
             value=""
@@ -207,7 +216,7 @@ function SquadPicker({
             <UserPlus className="w-4 h-4" />Add
           </button>
         </div>
-      </div>
+      </div>}
 
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
@@ -232,13 +241,14 @@ function SquadPicker({
 }
 
 export default function MatchSetupForm({
-  leagueId, match, teams, players, existing, onSaved,
+  leagueId, match, teams, players, existing, onSaved, squadOnly = false,
 }: {
   leagueId: string;
   match: Pick<Match, 'id' | 'team1Id' | 'team2Id'>;
   teams: Team[];
   players: Player[];
   existing: MatchScorecard | null;
+  squadOnly?: boolean;
   onSaved: (card: MatchScorecard) => void;
 }) {
   const team1 = teams.find((t) => t.id === match.team1Id);
@@ -247,7 +257,7 @@ export default function MatchSetupForm({
   const [quotaTouched, setQuotaTouched] = useState(!!existing);
   const [sides, setSides] = useState<[SideDraft, SideDraft] | null>(() =>
     team1 && team2
-      ? [draftFor(team1, players, existing?.setup.sides[0] ?? null), draftFor(team2, players, existing?.setup.sides[1] ?? null)]
+      ? [draftFor(team1, players, existing?.setup.sides[0] ?? null, squadOnly), draftFor(team2, players, existing?.setup.sides[1] ?? null, squadOnly)]
       : null,
   );
   const [tossWinner, setTossWinner] = useState<string>(existing?.setup.toss.winnerTeamId ?? '');
@@ -257,12 +267,12 @@ export default function MatchSetupForm({
   const borrowable = useMemo(() => {
     if (!sides) return [[], []] as [Player[], Player[]];
     const taken = new Set([...sides[0].cardIds, ...sides[1].cardIds]);
-    const pool = players.filter((p) => !taken.has(p.id));
+    const pool = players.filter((p) => !squadOnly && !taken.has(p.id));
     return [
       pool.filter((p) => p.teamId !== match.team1Id),
       pool.filter((p) => p.teamId !== match.team2Id),
     ] as [Player[], Player[]];
-  }, [players, sides, match.team1Id, match.team2Id]);
+  }, [players, sides, match.team1Id, match.team2Id, squadOnly]);
 
   if (!team1 || !team2 || !sides) {
     return <p className="text-sm text-muted-foreground">One of this match&apos;s teams no longer exists.</p>;
@@ -282,6 +292,7 @@ export default function MatchSetupForm({
     setSaving(true);
     const quota = rules.maxOversPerBowler === null ? null : Math.min(rules.maxOversPerBowler, rules.overs);
     const setup: MatchSetup = {
+      squadOnly,
       rules: { ...rules, maxOversPerBowler: quota },
       sides: [
         { teamId: team1.id, name: team1.name, color: team1.colorHex, players: lineup(sides[0]), captainId: sides[0].captainId, keeperId: sides[0].keeperId },
@@ -354,6 +365,7 @@ export default function MatchSetupForm({
             onChange={(d) => setSides((s) => (s ? (i === 0 ? [d, s[1]] : [s[0], d]) : s))}
             roster={players.filter((p) => p.teamId === team.id)}
             borrowable={borrowable[i]}
+            squadOnly={squadOnly}
           />
         </Section>
       ))}
