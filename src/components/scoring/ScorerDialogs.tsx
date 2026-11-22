@@ -1,16 +1,17 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { UserPlus } from 'lucide-react';
+import { ArrowLeftRight, UserPlus } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
-  DISMISSAL_LABELS, SUB_FIELDER, allowedDismissals, ballChip as ballLabel, bowlerOptions, currentInnings, economy, nextBatterOptions,
-  matchImpact, oversText, playerMatchLines, strikeRate, strikerOnly, summarizeMatch, upcomingInnings,
-  type CreaseDismissal, type DeliveryDismissal, type Extra, type LineupPlayer, type MatchState, type ScoringEvent,
+  DISMISSAL_LABELS, LIMITS, SUB_FIELDER, allowedDismissals, bowlerOptions, creditsBowler, currentInnings, dismissalText, economy,
+  nameLookup, nextBatterOptions, matchImpact, oversText, playerMatchLines, strikeRate, strikerOnly, summarizeMatch, upcomingInnings,
+  type CreaseDismissal, type DeliveryDismissal, type DismissalKind, type Extra, type LineupPlayer, type MatchState, type ScoringEvent,
 } from '@/lib/scoring';
 import type { Player } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { eventId } from './useScorecardSync';
+import { BallChip, TeamDot } from './ScorecardParts';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** An event before it gets its id and timestamp. */
@@ -19,17 +20,41 @@ export type Draft = DistributiveOmit<ScoringEvent, 'id' | 'at'>;
 export type Send = (d: Draft) => string | null;
 /** Checks a draft against the engine without recording it. */
 export type Preview = (d: Draft) => string | null;
+/** Where the runs off a no-ball came from. */
+export type NbRunsAs = 'bat' | 'bye' | 'legbye';
+
+const EXTRA_SHORT: Record<Extra, string> = { wd: 'Wd', nb: 'Nb', b: 'B', lb: 'Lb' };
+
+/** The over-strip chip a delivery would leave — the same text `ballChip` draws once it's recorded. */
+export function draftChip(runs: number, extra: Extra | null): string {
+  if (!extra) return String(runs);
+  if (extra === 'wd' || extra === 'nb') return runs > 0 ? `${EXTRA_SHORT[extra]}+${runs}` : EXTRA_SHORT[extra];
+  return `${runs}${EXTRA_SHORT[extra]}`;
+}
 
 // ── Building blocks ──────────────────────────────────────────────────────────
 
+/**
+ * Every scorer dialog. A sheet that rises from the bottom edge on a phone —
+ * where the scorer's thumb already is — and a centred dialog from `sm` up.
+ */
 export function Sheet({ open, onClose, title, description, children, wide }: {
   open: boolean; onClose: () => void; title: string; description?: string; children: ReactNode; wide?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className={cn('max-h-[90dvh] overflow-y-auto', wide ? 'sm:max-w-lg' : 'sm:max-w-md')}>
-        <DialogTitle className="text-base font-bold">{title}</DialogTitle>
-        {description && <DialogDescription className="-mt-2">{description}</DialogDescription>}
+      <DialogContent className={cn(
+        'max-h-[88dvh] overflow-y-auto overscroll-contain gap-4 p-5',
+        'top-auto bottom-0 left-0 translate-x-0 translate-y-0 w-full max-w-full rounded-3xl rounded-b-none',
+        'pb-[max(1.25rem,env(safe-area-inset-bottom))] data-open:slide-in-from-bottom-8 data-closed:slide-out-to-bottom-8',
+        'sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-5',
+        wide ? 'sm:max-w-lg' : 'sm:max-w-md',
+      )}>
+        <span aria-hidden className="sm:hidden mx-auto -mt-2 -mb-1 h-1 w-10 rounded-full bg-muted-foreground/25" />
+        <div className="space-y-1 pr-8">
+          <DialogTitle className="text-lg font-black tracking-tight">{title}</DialogTitle>
+          {description && <DialogDescription className="text-[13px] leading-snug">{description}</DialogDescription>}
+        </div>
         {children}
       </DialogContent>
     </Dialog>
@@ -47,9 +72,11 @@ export function Choice({ active, onClick, children, className, disabled, tone = 
       disabled={disabled}
       aria-pressed={active}
       className={cn(
-        'min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+        'min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed',
         active
-          ? tone === 'danger' ? 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400' : 'border-primary bg-primary/10 text-primary'
+          ? tone === 'danger'
+            ? 'border-red-500 bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/30'
+            : 'border-primary bg-primary/10 text-primary ring-1 ring-primary/30'
           : 'border-border bg-card hover:bg-muted',
         className,
       )}
@@ -60,19 +87,23 @@ export function Choice({ active, onClick, children, className, disabled, tone = 
 }
 
 function Label({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{children}</p>;
+  return <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{children}</p>;
 }
 
 function Problem({ text }: { text: string | null }) {
   if (!text) return null;
-  return <p className="text-xs text-amber-600 dark:text-amber-400 text-center">{text}</p>;
+  return (
+    <p role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200 text-center">
+      {text}
+    </p>
+  );
 }
 
 function Submit({ onClick, disabled, children, tone = 'default' }: { onClick: () => void; disabled?: boolean; children: ReactNode; tone?: 'default' | 'danger' }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={cn('w-full h-12 rounded-xl font-bold text-white disabled:opacity-40',
-        tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'btn-premium')}>
+      className={cn('w-full h-12 rounded-2xl font-bold text-white disabled:opacity-40 touch-manipulation',
+        tone === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-[0_10px_22px_-12px_rgb(220_38_38)]' : 'btn-premium')}>
       {children}
     </button>
   );
@@ -80,14 +111,58 @@ function Submit({ onClick, disabled, children, tone = 'default' }: { onClick: ()
 
 function Stepper({ value, onChange, min, max }: { value: number; onChange: (v: number) => void; min: number; max: number }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5 rounded-2xl border border-border bg-muted/40 p-1">
       <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}
-        className="w-11 h-11 rounded-xl border border-border bg-card text-xl disabled:opacity-40" aria-label="Less">−</button>
-      <span className="w-12 text-center text-2xl font-black tabular-nums">{value}</span>
+        className="w-10 h-10 rounded-xl bg-card border border-border text-xl disabled:opacity-40" aria-label="Less">−</button>
+      <span className="w-10 text-center text-2xl font-black tabular-nums">{value}</span>
       <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}
-        className="w-11 h-11 rounded-xl border border-border bg-card text-xl disabled:opacity-40" aria-label="More">+</button>
+        className="w-10 h-10 rounded-xl bg-card border border-border text-xl disabled:opacity-40" aria-label="More">+</button>
     </div>
   );
+}
+
+/** Segmented choice of where the runs off a no-ball came from. */
+function NbAsPicker({ value, onChange }: { value: NbRunsAs; onChange: (v: NbRunsAs) => void }) {
+  const options: { id: NbRunsAs; label: string }[] = [{ id: 'bat', label: 'Off the bat' }, { id: 'bye', label: 'Byes' }, { id: 'legbye', label: 'Leg byes' }];
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-muted/40 p-1" role="group" aria-label="Runs off the no-ball came">
+      {options.map((o) => (
+        <button key={o.id} type="button" onClick={() => onChange(o.id)} aria-pressed={value === o.id}
+          className={cn('h-9 rounded-xl text-xs font-semibold transition-colors',
+            value === o.id ? 'bg-card text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground')}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A tappable player for the pickers: name, an optional line under it, an optional corner badge. */
+function PlayerTile({ name, sub, badge, active, disabled, onClick, tone = 'primary' }: {
+  name: string; sub?: ReactNode; badge?: ReactNode; active?: boolean; disabled?: boolean; onClick: () => void;
+  tone?: 'primary' | 'danger';
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={active}
+      className={cn(
+        'relative w-full h-full min-h-12 rounded-xl border px-3 py-2 text-left transition-colors touch-manipulation',
+        'disabled:opacity-45 disabled:cursor-not-allowed',
+        active
+          ? tone === 'danger' ? 'border-red-500 bg-red-500/10 ring-1 ring-red-500/30' : 'border-primary bg-primary/10 ring-1 ring-primary/30'
+          : 'border-border bg-card hover:bg-muted/60 disabled:hover:bg-card',
+      )}>
+      <span className={cn('block text-sm font-semibold truncate', badge !== undefined && 'pr-6',
+        active && (tone === 'danger' ? 'text-red-700 dark:text-red-300' : 'text-primary'))}>{name}</span>
+      {sub && <span className="block mt-0.5 text-[11px] leading-tight text-muted-foreground truncate tabular-nums">{sub}</span>}
+      {badge !== undefined && badge !== null && <span className="absolute top-2 right-2">{badge}</span>}
+    </button>
+  );
+}
+
+/** "(c)" and "†" after a name, the way scorecards mark captains and keepers. */
+function marks(state: MatchState, teamId: string, playerId: string): string {
+  const side = state.setup.sides.find((s) => s.teamId === teamId);
+  return `${side?.captainId === playerId ? ' (c)' : ''}${side?.keeperId === playerId ? ' †' : ''}`;
 }
 
 function PlayerSelect({ label, value, onChange, players, placeholder = 'Choose…', exclude = [] }: {
@@ -190,6 +265,15 @@ export function QuickAddPlayer({ state, teamId, players, send, onAdded }: {
 
 // ── Start of an innings ──────────────────────────────────────────────────────
 
+function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return <section className={cn('rounded-3xl border border-border bg-card p-4 sm:p-5', className)}>{children}</section>;
+}
+
+/**
+ * Openers and the opening bowler, picked by tapping names rather than from
+ * drop-downs: the first batter tapped takes strike, the second the other end.
+ * The start button rides the bottom edge so a long squad never hides it.
+ */
 export function StartInningsPanel({ state, players, send }: { state: MatchState; players: Player[]; send: Send }) {
   const next = upcomingInnings(state);
   const [striker, setStriker] = useState<string | null>(null);
@@ -201,146 +285,206 @@ export function StartInningsPanel({ state, players, send }: { state: MatchState;
   const bowling = state.squads[next.bowlingTeamId] ?? [];
   const side = (id: string) => state.setup.sides.find((s) => s.teamId === id);
   const ordinal = next.superOver ? 'Super Over' : next.index === 0 ? '1st innings' : '2nd innings';
+  const nameOf = nameLookup(state);
+
+  function tapBatter(id: string) {
+    setProblem(null);
+    if (striker === id) { setStriker(null); return; }
+    if (nonStriker === id) { setNonStriker(null); return; }
+    if (!striker) setStriker(id);
+    else setNonStriker(id);
+  }
+
+  const badge = (n: 1 | 2) => (
+    <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground">{n}</span>
+  );
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-4 space-y-4">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">{ordinal}</p>
-        <h2 className="text-lg font-black">{side(next.battingTeamId)?.name} to bat</h2>
-        <p className="text-sm text-muted-foreground">
-          {next.overs} over{next.overs === 1 ? '' : 's'}{next.target !== null && <> · Target <strong className="text-foreground">{next.target}</strong></>}
+    <>
+      <Card className="relative overflow-hidden">
+        <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: side(next.battingTeamId)?.color }} />
+        <p className="text-[11px] font-bold uppercase tracking-wider text-primary">{ordinal}</p>
+        <h2 className="mt-1 flex items-center gap-2 text-xl font-black tracking-tight">
+          <TeamDot color={side(next.battingTeamId)?.color ?? '#64748b'} className="w-3 h-3" />
+          <span className="truncate">{side(next.battingTeamId)?.name} to bat</span>
+        </h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold tabular-nums">{next.overs} over{next.overs === 1 ? '' : 's'}</span>
+          {next.target !== null && (
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary tabular-nums">Target {next.target}</span>
+          )}
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">{side(next.bowlingTeamId)?.name} bowling</span>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-bold">Opening batters</h3>
+            <p className="text-xs text-muted-foreground">Tap the striker first, then the non-striker</p>
+          </div>
+          {striker && nonStriker && (
+            <button type="button" onClick={() => { setStriker(nonStriker); setNonStriker(striker); }}
+              className="shrink-0 h-8 px-3 inline-flex items-center gap-1.5 rounded-full border border-border text-xs font-semibold hover:bg-muted">
+              <ArrowLeftRight className="w-3.5 h-3.5" />Swap
+            </button>
+          )}
+        </div>
+        <ul className="grid grid-cols-2 gap-1.5">
+          {batting.map((p) => (
+            <li key={p.id}>
+              <PlayerTile name={`${p.name}${marks(state, next.battingTeamId, p.id)}`} onClick={() => tapBatter(p.id)}
+                active={striker === p.id || nonStriker === p.id}
+                sub={striker === p.id ? 'On strike' : nonStriker === p.id ? 'Non-striker' : undefined}
+                badge={striker === p.id ? badge(1) : nonStriker === p.id ? badge(2) : null} />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2">
+          <QuickAddPlayer state={state} teamId={next.battingTeamId} players={players} send={send}
+            onAdded={(pid) => { if (!striker) setStriker(pid); else if (!nonStriker) setNonStriker(pid); }} />
+        </div>
+      </Card>
+
+      <Card>
+        <div className="mb-3">
+          <h3 className="font-bold">Opening bowler</h3>
+          <p className="text-xs text-muted-foreground">{side(next.bowlingTeamId)?.name}</p>
+        </div>
+        <ul className="grid grid-cols-2 gap-1.5">
+          {bowling.map((p) => (
+            <li key={p.id}>
+              <PlayerTile name={`${p.name}${marks(state, next.bowlingTeamId, p.id)}`} active={bowler === p.id}
+                onClick={() => { setProblem(null); setBowler(bowler === p.id ? null : p.id); }} />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2">
+          <QuickAddPlayer state={state} teamId={next.bowlingTeamId} players={players} send={send} onAdded={setBowler} />
+        </div>
+      </Card>
+
+      <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/95 backdrop-blur-xl border-t border-border/60 space-y-2">
+        <Problem text={problem} />
+        <p className="text-center text-xs text-muted-foreground truncate">
+          {striker || nonStriker || bowler ? (
+            <>
+              <span className="font-semibold text-foreground">{striker ? `${nameOf(striker)}*` : '—'}</span>
+              {' & '}
+              <span className="font-semibold text-foreground">{nonStriker ? nameOf(nonStriker) : '—'}</span>
+              {' · '}
+              <span className="font-semibold text-foreground">{bowler ? nameOf(bowler) : '—'}</span> to bowl
+            </>
+          ) : 'Pick two openers and a bowler'}
         </p>
+        <Submit
+          disabled={!striker || !nonStriker || !bowler}
+          onClick={() => setProblem(send({ type: 'start_innings', strikerId: striker!, nonStrikerId: nonStriker, bowlerId: bowler! }))}
+        >
+          Start {ordinal}
+        </Submit>
       </div>
-      <PlayerSelect label="Striker" value={striker} onChange={setStriker} players={batting} exclude={[nonStriker]} />
-      <PlayerSelect label="Non-striker" value={nonStriker} onChange={setNonStriker} players={batting} exclude={[striker]} />
-      <QuickAddPlayer state={state} teamId={next.battingTeamId} players={players} send={send}
-        onAdded={(pid) => { if (!striker) setStriker(pid); else if (!nonStriker) setNonStriker(pid); }} />
-      <PlayerSelect label={`Opening bowler (${side(next.bowlingTeamId)?.name ?? ''})`} value={bowler} onChange={setBowler} players={bowling} />
-      <QuickAddPlayer state={state} teamId={next.bowlingTeamId} players={players} send={send} onAdded={setBowler} />
-      <Problem text={problem} />
-      <Submit
-        disabled={!striker || !nonStriker || !bowler}
-        onClick={() => setProblem(send({ type: 'start_innings', strikerId: striker!, nonStrikerId: nonStriker, bowlerId: bowler! }))}
-      >
-        Start {ordinal}
-      </Submit>
-    </section>
+    </>
   );
 }
 
 // ── Bowler ───────────────────────────────────────────────────────────────────
 
 export function BowlerPicker({ state, players, send, onDone }: { state: MatchState; players: Player[]; send: Send; onDone?: () => void }) {
-  const fieldingTeamId = currentInnings(state)?.bowlingTeamId ?? null;
+  const inn = currentInnings(state);
+  const fieldingTeamId = inn?.bowlingTeamId ?? null;
   const bpo = state.setup.rules.ballsPerOver;
-  const quota = state.setup.rules.maxOversPerBowler;
+  const quota = inn?.superOver ? null : state.setup.rules.maxOversPerBowler;
   const options = bowlerOptions(state);
-  // Bowlers already used first, so the attack is one tap away
-  const sorted = [...options].sort((a, b) => Number(!!b.figures) - Number(!!a.figures));
+  // The attack already in use first, then fresh arms, then anyone who can't bowl now
+  const rank = (o: (typeof options)[number]) => (o.blocked ? 2 : o.figures ? 0 : 1);
+  const sorted = [...options].sort((a, b) => rank(a) - rank(b));
   return (
-    <ul className="grid gap-1.5">
-      {sorted.map(({ player, blocked, figures }) => (
-        <li key={player.id}>
-          <button
-            type="button"
-            disabled={!!blocked}
-            onClick={() => { if (!send({ type: 'bowler', bowlerId: player.id })) onDone?.(); }}
-            className="w-full flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:bg-muted disabled:opacity-45 disabled:hover:bg-card"
-          >
-            <span className="flex-1 min-w-0">
-              <span className="block font-semibold truncate">{player.name}</span>
-              <span className="block text-xs text-muted-foreground">
-                {blocked ?? (figures
-                  ? `${oversText(figures.balls, bpo)}-${figures.maidens}-${figures.runs}-${figures.wickets} · Econ ${economy(figures.runs, figures.balls, bpo)}`
-                  : 'Yet to bowl')}
-              </span>
-            </span>
-            {quota !== null && figures && (
-              <span className="text-xs tabular-nums text-muted-foreground shrink-0">{oversText(figures.balls, bpo)}/{quota}</span>
-            )}
-          </button>
-        </li>
-      ))}
-      {fieldingTeamId && (
-        <li>
-          {/* A bowler who isn't in the squad yet: add them and bring them on in one go */}
-          <QuickAddPlayer state={state} teamId={fieldingTeamId} players={players} send={send}
-            onAdded={(pid) => { if (!send({ type: 'bowler', bowlerId: pid })) onDone?.(); }} />
-        </li>
-      )}
-    </ul>
-  );
-}
-
-// ── Extras ───────────────────────────────────────────────────────────────────
-
-interface RunOption { label: string; runs: number; boundary?: boolean }
-
-const EXTRA_TITLE: Record<Extra, string> = { wd: 'Wide', nb: 'No-ball', b: 'Byes', lb: 'Leg byes' };
-
-export function ExtrasSheet({ extra, state, send, onWicket, onClose }: {
-  extra: Extra | null; state: MatchState; send: Send; onWicket: (extra: Extra) => void; onClose: () => void;
-}) {
-  const [as, setAs] = useState<'bat' | 'bye' | 'legbye'>('bat');
-  if (!extra) return null;
-  const rules = state.setup.rules;
-  const penalty = extra === 'wd' ? rules.wideRuns : extra === 'nb' ? rules.noBallRuns : 0;
-  const options: RunOption[] =
-    extra === 'wd'
-      ? [{ label: '0', runs: 0 }, { label: '1', runs: 1 }, { label: '2', runs: 2 }, { label: '3', runs: 3 }, { label: '4 boundary', runs: 4, boundary: true }, { label: '4 run', runs: 4 }, { label: '5', runs: 5 }]
-      : extra === 'nb'
-        ? [
-          { label: '0', runs: 0 }, { label: '1', runs: 1 }, { label: '2', runs: 2 }, { label: '3', runs: 3 },
-          { label: 'FOUR', runs: 4, boundary: true },
-          ...(as === 'bat' ? [{ label: 'SIX', runs: 6, boundary: true }] : []),
-          { label: '4 run', runs: 4 }, { label: '5', runs: 5 },
-        ]
-        : [{ label: '1', runs: 1 }, { label: '2', runs: 2 }, { label: '3', runs: 3 }, { label: 'FOUR', runs: 4, boundary: true }, { label: '4 run', runs: 4 }, { label: '5', runs: 5 }];
-  const hint = extra === 'wd'
-    ? `${penalty} wide${penalty === 1 ? '' : 's'}, plus any the batters run`
-    : extra === 'nb'
-      ? `${penalty} for the no-ball, plus whatever was scored off it${rules.freeHit ? ' — next ball is a free hit' : ''}`
-      : 'Runs the batters took — not off the bat, not charged to the bowler';
-
-  return (
-    <Sheet open onClose={onClose} title={EXTRA_TITLE[extra]} description={hint}>
-      {extra === 'nb' && (
-        <div className="grid grid-cols-3 gap-1.5">
-          <Choice active={as === 'bat'} onClick={() => setAs('bat')}>Off the bat</Choice>
-          <Choice active={as === 'bye'} onClick={() => setAs('bye')}>Byes</Choice>
-          <Choice active={as === 'legbye'} onClick={() => setAs('legbye')}>Leg byes</Choice>
-        </div>
-      )}
-      <div className="grid grid-cols-4 gap-2">
-        {options.map((o) => (
-          <button key={o.label} type="button"
-            onClick={() => { if (!send({ type: 'ball', runs: o.runs, extra, ...(o.boundary ? { boundary: true } : {}), ...(extra === 'nb' ? { nbRunsAs: as } : {}) })) onClose(); }}
-            className={cn('h-14 rounded-xl border font-black text-sm',
-              o.boundary ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-card hover:bg-muted')}>
-            {o.label}
-          </button>
+    <div className="space-y-2">
+      <ul className="grid grid-cols-2 gap-1.5">
+        {sorted.map(({ player, blocked, figures }) => (
+          <li key={player.id}>
+            <PlayerTile
+              name={`${player.name}${fieldingTeamId ? marks(state, fieldingTeamId, player.id) : ''}`}
+              disabled={!!blocked}
+              onClick={() => { if (!send({ type: 'bowler', bowlerId: player.id })) onDone?.(); }}
+              sub={
+                <>
+                  <span className={cn(blocked && 'text-amber-700 dark:text-amber-300')}>
+                    {blocked ?? (figures
+                      ? `${figures.wickets}/${figures.runs} · ${oversText(figures.balls, bpo)} ov · Econ ${economy(figures.runs, figures.balls, bpo)}`
+                      : 'Yet to bowl')}
+                  </span>
+                  {quota !== null && figures && (
+                    <span className="mt-1.5 block h-1 rounded-full bg-muted overflow-hidden" aria-label={`${oversText(figures?.balls ?? 0, bpo)} of ${quota} overs`}>
+                      <span className="block h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, ((figures?.balls ?? 0) / (quota * bpo)) * 100)}%` }} />
+                    </span>
+                  )}
+                </>
+              }
+            />
+          </li>
         ))}
-      </div>
-      <button type="button" onClick={() => onWicket(extra)}
-        className="w-full h-11 rounded-xl border border-red-500/40 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-500/10">
-        Wicket on this {extra === 'wd' ? 'wide' : extra === 'nb' ? 'no-ball' : 'ball'}…
-      </button>
-    </Sheet>
+      </ul>
+      {fieldingTeamId && (
+        // A bowler who isn't in the squad yet: add them and bring them on in one go
+        <QuickAddPlayer state={state} teamId={fieldingTeamId} players={players} send={send}
+          onAdded={(pid) => { if (!send({ type: 'bowler', bowlerId: pid })) onDone?.(); }} />
+      )}
+    </div>
   );
 }
 
-export function CustomRunsSheet({ open, send, onClose }: { open: boolean; send: Send; onClose: () => void }) {
+// ── Runs the keypad has no key for ───────────────────────────────────────────
+
+const MORE_TITLE: Record<Extra | 'none', string> = {
+  none: 'More runs', wd: 'Wide + runs', nb: 'No-ball + runs', b: 'Byes', lb: 'Leg byes',
+};
+
+/**
+ * Fives, all-run fours, overthrows — on a legal ball or on whichever extra the
+ * keypad had armed. Strike follows the runs the batters actually ran.
+ */
+export function MoreRunsSheet({ extra, nbRunsAs = 'bat', state, send, onClose }: {
+  extra: Extra | null; nbRunsAs?: NbRunsAs; state: MatchState; send: Send; onClose: () => void;
+}) {
+  const rules = state.setup.rules;
   const [runs, setRuns] = useState(5);
   const [ran, setRan] = useState(5);
   const [boundary, setBoundary] = useState(false);
-  const canBoundary = runs === 4 || runs === 6;
+  const [as, setAs] = useState<NbRunsAs>(nbRunsAs);
+  const offBat = extra === null || (extra === 'nb' && as === 'bat');
+  const canBoundary = runs === 4 || (runs === 6 && offBat);
+  const penalty = extra === 'wd' ? rules.wideRuns : extra === 'nb' ? rules.noBallRuns : 0;
+  const description = extra === null
+    ? 'All-run fours, fives, overthrows. Strike follows the runs the batters actually ran.'
+    : extra === 'wd'
+      ? `${penalty} for the wide, plus the runs below.`
+      : extra === 'nb'
+        ? `${penalty} for the no-ball, plus the runs below${rules.freeHit ? ' — next ball is a free hit' : ''}.`
+        : 'Runs the batters took — not off the bat, not charged to the bowler.';
+
+  function pick(v: number) {
+    setRuns(v);
+    setRan(v);
+    if (!(v === 4 || (v === 6 && offBat))) setBoundary(false);
+  }
+
   return (
-    <Sheet open={open} onClose={onClose} title="Other runs"
-      description="All-run fours, fives, overthrows. Strike follows the runs the batters actually ran.">
+    <Sheet open onClose={onClose} title={MORE_TITLE[extra ?? 'none']} description={description}>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label>Runs scored off the bat</Label>
-          <Stepper value={runs} min={0} max={12} onChange={(v) => { setRuns(v); setRan(v); if (v !== 4 && v !== 6) setBoundary(false); }} />
+        {extra === 'nb' && <NbAsPicker value={as} onChange={(v) => { setAs(v); if (v !== 'bat' && runs === 6) setBoundary(false); }} />}
+        <div>
+          <Label>{extra === null ? 'Runs scored off the bat' : extra === 'wd' ? 'Runs on top of the wide' : extra === 'nb' ? 'Runs on top of the no-ball' : 'Runs'}</Label>
+          <div className="grid grid-cols-6 gap-1.5">
+            {Array.from({ length: LIMITS.runsPerBall }, (_, i) => i + 1).map((n) => (
+              <button key={n} type="button" onClick={() => pick(n)} aria-pressed={runs === n}
+                className={cn('h-11 rounded-xl border text-base font-black tabular-nums transition-colors touch-manipulation',
+                  runs === n ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-muted')}>
+                {n}
+              </button>
+            ))}
+          </div>
         </div>
         {canBoundary && (
           <div className="grid grid-cols-2 gap-1.5">
@@ -349,19 +493,24 @@ export function CustomRunsSheet({ open, send, onClose }: { open: boolean; send: 
           </div>
         )}
         {!boundary && (
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Runs actually run</Label>
-              <p className="text-xs text-muted-foreground -mt-1">Less than scored when overthrows went to the rope</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Runs actually run</p>
+              <p className="text-xs text-muted-foreground">Fewer than scored when overthrows went to the rope</p>
             </div>
             <Stepper value={Math.min(ran, runs)} min={0} max={runs} onChange={setRan} />
           </div>
         )}
         <Submit onClick={() => {
-          const err = send({ type: 'ball', runs, extra: null, ...(boundary ? { boundary: true } : {}), ...(!boundary && ran !== runs ? { ran } : {}) });
+          const err = send({
+            type: 'ball', runs, extra,
+            ...(extra === 'nb' ? { nbRunsAs: as } : {}),
+            ...(boundary && canBoundary ? { boundary: true } : {}),
+            ...(!boundary && ran !== runs ? { ran } : {}),
+          });
           if (!err) onClose();
         }}>
-          Record {runs} run{runs === 1 ? '' : 's'}
+          Record {draftChip(runs, extra)}{extra === null ? ` run${runs === 1 ? '' : 's'}` : ''}
         </Submit>
       </div>
     </Sheet>
@@ -460,6 +609,16 @@ export function WicketSheet({ state, players, mode, presetExtra, send, preview, 
   const endsAmbiguous = kind === 'run_out' || kind === 'obstructing_field' || mode === 'crease';
   const takesRuns = mode === 'delivery' && (kind === 'run_out' || kind === 'obstructing_field');
   const freshCandidates = candidates.filter((p) => !inn.batters.some((b) => b.id === p.id));
+
+  // The line this wicket will leave on the scorecard, built as the scorer picks
+  const nameOf = nameLookup(state);
+  const leaving = draft?.type === 'ball' ? draft.wicket?.outId ?? null : draft?.type === 'dismiss' ? draft.batterId : null;
+  const summary = kind && leaving ? (() => {
+    const k = kind as DismissalKind;
+    const fielder = k === 'stumped' ? fielderId ?? keeperId : fielderId;
+    return dismissalText({ kind: k, bowlerId: creditsBowler(k) ? inn.bowlerId : null, fielderId: fielder }, nameOf);
+  })() : null;
+  const extraOn = mode === 'delivery' ? toExtra(delivery) : null;
 
   return (
     <Sheet open onClose={onClose} wide
@@ -567,10 +726,25 @@ export function WicketSheet({ state, players, mode, presetExtra, send, preview, 
           </div>
         )}
 
+        {summary && leaving && (
+          <div className={cn('rounded-2xl border px-3.5 py-3',
+            kind === 'retired_hurt' ? 'border-border bg-muted/50' : 'border-red-500/30 bg-red-500/6')}>
+            <p className={cn('text-[10px] font-bold uppercase tracking-wider',
+              kind === 'retired_hurt' ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400')}>
+              {kind === 'retired_hurt' ? 'Retiring' : 'Out'}
+              {extraOn ? ` · off a ${DELIVERY_LABEL[extraOn].toLowerCase()}` : ''}
+              {takesRuns && runs > 0 ? ` · ${runs} run${runs === 1 ? '' : 's'} completed` : ''}
+            </p>
+            <p className="mt-0.5 font-bold leading-snug">
+              {nameOf(leaving)} <span className="font-semibold text-muted-foreground">{summary}</span>
+            </p>
+            {nextBatterId && <p className="mt-0.5 text-xs text-muted-foreground">{nameOf(nextBatterId)} comes in</p>}
+          </div>
+        )}
         <Problem text={kind ? problem : null} />
         <Submit tone="danger" disabled={!draft || !!problem}
           onClick={() => { if (draft && !send(draft)) onClose(); }}>
-          {kind === 'retired_hurt' ? 'Retire hurt' : 'Confirm wicket'}
+          {kind === 'retired_hurt' ? 'Retire hurt' : kind === 'retired_out' ? 'Retire out' : 'Confirm wicket'}
         </Submit>
       </div>
     </Sheet>
@@ -824,7 +998,7 @@ export function EditBallSheet({ state, events, replace, onClose }: {
                   <button type="button" onClick={() => pick(b.eventId)}
                     className="w-full flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-left hover:bg-muted">
                     <span className="w-9 text-xs font-semibold tabular-nums text-muted-foreground">{b.label}</span>
-                    <span className="min-w-12 text-center rounded-full border border-border px-2 py-0.5 text-xs font-bold">{ballLabel(b)}</span>
+                    <BallChip ball={b} />
                     <span className="flex-1 min-w-0 truncate text-sm">{nameOf(b.bowlerId)} to {nameOf(b.strikerId)}</span>
                   </button>
                 </li>

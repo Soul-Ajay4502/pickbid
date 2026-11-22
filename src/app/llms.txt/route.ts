@@ -106,7 +106,9 @@ shared with a single link. It runs in any modern browser with no app install.
 - **Auction Wrapped** — a shareable end-of-auction recap, plus holographic
   pack-opening squad reveals and a sponsor marquee display board.
 - **One-link sharing** — every league gets a link; make it public to list it in
-  the discover directory or let people join with a code.
+  the discover directory or let people join with a code. Organizers can also
+  share a registration form that players fill in without an account: photo,
+  playing style and phone, plus the entry-fee receipt if the league asks for one.
 - Full feature list: ${SITE_URL}/features
 
 ## Who it is for
@@ -147,8 +149,8 @@ cards without spreadsheets, WhatsApp threads or paper chits.
   real-money betting product. Auctions use league budgets, not real currency.
 - Organizer pages (creating leagues, running an auction, analytics) require
   sign-in and are excluded from crawling; public league pages, watch mode,
-  match centres (live scores and scorecards) and the recap are shareable
-  without an account.
+  match centres (live scores and scorecards), the recap and a league's player
+  registration form are shareable without an account.
 
 ## Optional
 

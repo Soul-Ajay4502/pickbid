@@ -810,13 +810,18 @@ function LeaguePageInner({ initialData, initialProfile }: WorkspaceProps) {
                 <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}`, 'View link'); setShareOpen(false); }}>
                   <Link2 className="w-3.5 h-3.5 text-muted-foreground" />Copy View Link
                 </button>
-                <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}/register`, 'Registration form'); setShareOpen(false); }}>
-                  <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Registration Form
-                </button>
+                {/* Two ways in, for organizers to hand out: the join link opens
+                    this page (players sign in and join from their profile), the
+                    form link is the standalone no-account form at /register. */}
                 {canManage && (
-                  <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}?open=true`, 'Register link'); setShareOpen(false); }}>
-                    <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Register Link
-                  </button>
+                  <>
+                    <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}?open=true`, 'Join link'); setShareOpen(false); }}>
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy Join Link
+                    </button>
+                    <button className="menu-item" onClick={() => { copyLink(`${origin}/leagues/${id}/register`, 'No-login form link'); setShareOpen(false); }}>
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />Copy No-Login Form Link
+                    </button>
+                  </>
                 )}
                 {data.players.length > 0 && (
                   <>

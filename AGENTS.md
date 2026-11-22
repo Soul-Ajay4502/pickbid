@@ -208,6 +208,15 @@ add-someone-else form, exempt exactly like the API. Don't collapse those two
 modes back onto `canManage` — organizers play in their own leagues, so "can
 manage this league" is a different question from "whose card is this".
 
+The third way in is the no-account form at
+[leagues/[id]/register](src/app/leagues/[id]/register/page.tsx), public in
+`proxy.ts` and offered only in the organizers' share menu. It posts as an
+anonymous player, so it carries the entry-fee receipt when the league asks for
+one — but it can never satisfy an identity-proof requirement, which lives on an
+account, so for those leagues the page shows a sign-in screen pointing at
+`players/new?self=1` instead of the form. The page is a server component that
+reads only the league's own scalars; don't hand it the league GET's roster.
+
 **`contactNumber` is organizer-only.** The players GET handler strips it for
 everyone who can't manage the league — the platform owner included in "can
 manage", since the owner console is an organizer-grade view. Any new endpoint
@@ -296,7 +305,9 @@ panel's top edge, so it no longer needs to clear the nav bar.
 list of screens that run with no chrome — auction, watch, wrapped, sponsors,
 squad reveal, and the ball-by-ball scorer. `NavBar` and `LeagueChrome` both read it so they can't disagree,
 and `LeagueChrome` returns early on a match: that is what keeps the rail's fetch
-off `/watch`, which a whole hall loads at once.
+off `/watch`, which a whole hall loads at once. `isStandaloneLeaguePath` is
+the smaller list of screens that keep `NavBar` but drop the rail, for visitors
+who aren't in the league yet — today only the public registration form.
 
 **Badges are derived lazily, never awarded from write paths.**
 `evaluateRewards` ([rewards.ts](src/lib/rewards.ts)) recomputes a user's
@@ -394,8 +405,9 @@ Scorecards carry names and card ids only; keep anything organizer-only out of
 
 **Publicly shareable routes must be whitelisted in `isPublicPath`** in
 [src/proxy.ts](src/proxy.ts). `/watch`, `/wrapped`, `/wrapped/poster`,
-`/sponsors`, match centres (`/leagues/[id]/matches/[matchId]`, not its
-`/score` console) and the OG image routes are public today. The proxy is
+`/sponsors`, `/register` (the no-account registration form), match centres
+(`/leagues/[id]/matches/[matchId]`, not its `/score` console) and the OG image
+routes are public today. The proxy is
 defence-in-depth for navigation only — real enforcement lives in the API
 handlers via `auth()`.
 
