@@ -7,7 +7,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, Menu, X } from 'lucide-react';
-import { isImmersiveLeaguePath } from '@/lib/leagueChrome';
+import { isImmersiveLeaguePath, isStandaloneLeaguePath } from '@/lib/leagueChrome';
 import LeagueSidebar from './LeagueSidebar';
 import type { LeagueNavSummary } from '@/lib/types';
 
@@ -61,6 +61,8 @@ export function useLeagueScroller(): () => HTMLElement {
  * sponsor marquee, the squad reveal — get `children` bare, with no fetch at
  * all. That matters most on `/watch`, which a whole hall loads at once: the
  * early return below is what keeps the rail's request off that path.
+ * Standalone screens — the public registration form — get the same bare
+ * `children`; unlike the immersive ones they keep the site nav bar.
  */
 export default function LeagueChrome({
   leagueId,
@@ -77,7 +79,8 @@ export default function LeagueChrome({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const immersive = isImmersiveLeaguePath(pathname);
+  // No rail and no rail fetch on either kind of bare screen.
+  const immersive = isImmersiveLeaguePath(pathname) || isStandaloneLeaguePath(pathname);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const [nav, setNav] = useState<LeagueNavSummary | null>(null);
