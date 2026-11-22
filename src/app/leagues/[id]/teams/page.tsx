@@ -389,7 +389,12 @@ export default function TeamsPage() {
           return (
             <div
               key={team.id}
-              className="card-premium p-4 space-y-3 animate-fade-in-up"
+              onClick={(event) => {
+                if (editId === team.id || iconPickerTeam === team.id || officialTeam === team.id) return;
+                if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, label')) return;
+                router.push(`/leagues/${id}/teams/${team.id}`);
+              }}
+              className={`card-premium p-4 space-y-3 animate-fade-in-up ${editId === team.id || iconPickerTeam === team.id || officialTeam === team.id ? '' : 'cursor-pointer'}`}
               style={{ animationDelay: `${ti * 0.05}s` }}
             >
               <div className="flex items-center gap-3">
