@@ -4,9 +4,16 @@
  * site URL and brand copy never drift between files.
  *
  * The site URL is resolved in priority order:
- *   1. NEXT_PUBLIC_SITE_URL          — set this if you move to a custom domain
- *   2. VERCEL_PROJECT_PRODUCTION_URL — Vercel sets this automatically on prod
- *   3. the known production alias     — safe hard-coded fallback
+ *   1. NEXT_PUBLIC_SITE_URL          — set this in Vercel; it is the real source
+ *   2. VERCEL_PROJECT_PRODUCTION_URL — Vercel sets this automatically on prod,
+ *                                      but picks the *shortest* custom domain
+ *                                      (the bare `pickbid.online`, not `www.`),
+ *                                      so don't rely on it for the canonical
+ *   3. the production domain          — safe hard-coded fallback
+ *
+ * `pickbid.vercel.app` is the old address. It stays attached to the project as
+ * a redirect to the custom domain, because shared links, QR codes and
+ * downloaded posters still point at it.
  */
 import type { Metadata } from 'next';
 
@@ -17,7 +24,7 @@ function resolveSiteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   if (vercel) return `https://${vercel.replace(/\/+$/, '')}`;
 
-  return 'https://pickbid.vercel.app';
+  return 'https://www.pickbid.online';
 }
 
 export const SITE_URL = resolveSiteUrl();

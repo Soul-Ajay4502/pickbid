@@ -488,4 +488,8 @@ missing any one of the three silently drops the field from API responses.
   ([.github/workflows/release-please.yml](.github/workflows/release-please.yml)).
 - Production is deployed **from the working tree via the Vercel CLI**, not from
   git. Merging to `main` does not deploy, and environment-variable changes need
-  a redeploy to take effect. Production domain: `pickbid.vercel.app`.
+  a redeploy to take effect. Production domain: `www.pickbid.online`; the old
+  `pickbid.vercel.app` stays attached as a redirect, since shared links, QR
+  codes and downloaded posters still point at it. Never print a domain as a
+  literal — use `SITE_URL` / `SITE_HOST` from [seo.ts](src/lib/seo.ts), which
+  production resolves from `NEXT_PUBLIC_SITE_URL`.

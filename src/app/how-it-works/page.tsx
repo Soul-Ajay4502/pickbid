@@ -1,7 +1,7 @@
 import SeoPage, { seoPageMetadata, type SeoPageContent } from '@/components/seo/SeoPage';
 import HowItWorksDemo from '@/components/seo/HowItWorksDemo';
 import { howToSchema } from '@/lib/jsonLd';
-import { SITE_NAME } from '@/lib/seo';
+import { SITE_HOST, SITE_NAME } from '@/lib/seo';
 
 /**
  * Angle: the *product* walkthrough — what an organizer actually does inside
@@ -241,6 +241,7 @@ export default function HowItWorksPage() {
       afterIntro={
         <HowItWorksDemo
           steps={STEPS.map((step, i) => ({ name: step.name, ...DEMO_SHOTS[i] }))}
+          host={SITE_HOST}
           source="Screens from LAST INNINGS BEFORE TAKEOFF, a public league run on Pickbid."
         />
       }
