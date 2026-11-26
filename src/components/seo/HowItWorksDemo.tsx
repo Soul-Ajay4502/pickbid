@@ -27,7 +27,21 @@ export type DemoStep = {
 const SHOT_W = 1920;
 const SHOT_H = 1200;
 
-export default function HowItWorksDemo({ steps, source }: { steps: DemoStep[]; source: string }) {
+/**
+ * `host` comes from the server page rather than an import of `SITE_HOST` here:
+ * this is a client component, and `seo.ts` resolves the host partly from a
+ * server-only env var, so the client could compute a different string and
+ * fail hydration.
+ */
+export default function HowItWorksDemo({
+  steps,
+  source,
+  host,
+}: {
+  steps: DemoStep[];
+  source: string;
+  host: string;
+}) {
   const [active, setActive] = useState(0);
   const step = steps[active];
   const go = (i: number) => setActive((i + steps.length) % steps.length);
@@ -67,7 +81,7 @@ export default function HowItWorksDemo({ steps, source }: { steps: DemoStep[]; s
             <span className="w-2.5 h-2.5 rounded-full bg-foreground/15" />
             <span className="w-2.5 h-2.5 rounded-full bg-foreground/15" />
             <span className="w-2.5 h-2.5 rounded-full bg-foreground/15" />
-            <span className="ml-3 text-[11px] text-muted-foreground truncate">pickbid.vercel.app</span>
+            <span className="ml-3 text-[11px] text-muted-foreground truncate">{host}</span>
           </div>
           {/* Every shot stays mounted so stepping is instant once loaded; only
               the first is fetched eagerly, the rest when the browser is idle */}
