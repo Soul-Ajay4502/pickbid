@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.14.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.13.0...v0.14.0) (2026-11-26)
+
+
+### Features
+
+* add league-wide extended squad limits ([23a9ff3](https://github.com/Soul-Ajay4502/pickbid/commit/23a9ff39fd36879acaee28d04cfd250c84950ddc))
+* add league-wide minimum and maximum squads ([dc9a80e](https://github.com/Soul-Ajay4502/pickbid/commit/dc9a80ee8946cbd864c5c73dbf3fc38a6ad2c1a5))
+* add match awards system with impact points for player performance ([b4f8021](https://github.com/Soul-Ajay4502/pickbid/commit/b4f80210dc8c00ca8ddd9504e5f02c50bcfeffd7))
+* add ScorerKeypad component for recording cricket scores ([c1cb52f](https://github.com/Soul-Ajay4502/pickbid/commit/c1cb52faade6537f1cbdba5fcfd17afb06cea0fb))
+* add ScorerKeypad component for recording cricket scores ([09f65c9](https://github.com/Soul-Ajay4502/pickbid/commit/09f65c9478f7fac2eaac5e55c8456c75cc33e968))
+* add shareable player registration form ([b8e86d6](https://github.com/Soul-Ajay4502/pickbid/commit/b8e86d61396acace315513a29272391b76a1d136))
+* preview squad posters in app ([99e8911](https://github.com/Soul-Ajay4502/pickbid/commit/99e89111bec168efd27a6352bdbd3f12e4f158f7))
+* update domain references to www.pickbid.online and improve SEO … ([8af0642](https://github.com/Soul-Ajay4502/pickbid/commit/8af0642b86627826b1f8a5e3a15383b3c8710d57))
+* update domain references to www.pickbid.online and improve SEO handling ([af6b778](https://github.com/Soul-Ajay4502/pickbid/commit/af6b7787b2be6896b63389e4b5a9786eb16b3277))
+
+
+### Bug Fixes
+
+* clarify public path checks for registration forms ([09f65c9](https://github.com/Soul-Ajay4502/pickbid/commit/09f65c9478f7fac2eaac5e55c8456c75cc33e968))
+* confirm deletes and shape regional posters ([6ca8d23](https://github.com/Soul-Ajay4502/pickbid/commit/6ca8d230b88776afed4c1cf868262c068c53c0df))
+* open team details from card ([#26](https://github.com/Soul-Ajay4502/pickbid/issues/26)) ([b08cdc8](https://github.com/Soul-Ajay4502/pickbid/commit/b08cdc8b5b3000e05b860e9db013de6b16d114e5))
+
+
+### Code Refactoring
+
+* update league path checks for standalone registration ([09f65c9](https://github.com/Soul-Ajay4502/pickbid/commit/09f65c9478f7fac2eaac5e55c8456c75cc33e968))
+
 ## [0.13.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.12.0...v0.13.0) (2026-11-19)
 
 
