@@ -73,7 +73,7 @@ export default function LeagueSidebar({
   const [bulkPhotosOpen, setBulkPhotosOpen] = useState(false);
   const [playerAccessOpen, setPlayerAccessOpen] = useState(false);
   const [squadOpen, setSquadOpen] = useState(false);
-  const [squadMin, setSquadMin] = useState('11');
+  const [squadMin, setSquadMin] = useState('1');
   const [squadMax, setSquadMax] = useState('15');
   const [squadSaving, setSquadSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -442,7 +442,7 @@ export default function LeagueSidebar({
               </label>
               <label className="space-y-1">
                 <span className="text-xs font-semibold">Maximum players</span>
-                <input type="number" min={Math.max(11, Number(squadMin) || 11)} max="100" step="1" required value={squadMax}
+                <input type="number" min={Math.max(11, Number(squadMin) || 1)} max="100" step="1" required value={squadMax}
                   onChange={(e) => setSquadMax(e.target.value)} disabled={squadSaving}
                   className="w-full h-10 px-3 rounded-xl border border-border bg-input text-sm" />
               </label>
