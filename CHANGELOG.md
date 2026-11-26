@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/Soul-Ajay4502/pickbid/compare/v0.14.0...v0.14.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* update minimum squad size to 1 in LeagueSidebar component ([10680df](https://github.com/Soul-Ajay4502/pickbid/commit/10680df944bc60f54c7f9d05485339dd365eb22a))
+
 ## [0.14.0](https://github.com/Soul-Ajay4502/pickbid/compare/v0.13.0...v0.14.0) (2026-11-26)
 
 
