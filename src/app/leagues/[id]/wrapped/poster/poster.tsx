@@ -8,6 +8,7 @@ import { ImageResponse } from 'next/og';
 import { getTemplate } from '@/lib/templates';
 import { teamOf, type WrappedStats } from '@/lib/recap';
 import type { League } from '@/lib/types';
+import { SITE_HOST } from '@/lib/seo';
 
 /** 4:5 portrait — the story/status-friendly format. */
 export const POSTER_SIZE = { width: 1080, height: 1350 };
@@ -314,8 +315,7 @@ export async function renderWrappedPoster(league: League, stats: WrappedStats): 
             Conducted by {league.conductedBy}
           </div>
           <div style={{ display: 'flex', fontSize: 24, fontWeight: 700, color: t.awardColor, letterSpacing: 3 }}>
-            pickbid.vercel.app
-
+            {SITE_HOST}
           </div>
         </div>
       </div>

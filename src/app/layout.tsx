@@ -35,6 +35,23 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+/**
+ * Google Search Console ownership tokens, one `<meta name="google-site-verification">`
+ * each. The `www.pickbid.online` token is committed: it is public by design (it
+ * sits in every page's HTML) and has to survive any env change, since Google
+ * re-checks it and un-verifies the property if it disappears.
+ * `GOOGLE_SITE_VERIFICATION` keeps the older `pickbid.vercel.app` property
+ * verified alongside it — the Change of Address tool needs both.
+ */
+const GOOGLE_SITE_VERIFICATION = [
+  ...new Set(
+    [
+      'WLhvuO58oGKDnU665GCTzjvVSAjypbph2WlXoH5h08w', // www.pickbid.online
+      process.env.GOOGLE_SITE_VERIFICATION,
+    ].filter((token): token is string => !!token),
+  ),
+];
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -84,10 +101,7 @@ export const metadata: Metadata = {
     title: SITE_NAME,
   },
   other: { 'mobile-web-app-capable': 'yes' },
-  // Add a Google Search Console token by setting GOOGLE_SITE_VERIFICATION.
-  ...(process.env.GOOGLE_SITE_VERIFICATION
-    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
-    : {}),
+  verification: { google: GOOGLE_SITE_VERIFICATION },
 };
 
 export const viewport: Viewport = {

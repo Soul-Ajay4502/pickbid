@@ -4,7 +4,7 @@
 
 Pickbid is a full-stack [Next.js](https://nextjs.org) app for organisers of local and amateur cricket leagues. Create a league, build broadcast-quality player cards, run a live auction that spectators can follow from any browser, record match results, and export squad sheets — all without anyone needing to install an app.
 
-> **Website:** https://pickbid.vercel.app
+> **Website:** https://www.pickbid.online
 
 ---
 
@@ -67,7 +67,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ✅ | Google OAuth for sign-in. |
 | `AUTH_SECRET` | ✅ | NextAuth session encryption secret. |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | ✅ | Image uploads and transforms. |
-| `NEXT_PUBLIC_SITE_URL` | – | Canonical site URL; set when using a custom domain. Falls back to the Vercel production URL. |
+| `NEXT_PUBLIC_SITE_URL` | – | Canonical site URL — `https://www.pickbid.online` in production. Set it explicitly: the `VERCEL_PROJECT_PRODUCTION_URL` fallback picks the bare `pickbid.online`, not `www`. Inlined at build time, so changing it needs a redeploy. |
 | `WHATSAPPAPIKEY` / `WHATSAPPAPIURL` / `FROM_NUMBER` | – | WhatsApp Cloud API broadcasts. |
 | `WHATSAPP_TEMPLATE_NAME` / `WHATSAPP_TEMPLATE_LANG` | – | WhatsApp message template config. |
 | `GOOGLE_SITE_VERIFICATION` | – | Google Search Console verification tag. |
